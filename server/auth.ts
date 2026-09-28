@@ -2,8 +2,8 @@ import { Router } from 'express';
 import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import { getUserByEmail, getUserByGoogleSub, createUser, updateUser } from './repositories/users';
-import { requireAuth, AuthRequest } from './middleware/auth';
+import { getUserByEmail, getUserByGoogleSub, createUser, updateUser } from './repositories/users.js';
+import { requireAuth, AuthRequest } from './middleware/auth.js';
 
 const router = Router();
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);

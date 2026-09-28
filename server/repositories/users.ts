@@ -1,4 +1,4 @@
-import { getSheetData, appendSheetData, updateSheetData } from '../google-sheets';
+import { getSheetData, appendSheetData, updateSheetData } from '../google-sheets.js';
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID!;
 const USERS_SHEET = 'USERS';
