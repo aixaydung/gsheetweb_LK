@@ -1,6 +1,6 @@
-import React from 'react';
 import { Icon } from '../ui/Icon';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 
 interface SidebarProps {
   currentPath: string;
@@ -18,6 +18,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCloseMobile,
 }) => {
   const { theme, toggleTheme } = useApp();
+  const { user, logout } = useAuth();
+
+  const displayName = user?.name || user?.email?.split('@')[0] || 'LK ERP';
+  const displayEmail = user?.email || (user?.role === 'admin' ? 'Quản trị viên' : 'Hồ sơ cá nhân');
+  const userInitials = (user?.name || user?.email || 'LK')
+    .split(' ')
+    .filter(Boolean)
+    .map(w => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
+  const handleLogout = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (window.confirm('Bạn có chắc chắn muốn đăng xuất khỏi LK ERP?')) {
+      logout();
+    }
+  };
   const menuItems = [
     { label: 'Tổng quan', path: '/', icon: 'space_dashboard' },
     { label: 'Bán hàng', path: '/ban-hang', icon: 'sell' },
@@ -204,27 +222,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </button>
 
-          {/* User Profile Card */}
-          <button
-            type="button"
-            onClick={() => handleItemClick('/ho-so')}
-            className="w-full p-2 rounded-[12px] hover:bg-[#F9FAFB] flex items-center justify-between transition-colors text-left"
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#6D3EEB] to-[#A855F7] flex items-center justify-center text-white font-bold text-[12px] shadow-sm">
-                LK
+          {/* User Profile Card with quick logout */}
+          <div className="w-full p-2 rounded-[12px] bg-gray-50/80 dark:bg-[#1E293B] hover:bg-gray-100/90 dark:hover:bg-slate-700/60 border border-[#E5E7EB] dark:border-[#334155] flex items-center justify-between transition-colors shadow-2xs">
+            <button
+              type="button"
+              onClick={() => handleItemClick('/ho-so')}
+              className="flex items-center gap-2.5 flex-1 min-w-0 text-left cursor-pointer group"
+              title="Xem hồ sơ cá nhân"
+            >
+              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#6D3EEB] to-[#A855F7] flex items-center justify-center text-white font-bold text-[12px] shadow-xs shrink-0">
+                {userInitials}
               </div>
-              <div className="overflow-hidden">
-                <div className="text-[13.5px] font-semibold text-[#111827] dark:text-[#F8FAFC] truncate leading-tight">
-                  LK ERP
+              <div className="overflow-hidden min-w-0 pr-1">
+                <div className="text-[13px] font-semibold text-[#111827] dark:text-[#F8FAFC] truncate leading-tight group-hover:text-[#6D3EEB] dark:group-hover:text-[#C084FC] transition-colors">
+                  {displayName}
                 </div>
-                <div className="text-[11px] text-[#6B7280] leading-none mt-0.5">
-                  Hồ sơ cá nhân
+                <div className="text-[11px] text-[#6B7280] dark:text-[#94A3B8] truncate leading-none mt-0.5">
+                  {displayEmail}
                 </div>
               </div>
-            </div>
-            <Icon name="chevron_right" size={18} className="text-[#9CA3AF]" />
-          </button>
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              title="Đăng xuất khỏi hệ thống"
+              aria-label="Đăng xuất"
+              className="w-8 h-8 rounded-[8px] text-[#9CA3AF] hover:text-[#E11D48] hover:bg-rose-50 dark:hover:bg-rose-950/50 flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+            >
+              <Icon name="logout" size={17} />
+            </button>
+          </div>
         </div>
       </aside>
     </>

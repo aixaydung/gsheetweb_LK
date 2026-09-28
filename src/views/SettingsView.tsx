@@ -92,7 +92,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentTab, onTabCha
   }).filter(grp => grp.tabs.length > 0);
 
   return (
-    <div className="space-y-4 sm:space-y-6 max-w-7xl mx-auto pb-12">
+    <div className="space-y-4 sm:space-y-6 w-full pb-12">
       {/* ========================================================= */}
       {/* PC TOP HEADER (Unchanged on PC: hidden on mobile, visible on sm+) */}
       {/* ========================================================= */}

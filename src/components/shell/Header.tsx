@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Icon } from '../ui/Icon';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 
 interface HeaderProps {
   onOpenMobileSidebar: () => void;
@@ -10,6 +11,7 @@ interface HeaderProps {
   onOpenNotifications: () => void;
   unreadCount?: number;
   alertCount?: number;
+  onNavigate?: (path: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -20,8 +22,50 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenNotifications,
   unreadCount = 2,
   alertCount = 6111,
+  onNavigate,
 }) => {
   const { theme, toggleTheme } = useApp();
+  const { user, logout } = useAuth();
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+    if (isUserMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isUserMenuOpen]);
+
+  const displayName = user?.name || user?.email?.split('@')[0] || 'LK ERP';
+  const displayEmail = user?.email || 'admin@lkerp.vn';
+  const userInitials = (user?.name || user?.email || 'LK')
+    .split(' ')
+    .filter(Boolean)
+    .map(w => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
+  const handleLogout = () => {
+    setIsUserMenuOpen(false);
+    if (window.confirm('Bạn có chắc chắn muốn đăng xuất khỏi LK ERP?')) {
+      logout();
+    }
+  };
+
+  const handleMenuNavigate = (path: string) => {
+    setIsUserMenuOpen(false);
+    if (onNavigate) {
+      onNavigate(path);
+    }
+  };
   return (
     <header className="h-[62px] sm:h-[66px] bg-white/95 backdrop-blur-md border-b border-[#F1F2F5] px-3.5 sm:px-8 flex items-center justify-between sticky top-0 z-30 transition-all shadow-xs">
       {/* Left: Mobile Logo & Hamburger / Desktop Search */}
@@ -125,6 +169,76 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#E11D48] ring-2 ring-white" />
           )}
         </button>
+
+        {/* User Account Avatar & Dropdown */}
+        <div className="relative" ref={userMenuRef}>
+          <button
+            type="button"
+            onClick={() => setIsUserMenuOpen(prev => !prev)}
+            title={`Tài khoản: ${displayName}`}
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-[#6D3EEB] to-[#9333EA] text-white font-bold text-[12.5px] sm:text-[13px] flex items-center justify-center shadow-xs ring-2 ring-purple-100 hover:ring-[#6D3EEB] transition-all cursor-pointer select-none"
+          >
+            {userInitials}
+          </button>
+
+          {isUserMenuOpen && (
+            <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-[#1E293B] rounded-[16px] border border-[#E5E7EB] dark:border-[#334155] shadow-xl py-2 z-50 animate-in fade-in zoom-in-95 duration-150">
+              {/* User info banner */}
+              <div className="px-4 py-3 border-b border-[#F1F2F5] dark:border-[#334155]">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#6D3EEB] to-[#9333EA] text-white font-bold text-[14px] flex items-center justify-center shadow-xs shrink-0">
+                    {userInitials}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[14px] font-bold text-[#111827] dark:text-[#F8FAFC] truncate">
+                      {displayName}
+                    </p>
+                    <p className="text-[12px] text-[#6B7280] dark:text-[#94A3B8] truncate">
+                      {displayEmail}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-2.5 flex items-center gap-1.5">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-[#ECFDF5] text-[#059669] dark:bg-emerald-950/60 dark:text-emerald-400">
+                    {user?.role === 'admin' ? 'Quản trị viên (Admin)' : 'Người dùng hệ thống'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Navigation links */}
+              <div className="py-1">
+                <button
+                  type="button"
+                  onClick={() => handleMenuNavigate('/ho-so')}
+                  className="w-full px-4 py-2 text-left text-[13.5px] text-[#374151] dark:text-[#CBD5E1] hover:bg-[#F9FAFB] dark:hover:bg-slate-700/60 flex items-center gap-2.5 transition-colors cursor-pointer"
+                >
+                  <Icon name="person" size={18} className="text-[#6B7280] dark:text-[#94A3B8]" />
+                  <span>Hồ sơ cá nhân</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleMenuNavigate('/cai-dat')}
+                  className="w-full px-4 py-2 text-left text-[13.5px] text-[#374151] dark:text-[#CBD5E1] hover:bg-[#F9FAFB] dark:hover:bg-slate-700/60 flex items-center gap-2.5 transition-colors cursor-pointer"
+                >
+                  <Icon name="settings" size={18} className="text-[#6B7280] dark:text-[#94A3B8]" />
+                  <span>Cài đặt hệ thống</span>
+                </button>
+              </div>
+
+              {/* Logout Action */}
+              <div className="pt-1 border-t border-[#F1F2F5] dark:border-[#334155]">
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="w-full px-4 py-2 text-left text-[13.5px] font-medium text-[#E11D48] hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center gap-2.5 transition-colors cursor-pointer"
+                >
+                  <Icon name="logout" size={18} className="text-[#E11D48]" />
+                  <span>Đăng xuất</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

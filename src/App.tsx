@@ -258,6 +258,7 @@ function AppContent() {
           onOpenNotifications={() => setIsNotificationsOpen(true)}
           unreadCount={unreadNotifsCount}
           alertCount={alerts.totalBadgeCount}
+          onNavigate={navigateTo}
         />
 
         {/* Content Container (Full width, minimized horizontal padding for larger workspace) */}
