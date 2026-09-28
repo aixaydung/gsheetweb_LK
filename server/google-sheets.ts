@@ -5,7 +5,7 @@ dotenv.config();
 let auth: any;
 let sheets: any;
 
-const initGoogleSheets = () => {
+export const initGoogleSheets = () => {
   if (sheets) return sheets;
   if (!process.env.GOOGLE_CLIENT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
     throw new Error('Thiếu cấu hình GOOGLE_CLIENT_EMAIL hoặc GOOGLE_PRIVATE_KEY trong biến môi trường!');

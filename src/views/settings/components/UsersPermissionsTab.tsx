@@ -1,26 +1,155 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Icon } from '../../../components/ui/Icon';
+import { useAuth } from '../../../context/AuthContext';
 
-interface SystemUser {
+interface LiveUser {
   id: string;
   name: string;
   email: string;
-  role: 'Quản trị viên' | 'Giám đốc' | 'Kế toán trưởng' | 'Thủ kho' | 'Nhân viên Sale';
-  phone: string;
-  status: 'active' | 'inactive';
-  lastActive: string;
+  role: string;
+  status: 'active' | 'pending' | 'blocked';
+  last_login_at?: string;
+  created_at?: string;
+  auth_provider?: string;
 }
 
-const INITIAL_USERS: SystemUser[] = [
-  { id: 'U001', name: 'Nguyễn Văn Quản Trị', email: 'admin@lkerp.vn', role: 'Quản trị viên', phone: '0988 123 456', status: 'active', lastActive: 'Vừa xong' },
-  { id: 'U002', name: 'Trần Thị Thu Thảo', email: 'ketoan@lkerp.vn', role: 'Kế toán trưởng', phone: '0912 345 678', status: 'active', lastActive: '15 phút trước' },
-  { id: 'U003', name: 'Phạm Minh Kho', email: 'thukho@lkerp.vn', role: 'Thủ kho', phone: '0977 888 999', status: 'active', lastActive: '1 giờ trước' },
-  { id: 'U004', name: 'Lê Hoàng Bán Hàng', email: 'sales@lkerp.vn', role: 'Nhân viên Sale', phone: '0933 222 111', status: 'active', lastActive: 'Hôm nay 08:30' },
-];
+const ROLE_LABELS: Record<string, string> = {
+  admin: 'Quản trị viên (Admin)',
+  accountant: 'Kế toán trưởng',
+  warehouse: 'Thủ kho',
+  sales: 'Nhân viên Sale',
+  user: 'Người dùng (Chờ phân quyền)',
+};
+
+const ROLE_BADGE_STYLES: Record<string, string> = {
+  admin: 'bg-purple-100 text-[#6D3EEB] dark:bg-purple-950/60 dark:text-[#C084FC] border-purple-200 dark:border-purple-800/60',
+  accountant: 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200 dark:border-blue-800/60',
+  warehouse: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-800/60',
+  sales: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60',
+  user: 'bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-slate-300 border-gray-200 dark:border-slate-700',
+};
 
 export const UsersPermissionsTab: React.FC = () => {
-  const [users] = useState<SystemUser[]>(INITIAL_USERS);
+  const { user: currentUser } = useAuth();
+  const [users, setUsers] = useState<LiveUser[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeSubTab, setActiveSubTab] = useState<'users' | 'matrix'>('users');
+  const [actionModal, setActionModal] = useState<{
+    isOpen: boolean;
+    user: LiveUser | null;
+    selectedRole: string;
+    selectedStatus: 'active' | 'pending' | 'blocked';
+  }>({
+    isOpen: false,
+    user: null,
+    selectedRole: 'sales',
+    selectedStatus: 'active',
+  });
+  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  const fetchUsers = async () => {
+    try {
+      setIsLoading(true);
+      const res = await fetch('/api/auth/users');
+      if (res.ok) {
+        const data = await res.json();
+        setUsers(data.users || []);
+      }
+    } catch (err) {
+      console.error('Error fetching users:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const showToast = (text: string, type: 'success' | 'error' = 'success') => {
+    setToastMessage({ text, type });
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  // Optimistic UI Handler: Updates UI instantly, sends background request to Google Sheets
+  const handleSaveRole = async () => {
+    if (!actionModal.user) return;
+    const targetUserId = actionModal.user.id;
+    const newRole = actionModal.selectedRole;
+    const newStatus = actionModal.selectedStatus;
+
+    // Snapshot for rollback in case of error
+    const previousUsers = [...users];
+
+    // 1. Optimistic Update (Immediate UI response)
+    setUsers(prev =>
+      prev.map(u =>
+        u.id === targetUserId
+          ? { ...u, role: newRole, status: newStatus }
+          : u
+      )
+    );
+    setActionModal({ isOpen: false, user: null, selectedRole: 'sales', selectedStatus: 'active' });
+    showToast(`Đã duyệt & cập nhật quyền tài khoản! Đang đồng bộ Google Sheets...`);
+
+    // 2. Background Sync
+    try {
+      const res = await fetch(`/api/auth/users/${targetUserId}/update-role`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: newRole, status: newStatus }),
+      });
+
+      if (!res.ok) {
+        throw new Error('Máy chủ phản hồi lỗi');
+      }
+      showToast('Đã lưu thành công vào bảng tính Google Sheets!', 'success');
+    } catch (error: any) {
+      // 3. Rollback on failure
+      setUsers(previousUsers);
+      showToast(`Không thể lưu vào Google Sheets (${error.message}). Đã hoàn tác!`, 'error');
+    }
+  };
+
+  const handleOpenApproveModal = (targetUser: LiveUser) => {
+    setActionModal({
+      isOpen: true,
+      user: targetUser,
+      selectedRole: targetUser.role === 'user' ? 'sales' : targetUser.role,
+      selectedStatus: 'active',
+    });
+  };
+
+  const handleToggleBlock = async (targetUser: LiveUser) => {
+    const nextStatus = targetUser.status === 'blocked' ? 'active' : 'blocked';
+    const actionName = nextStatus === 'blocked' ? 'khóa' : 'mở khóa';
+
+    if (!confirm(`Bạn có chắc chắn muốn ${actionName} tài khoản ${targetUser.email}?`)) {
+      return;
+    }
+
+    const previousUsers = [...users];
+    // Optimistic Update
+    setUsers(prev =>
+      prev.map(u => (u.id === targetUser.id ? { ...u, status: nextStatus } : u))
+    );
+    showToast(`Đã ${actionName} tài khoản! Đang đồng bộ...`);
+
+    try {
+      const res = await fetch(`/api/auth/users/${targetUser.id}/update-role`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      if (!res.ok) throw new Error('Failed to update');
+      showToast(`Đã đồng bộ trạng thái ${actionName} vào Google Sheets!`);
+    } catch {
+      setUsers(previousUsers);
+      showToast(`Lỗi khi ${actionName} tài khoản. Đã hoàn tác!`, 'error');
+    }
+  };
+
+  const pendingCount = users.filter(u => u.status === 'pending').length;
 
   const matrixData = [
     {
@@ -75,24 +204,45 @@ export const UsersPermissionsTab: React.FC = () => {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div
+          className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-[12px] shadow-lg flex items-center gap-2.5 text-[13.5px] font-semibold transition-all animate-in slide-in-from-top ${
+            toastMessage.type === 'success'
+              ? 'bg-emerald-600 text-white'
+              : 'bg-rose-600 text-white'
+          }`}
+        >
+          <Icon name={toastMessage.type === 'success' ? 'check_circle' : 'error'} size={18} />
+          <span>{toastMessage.text}</span>
+        </div>
+      )}
+
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 sm:pb-4 border-b border-[#F1F2F5] dark:border-[#334155]">
         <div>
-          <h3 className="text-[17px] sm:text-[20px] font-bold text-[#111827] dark:text-[#F8FAFC]">
-            Tài khoản & Phân quyền (RBAC)
-          </h3>
+          <div className="flex items-center gap-2.5">
+            <h3 className="text-[17px] sm:text-[20px] font-bold text-[#111827] dark:text-[#F8FAFC]">
+              Tài khoản & Phân quyền Google Workspace
+            </h3>
+            {pendingCount > 0 && (
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 animate-pulse">
+                {pendingCount} chờ duyệt
+              </span>
+            )}
+          </div>
           <p className="text-[12.5px] sm:text-[14.5px] text-[#4B5563] dark:text-[#94A3B8] mt-0.5">
-            Phân định quyền hạn truy cập xem, thêm, sửa, xóa chứng từ theo từng vai trò nhân sự
+            Quản lý tài khoản đăng nhập Google, phê duyệt quyền truy cập và phân vai trò ERP (RBAC)
           </p>
         </div>
 
         <button
           type="button"
-          onClick={() => alert('Chức năng thêm tài khoản nhân viên mới đã sẵn sàng.')}
-          className="w-full sm:w-auto h-10 px-4 sm:px-5 bg-[#6D3EEB] hover:bg-[#5B2BD6] text-white text-[13.5px] sm:text-[14.5px] font-semibold rounded-[12px] shadow-sm flex items-center justify-center gap-2 transition-all shrink-0 cursor-pointer"
+          onClick={fetchUsers}
+          className="w-full sm:w-auto h-10 px-4 bg-[#F3EBFE] hover:bg-[#E9D5FF] dark:bg-purple-950/40 dark:hover:bg-purple-900/50 text-[#6D3EEB] dark:text-[#C084FC] text-[13px] sm:text-[14px] font-semibold rounded-[12px] flex items-center justify-center gap-2 transition-all shrink-0 cursor-pointer"
         >
-          <Icon name="person_add" size={18} />
-          <span>Thêm nhân viên</span>
+          <Icon name="refresh" size={17} className={isLoading ? 'animate-spin' : ''} />
+          <span>Làm mới danh sách</span>
         </button>
       </div>
 
@@ -109,6 +259,9 @@ export const UsersPermissionsTab: React.FC = () => {
         >
           <Icon name="group" size={19} />
           <span>Danh sách tài khoản ({users.length})</span>
+          {pendingCount > 0 && (
+            <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+          )}
         </button>
         <button
           type="button"
@@ -120,139 +273,193 @@ export const UsersPermissionsTab: React.FC = () => {
           }`}
         >
           <Icon name="grid_view" size={19} />
-          <span>Ma trận quyền hạn chi tiết</span>
+          <span>Ma trận quyền hạn chi tiết (RBAC)</span>
         </button>
       </div>
 
-      {/* ========================================================= */}
-      {/* SUB-TAB 1: USERS LIST                                     */}
-      {/* ========================================================= */}
+      {/* SUB-TAB 1: USERS LIST */}
       {activeSubTab === 'users' ? (
         <div>
-          {/* Mobile View (< sm): Sleek, touch-friendly User Cards */}
-          <div className="sm:hidden space-y-3">
-            {users.map(u => (
-              <div
-                key={u.id}
-                className="bg-transparent rounded-[16px] border border-[#E5E7EB] dark:border-[#334155] p-4 shadow-xs space-y-3"
-              >
-                {/* Header: Avatar, Name & Role Badge */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-10 h-10 rounded-full bg-transparent border border-purple-300 dark:border-purple-800/60 text-[#6D3EEB] dark:text-[#C084FC] flex items-center justify-center font-bold text-[14px] shrink-0">
-                      {u.name.slice(0, 1)}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[14.5px] font-bold text-[#111827] dark:text-[#F8FAFC] leading-snug">
-                        {u.name}
-                      </div>
-                      <div className="text-[11.5px] text-[#6B7280] dark:text-[#94A3B8] flex items-center gap-1.5 mt-0.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
-                        <span>Đang hoạt động &bull; {u.lastActive}</span>
-                      </div>
-                    </div>
-                  </div>
+          {isLoading && users.length === 0 ? (
+            <div className="p-8 text-center text-[#64748B] dark:text-[#94A3B8]">
+              <Icon name="sync" size={24} className="animate-spin mx-auto mb-2 text-[#6D3EEB]" />
+              <p className="text-[14px]">Đang tải dữ liệu tài khoản từ Google Sheets...</p>
+            </div>
+          ) : users.length === 0 ? (
+            <div className="p-8 text-center text-[#64748B] dark:text-[#94A3B8] border border-dashed rounded-[16px]">
+              Chưa có tài khoản nào được lưu trên Google Sheets.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Desktop Table */}
+              <div className="hidden sm:block rounded-[16px] border border-[#E5E7EB] dark:border-[#334155] shadow-xs overflow-hidden">
+                <table className="w-full text-left text-[14px]">
+                  <thead className="bg-gray-50/70 dark:bg-slate-800/40 text-[#4B5563] dark:text-[#94A3B8] text-[12.5px] uppercase font-semibold border-b border-[#E5E7EB] dark:border-[#334155]">
+                    <tr>
+                      <th className="py-3 px-4">Tài khoản & Tên</th>
+                      <th className="py-3 px-4">Email Google</th>
+                      <th className="py-3 px-4">Vai trò nghiệp vụ</th>
+                      <th className="py-3 px-4">Trạng thái phê duyệt</th>
+                      <th className="py-3 px-4 text-right">Hành động</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#F1F2F5] dark:divide-[#334155]">
+                    {users.map(u => {
+                      const isPending = u.status === 'pending';
+                      const isBlocked = u.status === 'blocked';
+                      const roleLabel = ROLE_LABELS[u.role] || u.role;
+                      const badgeStyle = ROLE_BADGE_STYLES[u.role] || ROLE_BADGE_STYLES.user;
 
-                  <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-transparent text-[#6317D6] dark:text-[#C084FC] border border-purple-300 dark:border-purple-800/50 shrink-0">
-                    {u.role}
-                  </span>
-                </div>
+                      return (
+                        <tr
+                          key={u.id}
+                          className={`transition-colors ${
+                            isPending
+                              ? 'bg-amber-50/30 dark:bg-amber-950/10'
+                              : 'hover:bg-gray-50/50 dark:hover:bg-slate-800/30'
+                          }`}
+                        >
+                          <td className="py-3.5 px-4 font-bold text-[#111827] dark:text-[#F8FAFC]">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#6D3EEB] to-[#A855F7] text-white flex items-center justify-center font-bold text-[12px] shadow-xs shrink-0">
+                                {(u.name || u.email || 'U').slice(0, 1).toUpperCase()}
+                              </div>
+                              <div>
+                                <span className="whitespace-nowrap">{u.name || 'Người dùng'}</span>
+                                {currentUser?.email === u.email && (
+                                  <span className="ml-1.5 text-[11px] px-1.5 py-0.2 rounded bg-purple-100 dark:bg-purple-950/50 text-[#6D3EEB] dark:text-[#C084FC]">
+                                    (Bạn)
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 text-[#4B5563] dark:text-[#CBD5E1] font-mono text-[13px] whitespace-nowrap">
+                            {u.email}
+                          </td>
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            <span className={`px-2.5 py-1 rounded-full text-[11.5px] font-bold border ${badgeStyle}`}>
+                              {roleLabel}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            {isPending ? (
+                              <span className="inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-400 text-[12.5px] font-bold bg-amber-100/70 dark:bg-amber-950/40 px-2.5 py-0.5 rounded-full border border-amber-200 dark:border-amber-800/50">
+                                <Icon name="hourglass_empty" size={14} />
+                                Chờ duyệt
+                              </span>
+                            ) : isBlocked ? (
+                              <span className="inline-flex items-center gap-1.5 text-rose-700 dark:text-rose-400 text-[12.5px] font-semibold bg-rose-100/70 dark:bg-rose-950/40 px-2.5 py-0.5 rounded-full">
+                                <Icon name="block" size={14} />
+                                Đã tạm khóa
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 text-[12.5px] font-semibold">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                Đã duyệt (Active)
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-2">
+                              {isPending ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenApproveModal(u)}
+                                  className="px-3 py-1 bg-[#6D3EEB] hover:bg-[#5B2BD6] text-white text-[12.5px] font-semibold rounded-[8px] flex items-center gap-1 shadow-xs cursor-pointer transition-colors"
+                                >
+                                  <Icon name="check" size={15} />
+                                  <span>Duyệt quyền</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenApproveModal(u)}
+                                  className="text-[#6D3EEB] dark:text-[#C084FC] hover:underline font-semibold text-[13px] cursor-pointer"
+                                >
+                                  Đổi quyền
+                                </button>
+                              )}
 
-                {/* Info Rows: Email & Phone */}
-                <div className="bg-transparent rounded-[12px] p-2.5 space-y-1.5 text-[12.5px] border border-[#F1F2F5] dark:border-[#334155]">
-                  <div className="flex items-center gap-2 text-[#4B5563] dark:text-[#CBD5E1]">
-                    <Icon name="mail" size={15} className="text-[#9CA3AF] shrink-0" />
-                    <span className="font-mono truncate">{u.email}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-[#4B5563] dark:text-[#CBD5E1]">
-                    <Icon name="phone" size={15} className="text-[#9CA3AF] shrink-0" />
-                    <a href={`tel:${u.phone.replace(/\s+/g, '')}`} className="hover:text-[#6D3EEB] font-medium">
-                      {u.phone}
-                    </a>
-                  </div>
-                </div>
-
-                {/* Footer Action */}
-                <div className="flex items-center justify-end pt-1">
-                  <button
-                    type="button"
-                    onClick={() => alert(`Chỉnh sửa quyền tài khoản: ${u.name}`)}
-                    className="h-8.5 px-3 bg-transparent border border-purple-300 dark:border-purple-800/50 hover:bg-[#6D3EEB] text-[#6317D6] dark:text-[#C084FC] hover:text-white rounded-[10px] text-[12.5px] font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                  >
-                    <Icon name="tune" size={15} />
-                    <span>Sửa phân quyền</span>
-                  </button>
-                </div>
+                              {currentUser?.email !== u.email && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleBlock(u)}
+                                  title={isBlocked ? 'Mở khóa tài khoản' : 'Khóa tài khoản'}
+                                  className="p-1 rounded-[6px] text-gray-400 hover:text-[#E11D48] hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                                >
+                                  <Icon name={isBlocked ? 'lock_open' : 'block'} size={16} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-            ))}
-          </div>
 
-          {/* Desktop View (sm+): Full Wide Responsive Table */}
-          <div className="hidden sm:block bg-transparent rounded-[16px] border border-[#E5E7EB] dark:border-[#334155] shadow-xs overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-[14px] min-w-[700px]">
-                <thead className="bg-transparent text-[#4B5563] dark:text-[#94A3B8] text-[12.5px] uppercase font-semibold border-b border-[#E5E7EB] dark:border-[#334155]">
-                  <tr>
-                    <th className="py-3 px-4">Họ và tên</th>
-                    <th className="py-3 px-4">Email đăng nhập</th>
-                    <th className="py-3 px-4">Số điện thoại</th>
-                    <th className="py-3 px-4">Vai trò / Chức vụ</th>
-                    <th className="py-3 px-4">Trạng thái</th>
-                    <th className="py-3 px-4">Đăng nhập gần nhất</th>
-                    <th className="py-3 px-4 text-right">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#F1F2F5] dark:divide-[#334155]">
-                  {users.map(u => (
-                    <tr key={u.id} className="hover:bg-gray-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                      <td className="py-3.5 px-4 font-bold text-[#111827] dark:text-[#F8FAFC]">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-transparent border border-purple-300 dark:border-purple-800/60 text-[#6D3EEB] dark:text-[#C084FC] flex items-center justify-center font-bold text-[13px] shrink-0">
-                            {u.name.slice(0, 1)}
+              {/* Mobile View */}
+              <div className="sm:hidden space-y-3">
+                {users.map(u => {
+                  const isPending = u.status === 'pending';
+                  const isBlocked = u.status === 'blocked';
+                  const roleLabel = ROLE_LABELS[u.role] || u.role;
+
+                  return (
+                    <div
+                      key={u.id}
+                      className={`rounded-[16px] border p-4 space-y-3 ${
+                        isPending
+                          ? 'border-amber-300 dark:border-amber-800 bg-amber-50/20'
+                          : 'border-[#E5E7EB] dark:border-[#334155]'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-[14.5px] font-bold text-[#111827] dark:text-[#F8FAFC] truncate">
+                            {u.name || 'Người dùng'}
                           </div>
-                          <span className="whitespace-nowrap">{u.name}</span>
+                          <div className="text-[12px] text-[#64748B] dark:text-[#94A3B8] font-mono truncate">
+                            {u.email}
+                          </div>
                         </div>
-                      </td>
-                      <td className="py-3.5 px-4 text-[#4B5563] dark:text-[#CBD5E1] font-mono text-[13.5px] whitespace-nowrap">
-                        {u.email}
-                      </td>
-                      <td className="py-3.5 px-4 text-[#4B5563] dark:text-[#CBD5E1] whitespace-nowrap">
-                        {u.phone}
-                      </td>
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <span className="px-3 py-1 rounded-full text-[12px] font-bold bg-transparent text-[#6317D6] dark:text-[#C084FC] border border-purple-300 dark:border-purple-800/50">
-                          {u.role}
+                        <span className="px-2 py-0.5 rounded-full text-[11px] font-bold border shrink-0">
+                          {roleLabel}
                         </span>
-                      </td>
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 text-[13px] font-semibold">
-                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-                          Đang hoạt động
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-[#6B7280] dark:text-[#94A3B8] text-[13px] whitespace-nowrap">
-                        {u.lastActive}
-                      </td>
-                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1 border-t border-gray-100 dark:border-slate-800">
+                        <div>
+                          {isPending ? (
+                            <span className="text-amber-700 dark:text-amber-400 text-[12px] font-bold">
+                              Chờ phê duyệt
+                            </span>
+                          ) : isBlocked ? (
+                            <span className="text-rose-600 text-[12px] font-medium">Đã tạm khóa</span>
+                          ) : (
+                            <span className="text-emerald-600 text-[12px] font-medium">Đang hoạt động</span>
+                          )}
+                        </div>
+
                         <button
                           type="button"
-                          onClick={() => alert(`Chỉnh sửa quyền tài khoản: ${u.name}`)}
-                          className="text-[#6D3EEB] dark:text-[#C084FC] hover:underline font-semibold text-[13px] cursor-pointer"
+                          onClick={() => handleOpenApproveModal(u)}
+                          className="px-3 py-1 bg-[#6D3EEB] text-white text-[12px] font-semibold rounded-[8px]"
                         >
-                          Sửa quyền
+                          {isPending ? 'Duyệt quyền' : 'Đổi vai trò'}
                         </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       ) : (
-        /* ========================================================= */
-        /* SUB-TAB 2: ROLE-BASED ACCESS CONTROL MATRIX (RBAC)        */
-        /* ========================================================= */
+        /* SUB-TAB 2: MATRIX */
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h4 className="text-[15px] sm:text-[16px] font-bold text-[#111827] dark:text-[#F8FAFC]">
@@ -263,72 +470,10 @@ export const UsersPermissionsTab: React.FC = () => {
             </span>
           </div>
 
-          {/* Mobile View (< sm): Modular Role Cards per Module */}
-          <div className="sm:hidden space-y-3">
-            {matrixData.map((row, i) => (
-              <div
-                key={i}
-                className="bg-transparent rounded-[16px] border border-[#E5E7EB] dark:border-[#334155] p-3.5 shadow-xs space-y-2.5"
-              >
-                <div className="flex items-center gap-2 pb-2 border-b border-[#F1F2F5] dark:border-[#334155]">
-                  <div className="w-7 h-7 rounded-lg bg-transparent border border-purple-300 dark:border-purple-800/50 text-[#6D3EEB] dark:text-[#C084FC] flex items-center justify-center shrink-0">
-                    <Icon name={row.icon} size={16} />
-                  </div>
-                  <span className="text-[13.5px] font-bold text-[#111827] dark:text-[#F8FAFC] leading-snug">
-                    {row.module}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-[12px]">
-                  {/* Admin */}
-                  <div className="p-2 rounded-[10px] bg-transparent border border-purple-300 dark:border-purple-900/50">
-                    <div className="text-[10.5px] font-bold uppercase text-[#6D3EEB] dark:text-[#C084FC]">
-                      Quản trị viên
-                    </div>
-                    <div className="font-bold text-[#111827] dark:text-white mt-0.5">
-                      {row.admin}
-                    </div>
-                  </div>
-
-                  {/* Kế toán */}
-                  <div className="p-2 rounded-[10px] bg-transparent border border-gray-200 dark:border-[#334155]">
-                    <div className="text-[10.5px] font-semibold text-[#6B7280] dark:text-[#94A3B8]">
-                      Kế toán
-                    </div>
-                    <div className="font-medium text-[#374151] dark:text-[#CBD5E1] mt-0.5">
-                      {row.keToan}
-                    </div>
-                  </div>
-
-                  {/* Thủ kho */}
-                  <div className="p-2 rounded-[10px] bg-transparent border border-gray-200 dark:border-[#334155]">
-                    <div className="text-[10.5px] font-semibold text-[#6B7280] dark:text-[#94A3B8]">
-                      Thủ kho
-                    </div>
-                    <div className="font-medium text-[#374151] dark:text-[#CBD5E1] mt-0.5">
-                      {row.kho}
-                    </div>
-                  </div>
-
-                  {/* Sale */}
-                  <div className="p-2 rounded-[10px] bg-transparent border border-gray-200 dark:border-[#334155]">
-                    <div className="text-[10.5px] font-semibold text-[#6B7280] dark:text-[#94A3B8]">
-                      Nhân viên Sale
-                    </div>
-                    <div className="font-medium text-[#374151] dark:text-[#CBD5E1] mt-0.5">
-                      {row.sale}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Desktop View (sm+): Matrix Table */}
-          <div className="hidden sm:block bg-transparent rounded-[16px] border border-[#E5E7EB] dark:border-[#334155] shadow-xs p-5 space-y-4">
+          <div className="hidden sm:block rounded-[16px] border border-[#E5E7EB] dark:border-[#334155] shadow-xs p-5 space-y-4">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-[14px] min-w-[650px]">
-                <thead className="bg-transparent text-[#4B5563] dark:text-[#94A3B8] uppercase font-semibold border-b border-[#E5E7EB] dark:border-[#334155] text-[12.5px]">
+                <thead className="text-[#4B5563] dark:text-[#94A3B8] uppercase font-semibold border-b border-[#E5E7EB] dark:border-[#334155] text-[12.5px]">
                   <tr>
                     <th className="p-3.5">Phân hệ nghiệp vụ</th>
                     <th className="p-3.5 text-center">Quản trị viên</th>
@@ -344,7 +489,7 @@ export const UsersPermissionsTab: React.FC = () => {
                         <Icon name={row.icon} size={18} className="text-[#6D3EEB] dark:text-[#C084FC]" />
                         <span>{row.module}</span>
                       </td>
-                      <td className="p-3.5 text-center font-bold text-[#6317D6] dark:text-[#C084FC] bg-transparent">
+                      <td className="p-3.5 text-center font-bold text-[#6317D6] dark:text-[#C084FC]">
                         {row.admin}
                       </td>
                       <td className="p-3.5 text-center font-medium text-[#374151] dark:text-[#CBD5E1]">
@@ -360,6 +505,101 @@ export const UsersPermissionsTab: React.FC = () => {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* APPROVE & ROLE SELECTION MODAL */}
+      {actionModal.isOpen && actionModal.user && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-xs"
+            onClick={() => setActionModal({ isOpen: false, user: null, selectedRole: 'sales', selectedStatus: 'active' })}
+          />
+
+          <div className="relative w-full max-w-md bg-white dark:bg-[#1E293B] rounded-[24px] border border-[#E2E8F0] dark:border-[#334155] shadow-2xl p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-[#F1F2F5] dark:border-[#334155]">
+              <div className="flex items-center gap-2">
+                <Icon name="verified_user" size={20} className="text-[#6D3EEB]" />
+                <h3 className="text-[17px] font-bold text-[#111827] dark:text-[#F8FAFC]">
+                  Phê duyệt & Phân vai trò
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActionModal({ isOpen: false, user: null, selectedRole: 'sales', selectedStatus: 'active' })}
+                className="w-8 h-8 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center justify-center text-gray-500"
+              >
+                <Icon name="close" size={18} />
+              </button>
+            </div>
+
+            <div className="p-3 bg-gray-50 dark:bg-slate-800 rounded-[12px] space-y-1">
+              <div className="text-[14px] font-bold text-[#111827] dark:text-[#F8FAFC]">
+                {actionModal.user.name || 'Người dùng'}
+              </div>
+              <div className="text-[12.5px] font-mono text-[#64748B] dark:text-[#94A3B8]">
+                {actionModal.user.email}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <label className="block text-[13.5px] font-bold text-[#374151] dark:text-[#CBD5E1]">
+                Chọn vai trò truy cập (Role):
+              </label>
+
+              <div className="space-y-2">
+                {[
+                  { id: 'admin', label: 'Quản trị viên (Admin)', desc: 'Toàn quyền cấu hình, duyệt tài khoản, xem tất cả báo cáo' },
+                  { id: 'sales', label: 'Nhân viên Sale (Kinh doanh)', desc: 'Tạo báo giá, hóa đơn bán, quản lý khách hàng' },
+                  { id: 'warehouse', label: 'Thủ kho', desc: 'Nhập xuất tồn, kiểm kê, theo dõi hàng hóa' },
+                  { id: 'accountant', label: 'Kế toán', desc: 'Quản lý công nợ, thu chi, duyệt sổ sách' },
+                ].map(item => (
+                  <label
+                    key={item.id}
+                    className={`flex items-start gap-3 p-3 rounded-[12px] border cursor-pointer transition-all ${
+                      actionModal.selectedRole === item.id
+                        ? 'border-[#6D3EEB] bg-purple-50/50 dark:bg-purple-950/30'
+                        : 'border-[#E5E7EB] dark:border-[#334155] hover:bg-gray-50 dark:hover:bg-slate-800/40'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="userRole"
+                      value={item.id}
+                      checked={actionModal.selectedRole === item.id}
+                      onChange={() => setActionModal(prev => ({ ...prev, selectedRole: item.id }))}
+                      className="mt-0.5 text-[#6D3EEB] focus:ring-[#6D3EEB]"
+                    />
+                    <div>
+                      <div className="text-[13.5px] font-bold text-[#111827] dark:text-[#F8FAFC]">
+                        {item.label}
+                      </div>
+                      <div className="text-[11.5px] text-[#64748B] dark:text-[#94A3B8] leading-tight mt-0.5">
+                        {item.desc}
+                      </div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-[#F1F2F5] dark:border-[#334155]">
+              <button
+                type="button"
+                onClick={() => setActionModal({ isOpen: false, user: null, selectedRole: 'sales', selectedStatus: 'active' })}
+                className="px-4 py-2 text-[13.5px] font-medium text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-[10px]"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveRole}
+                className="px-5 py-2 bg-[#6D3EEB] hover:bg-[#5B2BD6] text-white text-[13.5px] font-semibold rounded-[10px] shadow-sm cursor-pointer"
+              >
+                Xác nhận & Cấp quyền
+              </button>
             </div>
           </div>
         </div>

@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
-interface User {
+export interface User {
   id: string;
   email: string;
   name: string;
   role: string;
+  status?: 'active' | 'pending' | 'blocked';
 }
 
 interface AuthContextType {

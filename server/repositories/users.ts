@@ -17,31 +17,45 @@ export interface User {
   auth_provider: string;
   last_login_at: string;
   session_version: string;
+  status: 'active' | 'pending' | 'blocked';
   created_at: string;
   rowIndex: number; // To help with updates
 }
 
 export const getAllUsers = async (): Promise<User[]> => {
-  const rows = await getSheetData(SPREADSHEET_ID, `${USERS_SHEET}!A2:K`);
-  return rows.map((row: any, index: number) => ({
-    id: row[0] || '',
-    email: row[1] || '',
-    password_hash: row[2] || '',
-    name: row[3] || '',
-    role: row[4] || '',
-    google_sub: row[5] || '',
-    google_email: row[6] || '',
-    auth_provider: row[7] || '',
-    last_login_at: row[8] || '',
-    session_version: row[9] || '1',
-    created_at: row[10] || '',
-    rowIndex: index + 2 // A2 is row 2
-  }));
+  const rows = await getSheetData(SPREADSHEET_ID, `${USERS_SHEET}!A2:L`);
+  return rows.map((row: any, index: number) => {
+    const role = row[4] || 'user';
+    let status: 'active' | 'pending' | 'blocked' = (row[11] as any) || (role === 'admin' ? 'active' : 'pending');
+    if (!row[11] && role === 'admin') {
+      status = 'active';
+    }
+    return {
+      id: row[0] || '',
+      email: row[1] || '',
+      password_hash: row[2] || '',
+      name: row[3] || '',
+      role,
+      google_sub: row[5] || '',
+      google_email: row[6] || '',
+      auth_provider: row[7] || '',
+      last_login_at: row[8] || '',
+      session_version: row[9] || '1',
+      created_at: row[10] || '',
+      status,
+      rowIndex: index + 2 // A2 is row 2
+    };
+  });
 };
 
 export const getUserByEmail = async (email: string): Promise<User | null> => {
   const users = await getAllUsers();
   return users.find(u => u.email.toLowerCase() === email.toLowerCase()) || null;
+};
+
+export const getUserById = async (id: string): Promise<User | null> => {
+  const users = await getAllUsers();
+  return users.find(u => u.id === id) || null;
 };
 
 export const getUserByGoogleSub = async (googleSub: string): Promise<User | null> => {
@@ -62,14 +76,14 @@ export const createUser = async (user: Omit<User, 'rowIndex' | 'id'>) => {
     user.auth_provider,
     user.last_login_at,
     user.session_version || '1',
-    new Date().toISOString()
+    new Date().toISOString(),
+    user.status || 'pending'
   ];
-  await appendSheetData(SPREADSHEET_ID, `${USERS_SHEET}!A:K`, [row]);
+  await appendSheetData(SPREADSHEET_ID, `${USERS_SHEET}!A:L`, [row]);
   return { ...user, id: newId };
 };
 
 export const updateUser = async (rowIndex: number, user: Partial<User>) => {
-  // In a real scenario, you'd merge existing data. Here we fetch the existing user row to avoid overwriting with empties.
   const users = await getAllUsers();
   const existing = users.find(u => u.rowIndex === rowIndex);
   if (!existing) throw new Error('User not found');
@@ -85,8 +99,9 @@ export const updateUser = async (rowIndex: number, user: Partial<User>) => {
     user.auth_provider ?? existing.auth_provider,
     user.last_login_at ?? existing.last_login_at,
     user.session_version ?? existing.session_version,
-    existing.created_at
+    existing.created_at,
+    user.status ?? existing.status
   ];
   
-  await updateSheetData(SPREADSHEET_ID, `${USERS_SHEET}!A${rowIndex}:K${rowIndex}`, [updatedRow]);
+  await updateSheetData(SPREADSHEET_ID, `${USERS_SHEET}!A${rowIndex}:L${rowIndex}`, [updatedRow]);
 };

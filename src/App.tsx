@@ -484,17 +484,27 @@ function AppContent() {
 
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginView } from './views/LoginView';
+import { PendingApprovalView } from './views/PendingApprovalView';
+import { BlockedUserView } from './views/BlockedUserView';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 
 function AppContentWrapper() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading, logout, checkSession } = useAuth();
   
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center">Đang tải...</div>;
   }
   
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !user) {
     return <LoginView />;
+  }
+
+  if (user.status === 'pending') {
+    return <PendingApprovalView user={user} onRefresh={checkSession} onLogout={logout} />;
+  }
+
+  if (user.status === 'blocked') {
+    return <BlockedUserView user={user} onLogout={logout} />;
   }
   
   return <AppContent />;

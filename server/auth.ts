@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import { getUserByEmail, getUserByGoogleSub, createUser, updateUser } from './repositories/users.js';
+import { getAllUsers, getUserByEmail, getUserByGoogleSub, createUser, updateUser } from './repositories/users.js';
 import { requireAuth, AuthRequest } from './middleware/auth.js';
 
 const router = Router();
@@ -11,7 +11,14 @@ const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 
 const setSessionCookie = (res: any, user: any) => {
   const token = jwt.sign(
-    { id: user.id, email: user.email, role: user.role, session_version: user.session_version },
+    { 
+      id: user.id, 
+      email: user.email, 
+      name: user.name,
+      role: user.role, 
+      status: user.status || (user.role === 'admin' ? 'active' : 'pending'),
+      session_version: user.session_version 
+    },
     JWT_SECRET,
     { expiresIn: '7d' }
   );
@@ -63,13 +70,19 @@ router.post('/google-login', async (req, res) => {
           last_login_at: new Date().toISOString()
         });
       } else {
-        // Chưa tồn tại user nào -> Tự động tạo mới (Provisioning) 
-        // *Ghi chú: Theo rule gsheet_auth_crud, nếu system không auto-provision thì throw error. Ở đây để thuận tiện nghiệm thu, tạo mới với quyền User.
+        // Kiểm tra xem đã có user nào trong bảng USERS chưa
+        const allUsers = await getAllUsers();
+        // Tài khoản đầu tiên đăng ký hệ thống sẽ tự động là Admin Active
+        const isFirstUser = allUsers.length === 0;
+        const initialRole = isFirstUser ? 'admin' : 'user';
+        const initialStatus = isFirstUser ? 'active' : 'pending';
+
         user = await createUser({
           email: email!,
           password_hash: '', // Không có mk
           name: name || 'Google User',
-          role: 'user',
+          role: initialRole,
+          status: initialStatus,
           google_sub: sub,
           google_email: email!,
           auth_provider: 'google',
@@ -86,7 +99,16 @@ router.post('/google-login', async (req, res) => {
     }
 
     setSessionCookie(res, user);
-    res.json({ message: 'Login successful', user: { id: user?.id, email: user?.email, name: user?.name, role: user?.role } });
+    res.json({ 
+      message: 'Login successful', 
+      user: { 
+        id: user?.id, 
+        email: user?.email, 
+        name: user?.name, 
+        role: user?.role,
+        status: user?.status || (user?.role === 'admin' ? 'active' : 'pending')
+      } 
+    });
 
   } catch (error: any) {
     console.error('Google login database error:', error.message);
@@ -111,7 +133,16 @@ router.post('/login', async (req, res) => {
     await updateUser(user.rowIndex, { last_login_at: new Date().toISOString() });
     
     setSessionCookie(res, user);
-    res.json({ message: 'Login successful', user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+    res.json({ 
+      message: 'Login successful', 
+      user: { 
+        id: user.id, 
+        email: user.email, 
+        name: user.name, 
+        role: user.role,
+        status: user.status
+      } 
+    });
   } catch (error) {
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } });
   }
@@ -128,6 +159,57 @@ router.post('/logout', (req, res) => {
 
 router.get('/me', requireAuth, async (req: AuthRequest, res) => {
   res.json({ user: req.user });
+});
+
+// Lấy danh sách toàn bộ tài khoản (Chỉ Admin)
+router.get('/users', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    if (req.user?.role !== 'admin') {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Chỉ Quản trị viên mới có quyền xem danh sách người dùng' } });
+    }
+    const users = await getAllUsers();
+    const safeUsers = users.map(u => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      status: u.status,
+      last_login_at: u.last_login_at,
+      created_at: u.created_at,
+      auth_provider: u.auth_provider,
+    }));
+    res.json({ users: safeUsers });
+  } catch (err: any) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+});
+
+// Cập nhật phân quyền / duyệt / khóa tài khoản (Chỉ Admin)
+router.post('/users/:id/update-role', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    if (req.user?.role !== 'admin') {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Chỉ Quản trị viên mới có quyền cập nhật quyền' } });
+    }
+    const { id } = req.params;
+    const { role, status } = req.body;
+    const users = await getAllUsers();
+    const targetUser = users.find(u => u.id === id);
+    if (!targetUser) {
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Không tìm thấy người dùng' } });
+    }
+
+    await updateUser(targetUser.rowIndex, {
+      role: role ?? targetUser.role,
+      status: status ?? targetUser.status
+    });
+
+    res.json({ 
+      message: 'Cập nhật phân quyền thành công', 
+      user: { id, role: role ?? targetUser.role, status: status ?? targetUser.status } 
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
 });
 
 export default router;
