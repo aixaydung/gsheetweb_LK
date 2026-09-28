@@ -41,6 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { label: 'Bán hàng', path: '/ban-hang', icon: 'sell' },
     { label: 'Mua hàng', path: '/mua-hang', icon: 'shopping_cart' },
     { label: 'Kho hàng', path: '/kho-hang', icon: 'inventory_2' },
+    { label: 'Sổ quỹ', path: '/so-quy', icon: 'payments' },
     { label: 'Công nợ', path: '/cong-no', icon: 'account_balance_wallet' },
     { label: 'Báo cáo', path: '/bao-cao', icon: 'bar_chart' },
   ];

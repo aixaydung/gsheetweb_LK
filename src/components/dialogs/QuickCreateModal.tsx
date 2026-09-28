@@ -37,10 +37,17 @@ export const QuickCreateModal: React.FC<QuickCreateModalProps> = ({
     },
     {
       key: 'payment',
-      title: 'Thu tiền khách',
-      desc: 'Thu nợ nhiều hóa đơn',
-      icon: 'account_balance_wallet',
+      title: 'Tạo phiếu thu',
+      desc: 'Thu nợ nhiều hóa đơn KH',
+      icon: 'add_circle',
       gradient: 'from-[#10B981] to-[#047857]',
+    },
+    {
+      key: 'payment_out',
+      title: 'Tạo phiếu chi',
+      desc: 'Chi trả tiền hàng cho NCC',
+      icon: 'remove_circle',
+      gradient: 'from-[#EF4444] to-[#B91C1C]',
     },
     {
       key: 'product',

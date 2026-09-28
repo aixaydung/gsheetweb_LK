@@ -29,6 +29,7 @@ import { DebtView } from './views/DebtView';
 import { ReportView } from './views/ReportView';
 import { SettingsView } from './views/SettingsView';
 import { ProfileView } from './views/ProfileView';
+import { CashbookView } from './views/CashbookView';
 
 import { Product } from './types';
 
@@ -108,6 +109,7 @@ function AppContent() {
       '/ban-hang': 'Bán hàng',
       '/mua-hang': 'Mua hàng',
       '/kho-hang': 'Kho hàng',
+      '/so-quy': 'Sổ quỹ',
       '/cong-no': 'Công nợ',
       '/bao-cao': 'Báo cáo',
       '/cai-dat': 'Cài đặt',
@@ -208,6 +210,9 @@ function AppContent() {
         break;
       case 'payment':
         setPaymentModalState({ isOpen: true, direction: 'in' });
+        break;
+      case 'payment_out':
+        setPaymentModalState({ isOpen: true, direction: 'out' });
         break;
       case 'product':
         setProductToEdit(null);
@@ -317,6 +322,17 @@ function AppContent() {
                 if (dir === 'in') setIsCreatePOOpen(true);
                 else setIsCreateInvoiceOpen(true);
               }}
+            />
+          )}
+
+          {currentPath === '/so-quy' && (
+            <CashbookView
+              onOpenCreateReceipt={() =>
+                setPaymentModalState({ isOpen: true, direction: 'in' })
+              }
+              onOpenCreatePayment={() =>
+                setPaymentModalState({ isOpen: true, direction: 'out' })
+              }
             />
           )}
 
