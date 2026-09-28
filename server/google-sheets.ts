@@ -10,6 +10,9 @@ const initGoogleSheets = () => {
   if (!process.env.GOOGLE_CLIENT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
     throw new Error('Thiếu cấu hình GOOGLE_CLIENT_EMAIL hoặc GOOGLE_PRIVATE_KEY trong biến môi trường!');
   }
+  if (!process.env.SPREADSHEET_ID || process.env.SPREADSHEET_ID === 'YOUR_SPREADSHEET_ID_HERE') {
+    throw new Error('Chưa cấu hình SPREADSHEET_ID hợp lệ trong biến môi trường (hiện đang là placeholder YOUR_SPREADSHEET_ID_HERE)!');
+  }
   
   // Format lại Private Key (Vercel thường hay bị lỗi format chuỗi \n hoặc bao quanh bởi ngoặc kép)
   let privateKey = process.env.GOOGLE_PRIVATE_KEY;

@@ -29,17 +29,23 @@ router.post('/google-login', async (req, res) => {
     return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Missing credential' } });
   }
 
+  let payload;
   try {
     const ticket = await googleClient.verifyIdToken({
       idToken: credential,
       audience: process.env.GOOGLE_CLIENT_ID,
     });
-    
-    const payload = ticket.getPayload();
-    if (!payload || !payload.email_verified) {
-      return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Email not verified by Google' } });
-    }
+    payload = ticket.getPayload();
+  } catch (tokenErr: any) {
+    console.error('Google token verification failed:', tokenErr.message);
+    return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Token Google không hợp lệ hoặc đã hết hạn' } });
+  }
 
+  if (!payload || !payload.email_verified) {
+    return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Email chưa được xác thực bởi Google' } });
+  }
+
+  try {
     const { sub, email, name } = payload;
 
     // 1. Tìm bằng google_sub
@@ -83,8 +89,8 @@ router.post('/google-login', async (req, res) => {
     res.json({ message: 'Login successful', user: { id: user?.id, email: user?.email, name: user?.name, role: user?.role } });
 
   } catch (error: any) {
-    console.error('Google login error:', error.message);
-    res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Invalid Google token' } });
+    console.error('Google login database error:', error.message);
+    res.status(500).json({ error: { code: 'DATABASE_ERROR', message: `Lỗi kết nối cơ sở dữ liệu Google Sheets: ${error.message}` } });
   }
 });
 
