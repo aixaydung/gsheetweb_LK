@@ -92,6 +92,8 @@ Spreadsheet ID: `1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY` đã khởi tạo
   - [x] Xây dựng `server/repositories/payments.ts` & `server/routes/payments.ts`.
   - [x] Tự động sinh mã phiếu thu `PT-YYYYMM-XXXX` và phiếu chi `PC-YYYYMM-XXXX`.
   - [x] Tự động gạch nợ hóa đơn bán hoặc đơn mua, cập nhật công nợ tức thì và đồng bộ ngầm lên Google Sheets.
+  - [x] Xây dựng giao diện chuyên dụng `src/views/CashbookView.tsx` với 2 nút bấm nổi bật **Tạo phiếu thu** & **Tạo phiếu chi**, 4 thẻ KPI quỹ, bộ lọc phân loại Thu/Chi và bảng chi tiết phiếu.
+  - [x] Bổ sung mục điều hướng **Sổ quỹ** trực tiếp trên Sidebar và menu Tạo nhanh Header.
 
 ### Giai đoạn C: Đang thực hiện & Cần kiểm thử thực tế [IN PROGRESS]
 - [ ] Người dùng kiểm tra tạo thử:
