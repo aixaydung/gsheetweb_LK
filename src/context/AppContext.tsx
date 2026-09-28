@@ -241,11 +241,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     const fetchSheetsData = async () => {
       try {
-        const [custRes, prodRes, vendRes, orderRes] = await Promise.allSettled([
+        const [custRes, prodRes, vendRes, orderRes, poRes] = await Promise.allSettled([
           fetch('/api/customers'),
           fetch('/api/products'),
           fetch('/api/vendors'),
-          fetch('/api/orders')
+          fetch('/api/orders'),
+          fetch('/api/purchases')
         ]);
         if (custRes.status === 'fulfilled' && custRes.value.ok) {
           const data = await custRes.value.json();
@@ -269,6 +270,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const data = await orderRes.value.json();
           if (Array.isArray(data.orders) && data.orders.length > 0) {
             setInvoices(data.orders);
+          }
+        }
+        if (poRes.status === 'fulfilled' && poRes.value.ok) {
+          const data = await poRes.value.json();
+          if (Array.isArray(data.purchases) && data.purchases.length > 0) {
+            setPurchaseOrders(data.purchases);
           }
         }
       } catch (err) {
@@ -800,9 +807,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Purchase Order
   const createPurchaseOrder = (poData: Partial<PurchaseOrder>, items: DocumentLineItem[]): PurchaseOrder => {
-    const nextNum = purchaseOrders.length + 11;
-    const code = poData.code || `PM${String(nextNum).padStart(3, '0')}`;
-    const now = new Date().toISOString();
+    const dateObj = new Date();
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const ym = `${year}${month}`;
+    const nextNum = purchaseOrders.filter(p => p.code && p.code.startsWith(`MH-${ym}`)).length + 1;
+    const code = poData.code || `MH-${ym}-${String(nextNum).padStart(4, '0')}`;
+    const now = dateObj.toISOString();
 
     const subtotal = items.reduce((sum, item) => sum + item.line_total, 0);
     const discountType = poData.discount_type || 'amount';
@@ -854,11 +865,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const updatedPOs = [newPO, ...purchaseOrders];
     setPurchaseOrders(updatedPOs);
 
+    // Background sync to Google Sheets (Option A: Optimistic UI)
+    fetch('/api/purchases', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        order: {
+          id: newPO.id,
+          code: newPO.code,
+          supplier_id: newPO.supplier_id,
+          supplier_name: newPO.supplier_name,
+          order_date: newPO.order_date,
+          expected_date: newPO.expected_date,
+          subtotal: newPO.subtotal,
+          discount_amount: newPO.discount_amount,
+          vat_rate: newPO.vat_rate,
+          vat_amount: newPO.vat_amount,
+          shipping_fee: newPO.shipping_fee,
+          total: newPO.total,
+          paid_amount: newPO.paid_amount,
+          debt_amount: newPO.debt_amount,
+          payment_status: newPO.payment_status,
+          status: newPO.status,
+          note: newPO.note,
+        },
+        items: newPO.items.map(it => ({
+          product_id: it.product_id,
+          sku: it.sku,
+          product_name: it.product_name,
+          unit: it.unit,
+          quantity: it.quantity,
+          unit_price: it.unit_price,
+          discount_amount: it.discount_amount ?? it.line_discount ?? 0,
+          line_total: it.line_total,
+          note: it.note || '',
+        })),
+      }),
+    }).catch(err => {
+      console.error('Background sync purchase order to Google Sheets failed:', err);
+    });
+
     // If 'received' (Đã nhập kho), create stock voucher & add stock
     if (newPO.status === 'received') {
+      const voucherCode = code.replace('MH-', 'PN-');
       const newVoucher: StockVoucher = {
         id: `sv-${Date.now()}`,
-        code,
+        code: voucherCode,
         direction: 'in',
         type: 'purchase',
         status: 'received',
@@ -916,6 +968,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPurchaseOrders(prev =>
       prev.map(po => (po.id === id ? { ...po, status } : po))
     );
+    fetch(`/api/purchases/${id}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    }).catch(err => {
+      console.error('Background sync update purchase status failed:', err);
+    });
   };
 
   const createPurchaseReturn = (retData: Partial<PurchaseReturn>, items: DocumentLineItem[]): PurchaseReturn => {

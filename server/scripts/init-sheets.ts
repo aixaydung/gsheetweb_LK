@@ -75,6 +75,23 @@ const REQUIRED_SHEETS: SheetSchema[] = [
       'partner_id', 'partner_name', 'amount', 'payment_method',
       'reference_code', 'note', 'status', 'created_by', 'created_at'
     ]
+  },
+  {
+    title: 'PURCHASE_ORDERS',
+    headers: [
+      'id', 'code', 'supplier_id', 'supplier_name', 'order_date',
+      'expected_date', 'subtotal', 'discount_amount', 'vat_rate',
+      'vat_amount', 'shipping_fee', 'total', 'paid_amount', 'debt_amount',
+      'payment_status', 'status', 'note', 'created_by', 'created_at'
+    ]
+  },
+  {
+    title: 'PURCHASE_ORDER_ITEMS',
+    headers: [
+      'id', 'po_id', 'product_id', 'sku', 'product_name',
+      'unit', 'quantity', 'unit_price', 'discount_amount',
+      'line_total', 'note'
+    ]
   }
 ];
 

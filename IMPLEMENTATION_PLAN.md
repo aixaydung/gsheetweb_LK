@@ -80,12 +80,16 @@ Spreadsheet ID: `1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY` đã khởi tạo
   - [x] Lưu song song Master vào `ORDERS`, chi tiết vào `ORDER_ITEMS`, tự động xuất kho `PX-YYYYMM-XXXX` vào `STOCK_MOVEMENTS`.
   - [x] Cập nhật trạng thái / hủy đơn hàng đồng bộ tab `ORDERS`.
 
+- [x] **Đơn mua hàng / Nhập hàng (`PURCHASE_ORDERS` + `PURCHASE_ORDER_ITEMS` + `STOCK_MOVEMENTS`)**:
+  - [x] Đã khởi tạo 2 sheet `PURCHASE_ORDERS` (19 cột) và `PURCHASE_ORDER_ITEMS` (11 cột) trên Google Sheets.
+  - [x] Xây dựng `server/repositories/purchases.ts` & `server/routes/purchases.ts`.
+  - [x] Tự động sinh mã `MH-YYYYMM-XXXX` và phiếu nhập `PN-YYYYMM-XXXX` vào `STOCK_MOVEMENTS`.
+  - [x] Tự động cộng tồn kho và tính lại giá vốn bình quân gia quyền trong tab `PRODUCTS`.
+  - [x] Cập nhật `src/context/AppContext.tsx` với Optimistic UI và đồng bộ ngầm lên Google Sheets.
+
 ### Giai đoạn C: Đang thực hiện & Cần kiểm thử thực tế [IN PROGRESS]
-- [ ] Người dùng kiểm tra tạo thử 1 đơn hàng bán trên [https://lkerp.sheetapp.store/ban-hang](https://lkerp.sheetapp.store/ban-hang) và đối chiếu các dòng tại 3 tab `ORDERS`, `ORDER_ITEMS`, `STOCK_MOVEMENTS`.
-- [ ] **Đơn mua hàng / Nhập hàng (`PURCHASE_ORDERS`)**:
-  - [ ] Xây dựng `server/repositories/purchases.ts` & `server/routes/purchases.ts`.
-  - [ ] Tự động sinh mã `MH-YYYYMM-XXXX` và phiếu nhập `PN-YYYYMM-XXXX`.
-  - [ ] Tự động cộng tồn kho và tính lại giá vốn bình quân gia quyền trong tab `PRODUCTS`.
+- [ ] Người dùng kiểm tra tạo thử đơn hàng bán trên [https://lkerp.sheetapp.store/ban-hang](https://lkerp.sheetapp.store/ban-hang) và đơn mua hàng trên [https://lkerp.sheetapp.store/mua-hang](https://lkerp.sheetapp.store/mua-hang).
+- [ ] Chuẩn bị triển khai Phân hệ Sổ quỹ Thu/Chi (`PAYMENTS`) & Gạch công nợ.
 
 ### Giai đoạn D: Sổ quỹ, Kho nâng cao & Báo cáo [ROADMAP TIẾP THEO]
 - [ ] **Sổ quỹ & Thu chi (`PAYMENTS`)**:

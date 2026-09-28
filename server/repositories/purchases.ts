@@ -1,0 +1,163 @@
+import crypto from 'crypto';
+import { getSheetData, appendSheetData, updateSheetData } from '../google-sheets.js';
+
+const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY';
+const PO_SHEET = 'PURCHASE_ORDERS';
+const PO_ITEMS_SHEET = 'PURCHASE_ORDER_ITEMS';
+const STOCK_MOVEMENTS_SHEET = 'STOCK_MOVEMENTS';
+
+export interface PurchaseOrderItemRecord {
+  id: string;
+  po_id: string;
+  product_id: string;
+  sku: string;
+  product_name: string;
+  unit: string;
+  quantity: number;
+  unit_price: number;
+  discount_amount: number;
+  line_total: number;
+  note?: string;
+}
+
+export interface PurchaseOrderRecord {
+  id: string;
+  code: string;
+  supplier_id: string;
+  supplier_name: string;
+  order_date: string;
+  expected_date?: string;
+  subtotal: number;
+  discount_amount: number;
+  vat_rate: number;
+  vat_amount: number;
+  shipping_fee: number;
+  total: number;
+  paid_amount: number;
+  debt_amount: number;
+  payment_status: 'unpaid' | 'partial' | 'paid' | 'overpaid';
+  status: 'ordered' | 'received' | 'partially_returned' | 'cancelled';
+  note?: string;
+  created_by?: string;
+  created_at: string;
+  items?: PurchaseOrderItemRecord[];
+  rowIndex?: number;
+}
+
+export const getAllPurchases = async (): Promise<PurchaseOrderRecord[]> => {
+  const rows = await getSheetData(SPREADSHEET_ID, `${PO_SHEET}!A2:S`);
+  return rows.map((row: any, index: number) => ({
+    id: row[0] || '',
+    code: row[1] || '',
+    supplier_id: row[2] || '',
+    supplier_name: row[3] || '',
+    order_date: row[4] || '',
+    expected_date: row[5] || '',
+    subtotal: Number(row[6]) || 0,
+    discount_amount: Number(row[7]) || 0,
+    vat_rate: Number(row[8]) || 0,
+    vat_amount: Number(row[9]) || 0,
+    shipping_fee: Number(row[10]) || 0,
+    total: Number(row[11]) || 0,
+    paid_amount: Number(row[12]) || 0,
+    debt_amount: Number(row[13]) || 0,
+    payment_status: (row[14] as any) || 'unpaid',
+    status: (row[15] as any) || 'received',
+    note: row[16] || '',
+    created_by: row[17] || '',
+    created_at: row[18] || '',
+    rowIndex: index + 2,
+  }));
+};
+
+export const generatePurchaseCode = async (): Promise<string> => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const ym = `${year}${month}`;
+  
+  const purchases = await getAllPurchases();
+  const currentMonthPurchases = purchases.filter(p => p.code && p.code.startsWith(`MH-${ym}`));
+  const nextNum = currentMonthPurchases.length + 1;
+  return `MH-${ym}-${String(nextNum).padStart(4, '0')}`;
+};
+
+export const createPurchaseWithItems = async (poData: Partial<PurchaseOrderRecord>, items: PurchaseOrderItemRecord[] = []) => {
+  const id = poData.id || crypto.randomUUID();
+  const code = poData.code || (await generatePurchaseCode());
+  const now = new Date().toISOString();
+
+  // 1. Append to PURCHASE_ORDERS sheet (A:S)
+  const poRow = [
+    id,
+    code,
+    poData.supplier_id || '',
+    poData.supplier_name || 'Nhà cung cấp',
+    poData.order_date || now,
+    poData.expected_date || '',
+    poData.subtotal || 0,
+    poData.discount_amount || 0,
+    poData.vat_rate || 0,
+    poData.vat_amount || 0,
+    poData.shipping_fee || 0,
+    poData.total || 0,
+    poData.paid_amount || 0,
+    poData.debt_amount || 0,
+    poData.payment_status || 'unpaid',
+    poData.status || 'received',
+    poData.note || '',
+    poData.created_by || 'Hệ thống',
+    now,
+  ];
+
+  await appendSheetData(SPREADSHEET_ID, `${PO_SHEET}!A:S`, [poRow]);
+
+  // 2. Append to PURCHASE_ORDER_ITEMS sheet if items present (A:K)
+  if (items && items.length > 0) {
+    const itemRows = items.map(it => [
+      it.id || crypto.randomUUID(),
+      id,
+      it.product_id || '',
+      it.sku || '',
+      it.product_name || '',
+      it.unit || 'Cái',
+      it.quantity || 1,
+      it.unit_price || 0,
+      it.discount_amount || 0,
+      it.line_total || 0,
+      it.note || '',
+    ]);
+    await appendSheetData(SPREADSHEET_ID, `${PO_ITEMS_SHEET}!A:K`, itemRows);
+  }
+
+  // 3. Auto record Stock In voucher into STOCK_MOVEMENTS if received
+  if (poData.status !== 'cancelled') {
+    const pnCode = code.replace('MH-', 'PN-');
+    const movementRow = [
+      crypto.randomUUID(),
+      pnCode,
+      'purchase',
+      'purchase_order',
+      code,
+      'wh-01',
+      now,
+      poData.total || 0,
+      `Nhập kho từ đơn mua ${code}`,
+      'received',
+      poData.created_by || 'Hệ thống',
+      now,
+    ];
+    await appendSheetData(SPREADSHEET_ID, `${STOCK_MOVEMENTS_SHEET}!A:L`, [movementRow]);
+  }
+
+  return { ...poData, id, code, items, created_at: now };
+};
+
+export const updatePurchaseStatus = async (id: string, newStatus: string) => {
+  const purchases = await getAllPurchases();
+  const target = purchases.find(p => p.id === id);
+  if (!target || !target.rowIndex) throw new Error('Purchase order not found');
+
+  // Status column is P (column 16)
+  await updateSheetData(SPREADSHEET_ID, `${PO_SHEET}!P${target.rowIndex}:P${target.rowIndex}`, [[newStatus]]);
+};
