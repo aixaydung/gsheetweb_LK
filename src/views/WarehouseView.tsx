@@ -8,8 +8,9 @@ import { DataTable, Column } from '../components/ui/DataTable';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { NoteCell } from '../components/ui/NoteCell';
 import { Icon } from '../components/ui/Icon';
-import { DateRange } from '../components/ui/DateRangePicker';
-import { formatCurrency, formatQuantity, formatDate } from '../lib/format';
+import { DateRangePicker, DateRange } from '../components/ui/DateRangePicker';
+import { formatCurrency, formatQuantity, formatDate, formatDateTime } from '../lib/format';
+import { exportToExcelFile } from '../lib/excelExport';
 import { Product, StockVoucher, StockMovement, Stocktake } from '../types';
 
 interface WarehouseViewProps {
@@ -39,6 +40,9 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
     stockVouchers,
     stockMovements,
     stocktakes,
+    invoices,
+    purchaseOrders,
+    companySettings,
     deleteProduct,
     updateInlineNote,
     createWarehouse,
@@ -50,11 +54,22 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
   const [filterType, setFilterType] = useState('all');
   const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null });
 
+  // State for Thẻ kho (Stock Card)
+  const [selectedProductSku, setSelectedProductSku] = useState<string>(() => products[0]?.sku || '');
+  const [stockCardDateRange, setStockCardDateRange] = useState<DateRange>({
+    from: '2026-09-01',
+    to: '2026-09-30',
+    preset: 'thisMonth',
+  });
+  const [stockCardSearch, setStockCardSearch] = useState('');
+  const [stockCardTypeFilter, setStockCardTypeFilter] = useState('all');
+
   const tabs: TabItem[] = [
     { id: 'tong-quan', label: 'Tổng quan kho' },
     { id: 'nhap-kho', label: 'Nhập kho' },
     { id: 'xuat-kho', label: 'Xuất kho' },
     { id: 'kiem-ke', label: 'Kiểm kê' },
+    { id: 'the-kho', label: 'Thẻ kho (Stock Card)' },
     { id: 'lich-su', label: 'Lịch sử kho' },
   ];
 
@@ -213,7 +228,18 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
       header: '',
       align: 'right',
       render: row => (
-        <div className="flex items-center justify-end gap-2 text-[#6B7280]">
+        <div className="flex items-center justify-end gap-1.5 text-[#6B7280]">
+          <button
+            type="button"
+            title="Xem Thẻ kho (Stock Card)"
+            onClick={() => {
+              setSelectedProductSku(row.sku);
+              onTabChange('the-kho');
+            }}
+            className="p-1.5 hover:text-[#059669] rounded-full hover:bg-[#ECFDF5] transition-colors"
+          >
+            <Icon name="history_edu" size={18} />
+          </button>
           <button
             type="button"
             title="Sửa sản phẩm"
@@ -500,6 +526,419 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
     },
   ];
 
+  // Selected product for Thẻ kho (Stock Card)
+  const selectedProduct = useMemo(() => {
+    return products.find(p => p.sku === selectedProductSku) || products[0];
+  }, [products, selectedProductSku]);
+
+  // Gather all historical events for the selected product
+  const allProductMovements = useMemo(() => {
+    if (!selectedProduct) return [];
+    const pId = selectedProduct.id;
+    const pSku = selectedProduct.sku;
+
+    const events: {
+      id: string;
+      date: string;
+      code: string;
+      type: string;
+      partner: string;
+      qtyIn: number;
+      qtyOut: number;
+      unitCost?: number;
+      note?: string;
+      rawDocType?: string;
+      rawDoc?: any;
+    }[] = [];
+
+    const seenCodes = new Set<string>();
+
+    // 1. From stockMovements
+    stockMovements.forEach(m => {
+      if (m.product_id === pId || m.sku === pSku) {
+        let typeLabel = 'Biến động kho';
+        let rawDocType = 'movement';
+        if (m.type === 'purchase') {
+          typeLabel = 'Nhập mua hàng';
+          rawDocType = 'PN';
+        } else if (m.type === 'sale') {
+          typeLabel = 'Xuất bán hàng';
+          rawDocType = 'PX';
+        } else if (m.type === 'stocktake') {
+          typeLabel = 'Cân bằng kiểm kê';
+          rawDocType = 'KK';
+        } else if (m.type === 'purchase_return') {
+          typeLabel = 'Xuất trả NCC';
+          rawDocType = 'PR';
+        }
+
+        events.push({
+          id: m.id,
+          date: m.movement_date,
+          code: m.code || m.source_code,
+          type: typeLabel,
+          partner: m.note || m.source_code,
+          qtyIn: m.qty_in || 0,
+          qtyOut: m.qty_out || 0,
+          unitCost: m.unit_cost,
+          note: m.note,
+          rawDocType,
+        });
+        if (m.source_code) seenCodes.add(m.source_code);
+        if (m.code) seenCodes.add(m.code);
+      }
+    });
+
+    // 2. From purchaseOrders
+    purchaseOrders.forEach(po => {
+      if (po.status !== 'cancelled' && !seenCodes.has(po.code) && !seenCodes.has(po.code.replace('MH-', 'PN-'))) {
+        const it = po.items?.find(i => i.product_id === pId || i.sku === pSku);
+        if (it && it.quantity > 0) {
+          const voucherCode = po.code.startsWith('MH-') ? po.code.replace('MH-', 'PN-') : po.code;
+          events.push({
+            id: `po-${po.id}`,
+            date: po.order_date,
+            code: voucherCode,
+            type: 'Nhập mua hàng',
+            partner: po.supplier_name || 'Nhà cung cấp',
+            qtyIn: it.quantity,
+            qtyOut: 0,
+            unitCost: it.unit_price,
+            note: `Nhập mua theo ${po.code}`,
+            rawDocType: 'MH',
+            rawDoc: po,
+          });
+          seenCodes.add(po.code);
+          seenCodes.add(voucherCode);
+        }
+      }
+    });
+
+    // 3. From invoices
+    invoices.forEach(inv => {
+      if (inv.status !== 'cancelled' && !seenCodes.has(inv.code) && !seenCodes.has(inv.code.replace('BH-', 'PX-'))) {
+        const it = inv.items?.find(i => i.product_id === pId || i.sku === pSku);
+        if (it && it.quantity > 0) {
+          const voucherCode = inv.code.startsWith('BH-') ? inv.code.replace('BH-', 'PX-') : inv.code;
+          events.push({
+            id: `inv-${inv.id}`,
+            date: inv.invoice_date || (inv as any).order_date || (inv as any).created_at,
+            code: voucherCode,
+            type: 'Xuất bán hàng',
+            partner: inv.customer_name || 'Khách hàng',
+            qtyIn: 0,
+            qtyOut: it.quantity,
+            unitCost: it.unit_cost || it.unit_price,
+            note: `Xuất bán theo ${inv.code}`,
+            rawDocType: 'BH',
+            rawDoc: inv,
+          });
+          seenCodes.add(inv.code);
+          seenCodes.add(voucherCode);
+        }
+      }
+    });
+
+    // 4. From stocktakes
+    stocktakes.forEach(st => {
+      if (st.status === 'completed' && !seenCodes.has(st.code) && !seenCodes.has(`PKK-${st.code}`)) {
+        const it = st.items?.find(i => i.product_id === pId || i.sku === pSku);
+        if (it && it.diff_qty !== 0) {
+          events.push({
+            id: `stk-${st.id}`,
+            date: st.stocktake_date,
+            code: `PKK-${st.code}`,
+            type: 'Cân bằng kiểm kê',
+            partner: st.counted_by || 'Hệ thống kiểm kê',
+            qtyIn: it.diff_qty > 0 ? it.diff_qty : 0,
+            qtyOut: it.diff_qty < 0 ? Math.abs(it.diff_qty) : 0,
+            unitCost: it.unit_cost,
+            note: it.reason || `Biên bản kiểm kê ${st.code}`,
+            rawDocType: 'KK',
+            rawDoc: st,
+          });
+          seenCodes.add(`PKK-${st.code}`);
+        }
+      }
+    });
+
+    // Sort chronologically ascending
+    return events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [selectedProduct, stockMovements, purchaseOrders, invoices, stocktakes]);
+
+  // Compute stock card ledger numbers
+  const stockCardData = useMemo(() => {
+    if (!selectedProduct) {
+      return { openingStock: 0, totalIn: 0, totalOut: 0, closingStock: 0, rows: [] };
+    }
+
+    const fromDate = stockCardDateRange.from;
+    const toDate = stockCardDateRange.to;
+
+    // Events within period
+    const inPeriodEvents = allProductMovements.filter(e => {
+      const d = (e.date || '').split('T')[0];
+      if (fromDate && d && d < fromDate) return false;
+      if (toDate && d && d > toDate) return false;
+      return true;
+    });
+
+    // Events before period
+    const beforeEvents = allProductMovements.filter(e => {
+      const d = (e.date || '').split('T')[0];
+      if (fromDate && d && d < fromDate) return true;
+      return false;
+    });
+
+    let openingStock = 0;
+    if (beforeEvents.length > 0) {
+      openingStock = Math.max(0, beforeEvents.reduce((sum, e) => sum + e.qtyIn - e.qtyOut, 0));
+    } else {
+      const netPeriod = inPeriodEvents.reduce((sum, e) => sum + e.qtyIn - e.qtyOut, 0);
+      openingStock = Math.max(0, (selectedProduct.stock_quantity || 0) - netPeriod);
+    }
+
+    let runningBalance = openingStock;
+    const computedRows = inPeriodEvents.map(e => {
+      runningBalance = runningBalance + e.qtyIn - e.qtyOut;
+      return {
+        ...e,
+        balance: runningBalance,
+      };
+    });
+
+    const totalIn = inPeriodEvents.reduce((sum, e) => sum + e.qtyIn, 0);
+    const totalOut = inPeriodEvents.reduce((sum, e) => sum + e.qtyOut, 0);
+    const closingStock = runningBalance;
+
+    // Filter by user search or transaction type filter
+    const filteredRows = computedRows.filter(r => {
+      const matchSearch =
+        !stockCardSearch ||
+        r.code.toLowerCase().includes(stockCardSearch.toLowerCase()) ||
+        r.partner.toLowerCase().includes(stockCardSearch.toLowerCase()) ||
+        (r.note && r.note.toLowerCase().includes(stockCardSearch.toLowerCase()));
+
+      let matchType = true;
+      if (stockCardTypeFilter === 'in') matchType = r.qtyIn > 0;
+      else if (stockCardTypeFilter === 'out') matchType = r.qtyOut > 0;
+      else if (stockCardTypeFilter === 'stocktake') matchType = r.type.includes('kiểm kê');
+
+      return matchSearch && matchType;
+    });
+
+    return {
+      openingStock,
+      totalIn,
+      totalOut,
+      closingStock,
+      rows: filteredRows,
+    };
+  }, [selectedProduct, allProductMovements, stockCardDateRange, stockCardSearch, stockCardTypeFilter]);
+
+  // Export Stock Card to Excel
+  const handleExportStockCardExcel = () => {
+    if (!selectedProduct) return;
+    const exportColumns = [
+      { key: 'date', header: 'NGÀY CHỨNG TỪ', accessor: (r: any) => formatDateTime(r.date) },
+      { key: 'code', header: 'SỐ CHỨNG TỪ' },
+      { key: 'type', header: 'LOẠI BIẾN ĐỘNG' },
+      { key: 'partner', header: 'ĐỐI TÁC / DIỄN GIẢI' },
+      { key: 'qtyIn', header: 'SỐ LƯỢNG NHẬP', accessor: (r: any) => r.qtyIn || 0 },
+      { key: 'qtyOut', header: 'SỐ LƯỢNG XUẤT', accessor: (r: any) => r.qtyOut || 0 },
+      { key: 'balance', header: 'TỒN LŨY KẾ' },
+      { key: 'unitCost', header: 'ĐƠN GIÁ VỐN', accessor: (r: any) => r.unitCost || 0 },
+      { key: 'note', header: 'GHI CHÚ' },
+    ];
+
+    const dataToExport = [
+      {
+        date: stockCardDateRange.from || '',
+        code: 'DK',
+        type: 'Số dư đầu kỳ',
+        partner: 'Số tồn đầu kỳ tính lũy kế',
+        qtyIn: 0,
+        qtyOut: 0,
+        balance: stockCardData.openingStock,
+        unitCost: selectedProduct.cost_price,
+        note: '',
+      },
+      ...stockCardData.rows,
+      {
+        date: stockCardDateRange.to || '',
+        code: 'CK',
+        type: 'Số dư cuối kỳ',
+        partner: `Tổng nhập: ${stockCardData.totalIn} | Tổng xuất: ${stockCardData.totalOut}`,
+        qtyIn: stockCardData.totalIn,
+        qtyOut: stockCardData.totalOut,
+        balance: stockCardData.closingStock,
+        unitCost: selectedProduct.cost_price,
+        note: '',
+      },
+    ];
+
+    exportToExcelFile(dataToExport, exportColumns, `TheKho_${selectedProduct.sku}`);
+  };
+
+  // Print Stock Card (Official Vietnamese Ministry of Finance S12-DNN standard)
+  const handlePrintStockCard = () => {
+    if (!selectedProduct) return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Vui lòng cấp quyền mở popup để in Thẻ kho.');
+      return;
+    }
+
+    const companyName = companySettings?.company_name || 'LK ERP - HỆ THỐNG QUẢN TRỊ DOANH NGHIỆP';
+    const companyAddress = companySettings?.address || 'TP. Hồ Chí Minh, Việt Nam';
+    const companyPhone = companySettings?.phone || '0901 234 567';
+
+    const rowsHtml = stockCardData.rows
+      .map(
+        (r, idx) => `
+        <tr>
+          <td style="text-align:center; padding:6px; border:1px solid #333;">${idx + 1}</td>
+          <td style="text-align:center; padding:6px; border:1px solid #333;">${formatDate(r.date)}</td>
+          <td style="text-align:center; padding:6px; border:1px solid #333; font-weight:600;">${r.qtyIn > 0 ? r.code : '—'}</td>
+          <td style="text-align:center; padding:6px; border:1px solid #333; font-weight:600;">${r.qtyOut > 0 ? r.code : '—'}</td>
+          <td style="padding:6px; border:1px solid #333;">${r.partner || r.type}</td>
+          <td style="text-align:right; padding:6px; border:1px solid #333;">${r.unitCost ? formatCurrency(r.unitCost) : '—'}</td>
+          <td style="text-align:right; padding:6px; border:1px solid #333; color:#059669; font-weight:600;">${r.qtyIn > 0 ? formatQuantity(r.qtyIn) : '—'}</td>
+          <td style="text-align:right; padding:6px; border:1px solid #333; color:#E11D48; font-weight:600;">${r.qtyOut > 0 ? formatQuantity(r.qtyOut) : '—'}</td>
+          <td style="text-align:right; padding:6px; border:1px solid #333; font-weight:bold;">${formatQuantity(r.balance)}</td>
+        </tr>`
+      )
+      .join('');
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>THẺ KHO - ${selectedProduct.sku} - ${selectedProduct.name}</title>
+        <style>
+          body { font-family: 'Times New Roman', Times, serif; font-size: 13px; color: #111; margin: 20px; line-height: 1.4; }
+          .header-table { width: 100%; margin-bottom: 20px; }
+          .title { text-align: center; font-size: 20px; font-weight: bold; margin: 15px 0 5px 0; text-transform: uppercase; }
+          .subtitle { text-align: center; font-style: italic; margin-bottom: 15px; }
+          .info-table { width: 100%; margin-bottom: 15px; }
+          .data-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
+          .data-table th { background: #f3f4f6; border: 1px solid #333; padding: 7px; text-align: center; font-weight: bold; font-size: 12px; }
+          .footer-table { width: 100%; margin-top: 30px; text-align: center; }
+          .footer-table td { padding: 5px; vertical-align: top; width: 25%; }
+          @media print {
+            @page { size: A4 portrait; margin: 15mm; }
+            button { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <table class="header-table">
+          <tr>
+            <td>
+              <strong>${companyName}</strong><br/>
+              Địa chỉ: ${companyAddress}<br/>
+              Điện thoại: ${companyPhone}
+            </td>
+            <td style="text-align: right; vertical-align: top;">
+              <strong>Mẫu số S12-DNN</strong><br/>
+              <em>(Ban hành theo TT số 133/2016/TT-BTC)</em>
+            </td>
+          </tr>
+        </table>
+
+        <div class="title">THẺ KHO (SỔ KHO)</div>
+        <div class="subtitle">
+          Từ ngày: ${stockCardDateRange.from ? formatDate(stockCardDateRange.from) : '...'} 
+          đến ngày: ${stockCardDateRange.to ? formatDate(stockCardDateRange.to) : '...'}
+        </div>
+
+        <table class="info-table">
+          <tr>
+            <td style="width: 50%;"><strong>Tên sản phẩm:</strong> ${selectedProduct.name}</td>
+            <td style="width: 50%;"><strong>Mã SKU:</strong> ${selectedProduct.sku}</td>
+          </tr>
+          <tr>
+            <td><strong>Đơn vị tính:</strong> ${selectedProduct.unit}</td>
+            <td><strong>Kho hàng:</strong> Kho Tổng TP.HCM</td>
+          </tr>
+        </table>
+
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th rowspan="2" style="width: 35px;">STT</th>
+              <th rowspan="2" style="width: 80px;">Ngày tháng</th>
+              <th colspan="2">Số hiệu chứng từ</th>
+              <th rowspan="2">Diễn giải</th>
+              <th rowspan="2" style="width: 80px;">Đơn giá</th>
+              <th colspan="3">Số lượng</th>
+            </tr>
+            <tr>
+              <th style="width: 85px;">Nhập</th>
+              <th style="width: 85px;">Xuất</th>
+              <th style="width: 65px;">Nhập</th>
+              <th style="width: 65px;">Xuất</th>
+              <th style="width: 75px;">Tồn</th>
+            </tr>
+            <tr style="background: #fafafa; font-weight: bold;">
+              <td style="text-align:center; padding:5px; border:1px solid #333;">—</td>
+              <td style="text-align:center; padding:5px; border:1px solid #333;">${stockCardDateRange.from ? formatDate(stockCardDateRange.from) : ''}</td>
+              <td style="text-align:center; padding:5px; border:1px solid #333;">—</td>
+              <td style="text-align:center; padding:5px; border:1px solid #333;">—</td>
+              <td style="padding:5px; border:1px solid #333; font-style:italic;">Số dư đầu kỳ</td>
+              <td style="text-align:right; padding:5px; border:1px solid #333;">—</td>
+              <td style="text-align:right; padding:5px; border:1px solid #333;">—</td>
+              <td style="text-align:right; padding:5px; border:1px solid #333;">—</td>
+              <td style="text-align:right; padding:5px; border:1px solid #333;">${formatQuantity(stockCardData.openingStock)}</td>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+          <tfoot>
+            <tr style="background: #f9f9f9; font-weight: bold;">
+              <td colspan="5" style="padding:7px; border:1px solid #333; text-align: center;">CỘNG PHÁT SINH VÀ SỐ DƯ CUỐI KỲ</td>
+              <td style="text-align:right; padding:7px; border:1px solid #333;">—</td>
+              <td style="text-align:right; padding:7px; border:1px solid #333; color:#059669;">${formatQuantity(stockCardData.totalIn)}</td>
+              <td style="text-align:right; padding:7px; border:1px solid #333; color:#E11D48;">${formatQuantity(stockCardData.totalOut)}</td>
+              <td style="text-align:right; padding:7px; border:1px solid #333; font-size:14px;">${formatQuantity(stockCardData.closingStock)}</td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <table class="footer-table">
+          <tr>
+            <td>
+              <strong>Người lập biểu</strong><br/>
+              <em>(Ký, họ tên)</em>
+            </td>
+            <td>
+              <strong>Thủ kho</strong><br/>
+              <em>(Ký, họ tên)</em>
+            </td>
+            <td>
+              <strong>Kế toán trưởng</strong><br/>
+              <em>(Ký, họ tên)</em>
+            </td>
+            <td>
+              Ngày ..... tháng ..... năm 2026<br/>
+              <strong>Giám đốc</strong><br/>
+              <em>(Ký, đóng dấu)</em>
+            </td>
+          </tr>
+        </table>
+
+        <div style="text-align: center; margin-top: 30px;">
+          <button onclick="window.print()" style="padding: 8px 20px; font-size: 14px; font-weight: bold; cursor: pointer; background: #6D3EEB; color: #fff; border: none; border-radius: 6px;">
+            🖨️ Bấm để in Thẻ kho
+          </button>
+        </div>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -696,7 +1135,297 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
         </div>
       )}
 
-      {/* Tab 5: Lịch sử kho */}
+      {/* Tab 5: Thẻ kho (Stock Card) */}
+      {currentTab === 'the-kho' && (
+        <div className="space-y-5">
+          {/* Top Controls: Product Selector, Date Range, Actions */}
+          <div className="bg-white rounded-[16px] p-4 sm:p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_2px_8px_rgba(16,24,40,0.04)] border border-[#F1F2F5] space-y-4">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              {/* Product Selector Combobox */}
+              <div className="flex-1 min-w-[280px]">
+                <label className="block text-[12px] font-semibold text-[#4B5563] uppercase tracking-wider mb-1.5">
+                  Chọn mặt hàng tra cứu Thẻ kho:
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedProduct?.sku || ''}
+                    onChange={e => setSelectedProductSku(e.target.value)}
+                    className="w-full h-[44px] pl-10 pr-8 bg-white border border-[#E5E7EB] hover:border-[#6D3EEB] rounded-[12px] text-[13.5px] font-semibold text-[#111827] shadow-xs outline-none transition-colors appearance-none cursor-pointer"
+                  >
+                    {products.map(p => (
+                      <option key={p.id} value={p.sku}>
+                        {p.sku} — {p.name} (Tồn: {formatQuantity(p.stock_quantity)} {p.unit})
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6D3EEB] pointer-events-none">
+                    <Icon name="inventory_2" size={20} />
+                  </div>
+                  <div className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF] pointer-events-none">
+                    <Icon name="expand_more" size={20} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Date Filters & Action Buttons */}
+              <div className="flex flex-wrap items-end gap-2.5">
+                <div>
+                  <label className="block text-[12px] font-semibold text-[#4B5563] uppercase tracking-wider mb-1.5">
+                    Kỳ tra cứu:
+                  </label>
+                  <DateRangePicker
+                    value={stockCardDateRange}
+                    onChange={setStockCardDateRange}
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleExportStockCardExcel}
+                    className="h-[42px] px-3.5 rounded-[12px] border border-[#E5E7EB] hover:border-[#6D3EEB] bg-white hover:bg-[#F9F5FF] text-[#1F2937] text-[13px] font-semibold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+                    title="Xuất file Excel / CSV"
+                  >
+                    <Icon name="download" size={18} className="text-[#059669]" />
+                    <span>Xuất Excel</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePrintStockCard}
+                    className="h-[42px] px-4 bg-[#6D3EEB] hover:bg-[#5B2BD6] text-white text-[13px] font-semibold rounded-[12px] shadow-[0_8px_20px_-6px_rgba(109,62,235,0.55)] flex items-center gap-1.5 transition-all cursor-pointer"
+                    title="In Thẻ kho chuẩn kế toán"
+                  >
+                    <Icon name="print" size={18} />
+                    <span>In Thẻ kho</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Selected Product Specs & 4 KPIs */}
+            {selectedProduct && (
+              <div className="pt-3 border-t border-gray-100 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[13px]">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-[15px] text-[#111827]">{selectedProduct.name}</span>
+                    <span className="font-mono px-2 py-0.5 rounded-md bg-purple-50 text-[#6D3EEB] font-semibold text-[12px]">
+                      {selectedProduct.sku}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-gray-100 text-[#4B5563] text-[12px]">
+                      ĐVT: {selectedProduct.unit}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-gray-100 text-[#4B5563] text-[12px]">
+                      Nhóm: {selectedProduct.group_name || 'Khác'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4 text-[12.5px] text-[#6B7280]">
+                    <span>Giá vốn: <strong className="text-[#111827] font-semibold tabular-nums">{formatCurrency(selectedProduct.cost_price)}</strong></span>
+                    <span>·</span>
+                    <span>Giá bán: <strong className="text-[#111827] font-semibold tabular-nums">{formatCurrency(selectedProduct.sale_price)}</strong></span>
+                    <span>·</span>
+                    <span>Tồn kho hiện tại: <strong className="text-[#6D3EEB] font-bold tabular-nums">{formatQuantity(selectedProduct.stock_quantity)} {selectedProduct.unit}</strong></span>
+                  </div>
+                </div>
+
+                {/* 4 Summary Balance Cards */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="p-3.5 rounded-[12px] bg-[#F9FAFB] border border-[#E5E7EB]">
+                    <span className="text-[11.5px] font-semibold text-[#6B7280] uppercase tracking-wider">Tồn đầu kỳ</span>
+                    <div className="text-[20px] font-bold text-[#111827] mt-0.5 tabular-nums">
+                      {formatQuantity(stockCardData.openingStock)} <span className="text-[13px] font-normal text-[#6B7280]">{selectedProduct.unit}</span>
+                    </div>
+                  </div>
+                  <div className="p-3.5 rounded-[12px] bg-[#ECFDF5] border border-[#A7F3D0]">
+                    <span className="text-[11.5px] font-semibold text-[#059669] uppercase tracking-wider">Tổng nhập trong kỳ</span>
+                    <div className="text-[20px] font-bold text-[#059669] mt-0.5 tabular-nums">
+                      +{formatQuantity(stockCardData.totalIn)} <span className="text-[13px] font-normal text-[#059669]">{selectedProduct.unit}</span>
+                    </div>
+                  </div>
+                  <div className="p-3.5 rounded-[12px] bg-[#FFF1F2] border border-[#FECDD3]">
+                    <span className="text-[11.5px] font-semibold text-[#E11D48] uppercase tracking-wider">Tổng xuất trong kỳ</span>
+                    <div className="text-[20px] font-bold text-[#E11D48] mt-0.5 tabular-nums">
+                      -{formatQuantity(stockCardData.totalOut)} <span className="text-[13px] font-normal text-[#E11D48]">{selectedProduct.unit}</span>
+                    </div>
+                  </div>
+                  <div className="p-3.5 rounded-[12px] bg-[#F9F5FF] border border-[#E9D5FF]">
+                    <span className="text-[11.5px] font-semibold text-[#6D3EEB] uppercase tracking-wider">Tồn cuối kỳ</span>
+                    <div className="text-[20px] font-bold text-[#6D3EEB] mt-0.5 tabular-nums">
+                      {formatQuantity(stockCardData.closingStock)} <span className="text-[13px] font-normal text-[#6D3EEB]">{selectedProduct.unit}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Ledger Filter Toolbar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 flex-1">
+              <div className="relative flex-1 max-w-sm">
+                <input
+                  type="text"
+                  placeholder="Tìm số chứng từ, đối tác..."
+                  value={stockCardSearch}
+                  onChange={e => setStockCardSearch(e.target.value)}
+                  className="w-full h-[40px] pl-9 pr-3.5 bg-white border border-[#E5E7EB] rounded-[10px] text-[13px] outline-none shadow-xs"
+                />
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]">
+                  <Icon name="search" size={17} />
+                </div>
+              </div>
+
+              <select
+                value={stockCardTypeFilter}
+                onChange={e => setStockCardTypeFilter(e.target.value)}
+                className="h-[40px] px-3 bg-white border border-[#E5E7EB] rounded-[10px] text-[13px] font-medium text-[#374151] outline-none shadow-xs cursor-pointer"
+              >
+                <option value="all">Tất cả giao dịch</option>
+                <option value="in">Chỉ phát sinh Nhập</option>
+                <option value="out">Chỉ phát sinh Xuất</option>
+                <option value="stocktake">Chỉ Cân bằng kiểm kê</option>
+              </select>
+            </div>
+
+            <div className="text-[12.5px] text-[#6B7280]">
+              Hiển thị <strong className="text-[#111827]">{stockCardData.rows.length}</strong> dòng chứng từ
+            </div>
+          </div>
+
+          {/* Stock Card Detailed Ledger Table */}
+          <div className="bg-white rounded-[16px] shadow-[0_1px_2px_rgba(16,24,40,0.04),0_2px_8px_rgba(16,24,40,0.04)] border border-[#F1F2F5] overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-[13px]">
+                <thead>
+                  <tr className="bg-[#F9FAFB] border-b border-[#F1F2F5] text-[#4B5563] text-[11.5px] font-bold uppercase tracking-wider">
+                    <th className="py-3 px-3 text-center w-12">STT</th>
+                    <th className="py-3 px-3">NGÀY CHỨNG TỪ</th>
+                    <th className="py-3 px-3">SỐ CHỨNG TỪ</th>
+                    <th className="py-3 px-3">LOẠI BIẾN ĐỘNG</th>
+                    <th className="py-3 px-3">ĐỐI TÁC / NỘI DUNG</th>
+                    <th className="py-3 px-3 text-right">ĐƠN GIÁ</th>
+                    <th className="py-3 px-3 text-right">SL NHẬP</th>
+                    <th className="py-3 px-3 text-right">SL XUẤT</th>
+                    <th className="py-3 px-3 text-right">TỒN LŨY KẾ</th>
+                    <th className="py-3 px-3 text-center w-16">IN</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#F1F2F5]">
+                  {/* Row 0: Opening Balance */}
+                  <tr className="bg-[#FBFBFF] font-semibold text-[#111827]">
+                    <td className="py-3 px-3 text-center text-[#9CA3AF]">—</td>
+                    <td className="py-3 px-3 text-[#6B7280]">
+                      {stockCardDateRange.from ? formatDate(stockCardDateRange.from) : '—'}
+                    </td>
+                    <td className="py-3 px-3 font-mono text-[#6D3EEB]">ĐẦU KỲ</td>
+                    <td className="py-3 px-3">
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-gray-100 text-[#4B5563]">
+                        Số dư đầu kỳ
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-[#6B7280] italic">Số tồn đầu kỳ tính lũy kế</td>
+                    <td className="py-3 px-3 text-right text-[#9CA3AF]">—</td>
+                    <td className="py-3 px-3 text-right text-[#9CA3AF]">—</td>
+                    <td className="py-3 px-3 text-right text-[#9CA3AF]">—</td>
+                    <td className="py-3 px-3 text-right font-bold text-[#111827] tabular-nums">
+                      {formatQuantity(stockCardData.openingStock)}
+                    </td>
+                    <td className="py-3 px-3 text-center text-[#9CA3AF]">—</td>
+                  </tr>
+
+                  {/* Dynamic Transaction Rows */}
+                  {stockCardData.rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="py-8 text-center text-[#9CA3AF]">
+                        Không có phát sinh giao dịch nào cho sản phẩm này trong kỳ chọn.
+                      </td>
+                    </tr>
+                  ) : (
+                    stockCardData.rows.map((r, idx) => (
+                      <tr key={r.id} className="hover:bg-[#F9FAFB] transition-colors">
+                        <td className="py-3 px-3 text-center text-[#9CA3AF] text-[12px]">{idx + 1}</td>
+                        <td className="py-3 px-3 text-[#374151] whitespace-nowrap">
+                          {formatDateTime(r.date)}
+                        </td>
+                        <td className="py-3 px-3 font-mono font-semibold text-[#111827]">
+                          {r.code}
+                        </td>
+                        <td className="py-3 px-3 whitespace-nowrap">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                              r.type.includes('Nhập mua')
+                                ? 'bg-[#ECFDF5] text-[#059669]'
+                                : r.type.includes('Xuất bán')
+                                ? 'bg-[#F9F5FF] text-[#6D3EEB]'
+                                : r.type.includes('kiểm kê')
+                                ? 'bg-[#FFFBEB] text-[#D97706]'
+                                : 'bg-gray-100 text-[#4B5563]'
+                            }`}
+                          >
+                            {r.type}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-[#374151] max-w-xs truncate" title={r.partner}>
+                          {r.partner}
+                        </td>
+                        <td className="py-3 px-3 text-right tabular-nums text-[#6B7280]">
+                          {r.unitCost ? formatCurrency(r.unitCost) : '—'}
+                        </td>
+                        <td className="py-3 px-3 text-right tabular-nums font-semibold text-[#059669]">
+                          {r.qtyIn > 0 ? `+${formatQuantity(r.qtyIn)}` : '—'}
+                        </td>
+                        <td className="py-3 px-3 text-right tabular-nums font-semibold text-[#E11D48]">
+                          {r.qtyOut > 0 ? `-${formatQuantity(r.qtyOut)}` : '—'}
+                        </td>
+                        <td className="py-3 px-3 text-right tabular-nums font-bold text-[#111827]">
+                          {formatQuantity(r.balance)}
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          {onPrintDocument && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (r.rawDocType && r.rawDoc) {
+                                  onPrintDocument(r.rawDocType, r.code, r.rawDoc);
+                                } else {
+                                  handlePrintStockCard();
+                                }
+                              }}
+                              className="p-1 hover:text-[#6D3EEB] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+                              title="In chứng từ"
+                            >
+                              <Icon name="print" size={16} />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-[#F9FAFB] border-t-2 border-[#E5E7EB] font-bold text-[#111827]">
+                    <td colSpan={5} className="py-3.5 px-3 text-center uppercase text-[12px] tracking-wider">
+                      Cộng phát sinh trong kỳ & Tồn cuối kỳ
+                    </td>
+                    <td className="py-3.5 px-3 text-right text-[#9CA3AF]">—</td>
+                    <td className="py-3.5 px-3 text-right tabular-nums text-[#059669] font-bold text-[14px]">
+                      +{formatQuantity(stockCardData.totalIn)}
+                    </td>
+                    <td className="py-3.5 px-3 text-right tabular-nums text-[#E11D48] font-bold text-[14px]">
+                      -{formatQuantity(stockCardData.totalOut)}
+                    </td>
+                    <td className="py-3.5 px-3 text-right tabular-nums text-[#6D3EEB] font-bold text-[15px]">
+                      {formatQuantity(stockCardData.closingStock)}
+                    </td>
+                    <td className="py-3.5 px-3 text-center text-[#9CA3AF]">—</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 6: Lịch sử kho */}
       {currentTab === 'lich-su' && (
         <div className="space-y-4">
           <FilterToolbar

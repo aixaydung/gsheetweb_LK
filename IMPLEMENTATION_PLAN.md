@@ -117,8 +117,8 @@ Spreadsheet ID: `1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY` đã khởi tạo
   - [x] Nút "In" trực quan tại từng dòng ở Sổ quỹ (`CashbookView`), Mua hàng (`PurchaseView`), Bán hàng (`SalesView`), và Kho hàng (`WarehouseView`).
   - [x] Hỗ trợ tùy biến khổ in A4 / A5 / K80, ẩn/hiện logo công ty, chữ ký, QR code ngân hàng và xuất file PDF.
 
-### Giai đoạn D: Dashboard Báo cáo & Tối ưu hóa [ĐÃ HOÀN THÀNH GÓI 1]
-- [x] **Dashboard phân tích tài chính & vận hành thực tế**:
+### Giai đoạn D: Dashboard Báo cáo, Thẻ kho & Tối ưu hóa [ĐÃ HOÀN THÀNH GÓI 1 & 2]
+- [x] **Dashboard phân tích tài chính & vận hành thực tế (Gói 1)**:
   - [x] Động hóa 100% biểu đồ `ComposedChart` trên Dashboard: nhóm dữ liệu theo ngày / tuần / tháng dựa trên hóa đơn bán hàng và giá vốn thực tế thay vì mock data cứng.
   - [x] Bổ sung khối **Báo cáo Hiệu quả Kinh doanh (P&L) & Dòng tiền thực tế**:
     - Doanh thu thuần (100% doanh số từ các đơn bán hoàn tất).
@@ -128,8 +128,14 @@ Spreadsheet ID: `1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY` đã khởi tạo
     - Lợi nhuận ròng (Net Profit) & Biên lãi ròng sau khi trừ chi phí vận hành.
     - Thống kê Thực thu, Thực chi và Dòng tiền thuần kỳ kinh doanh.
   - [x] Đồng bộ bộ lọc nhanh (Hôm nay, 7 ngày, Tháng này, Quý này) tự động cập nhật biểu đồ và các thẻ KPI.
-- [ ] **Thẻ kho (Stock Card) chi tiết cho từng SKU** *(Kế hoạch Gói 2 tiếp theo)*:
-  - [ ] Báo cáo sổ chi tiết hàng hóa tra cứu biến động Nhập (`PN`) – Xuất (`PX`) – Cân bằng kiểm kê (`PKK`) cùng số dư tồn lũy kế theo thời gian cho từng mặt hàng.
+- [x] **Thẻ kho (Stock Card) chi tiết cho từng SKU (Gói 2)**:
+  - [x] Thêm tab chuyên dụng **"Thẻ kho (Stock Card)"** (`/kho-hang?tab=the-kho`) trong module Kho hàng.
+  - [x] Tích hợp nút bấm tắt **"Xem Thẻ kho"** (icon `history_edu`) trực tiếp tại từng dòng của Danh sách sản phẩm tồn kho.
+  - [x] Thanh chọn sản phẩm thông minh (hiển thị SKU, Tên hàng, ĐVT, Tồn hiện tại) kèm bộ lọc ngày linh hoạt.
+  - [x] 4 thẻ chỉ số lũy kế chuẩn mực: Tồn đầu kỳ, Tổng nhập trong kỳ, Tổng xuất trong kỳ, và Tồn cuối kỳ.
+  - [x] Bảng dòng chảy lịch sử xuất - nhập - tồn lũy kế tự động gom từ Phiếu nhập mua (`PN`), Phiếu xuất bán (`PX`), Phiếu cân bằng kiểm kê (`PKK`) và Xuất trả NCC (`PR`).
+  - [x] Nút **"Xuất Excel"** xuất dữ liệu Thẻ kho chuẩn CSV UTF-8 BOM mở trực tiếp bằng Microsoft Excel.
+  - [x] Nút **"In Thẻ kho"** sinh mẫu biểu THẺ KHO (SỔ KHO) Mẫu số S12-DNN ban hành theo TT 133/2016/TT-BTC với đầy đủ tiêu đề công ty, thông tin mặt hàng, bảng chi tiết và 4 vị trí chữ ký phê duyệt.
 
 ---
 
