@@ -260,8 +260,8 @@ function AppContent() {
           alertCount={alerts.totalBadgeCount}
         />
 
-        {/* Content Container (max-w 1384px, centered, padding optimized for mobile) */}
-        <main className="flex-1 w-full max-w-[1384px] mx-auto p-3.5 sm:p-6 lg:p-8 pb-24 lg:pb-8">
+        {/* Content Container (Full width, minimized horizontal padding for larger workspace) */}
+        <main className="flex-1 w-full max-w-full mx-auto p-2 sm:px-4 sm:py-4 lg:px-6 lg:py-6 pb-24 lg:pb-6">
           {currentPath === '/' && (
             <DashboardView
               onNavigate={navigateTo}
