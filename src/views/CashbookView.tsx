@@ -12,11 +12,13 @@ import { Payment } from '../types';
 interface CashbookViewProps {
   onOpenCreateReceipt: () => void;
   onOpenCreatePayment: () => void;
+  onPrintDocument?: (type: string, code: string, doc: any) => void;
 }
 
 export const CashbookView: React.FC<CashbookViewProps> = ({
   onOpenCreateReceipt,
   onOpenCreatePayment,
+  onPrintDocument,
 }) => {
   const { payments, cancelPayment } = useApp();
 
@@ -193,6 +195,15 @@ export const CashbookView: React.FC<CashbookViewProps> = ({
       header: 'Thao tác',
       render: (p: Payment) => (
         <div className="flex items-center justify-end gap-1.5">
+          <button
+            type="button"
+            onClick={() => onPrintDocument?.(p.direction === 'in' ? 'PHIẾU THU TIỀN' : 'PHIẾU CHI TIỀN', p.code, p)}
+            title="In phiếu thu/chi này"
+            className="px-2.5 py-1 text-[12px] text-[#4B5563] hover:text-[#111827] hover:bg-[#F3F4F6] rounded-[8px] transition-colors font-medium border border-[#E5E7EB] inline-flex items-center gap-1"
+          >
+            <Icon name="print" size={13} />
+            <span>In</span>
+          </button>
           {p.status === 'active' && (
             <button
               type="button"
@@ -200,7 +211,7 @@ export const CashbookView: React.FC<CashbookViewProps> = ({
               title="Hủy phiếu thu/chi này"
               className="px-2.5 py-1 text-[12px] text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-[8px] transition-colors font-medium border border-rose-200"
             >
-              Hủy phiếu
+              Hủy
             </button>
           )}
         </div>

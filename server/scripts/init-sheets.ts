@@ -92,6 +92,22 @@ const REQUIRED_SHEETS: SheetSchema[] = [
       'unit', 'quantity', 'unit_price', 'discount_amount',
       'line_total', 'note'
     ]
+  },
+  {
+    title: 'STOCKTAKES',
+    headers: [
+      'id', 'code', 'stocktake_date', 'warehouse_id', 'warehouse_name',
+      'counted_by', 'item_count', 'increase_count', 'decrease_count',
+      'diff_value', 'status', 'note', 'created_by', 'created_at'
+    ]
+  },
+  {
+    title: 'STOCKTAKE_ITEMS',
+    headers: [
+      'id', 'stocktake_id', 'product_id', 'sku', 'product_name',
+      'unit', 'system_qty', 'actual_qty', 'diff_qty', 'unit_cost',
+      'diff_value', 'reason'
+    ]
   }
 ];
 

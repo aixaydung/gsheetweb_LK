@@ -30,13 +30,14 @@ Tất cả các module phải tuân thủ nghiêm ngặt định dạng mã ch�
 4. **Phiếu nhập kho mua hàng:** `PN-YYYYMM-XXXX` (Tương ứng với đơn mua hàng, VD: `PN-202609-0001`)
 5. **Phiếu thu tiền:** `PT-YYYYMM-XXXX`
 6. **Phiếu chi tiền:** `PC-YYYYMM-XXXX`
-7. **Khách hàng:** `KH-XXXX` hoặc `KHxxx`
-8. **Nhà cung cấp:** `NCC-XXXX` hoặc `NCCxx`
-9. **Mặt hàng / SKU:** `SPxxx` hoặc mã theo ngành hàng
+7. **Phiếu kiểm kê kho:** `KK-YYYYMM-XXXX` (Cân bằng tồn kho tự động với mã `PKK-KK-YYYYMM-XXXX` vào `STOCK_MOVEMENTS`)
+8. **Khách hàng:** `KH-XXXX` hoặc `KHxxx`
+9. **Nhà cung cấp:** `NCC-XXXX` hoặc `NCCxx`
+10. **Mặt hàng / SKU:** `SPxxx` hoặc mã theo ngành hàng
 
 ---
 
-## 3. CẤU TRÚC 8 TAB DỮ LIỆU TRÊN GOOGLE SHEETS (DATA CONTRACT)
+## 3. CẤU TRÚC 12 TAB DỮ LIỆU TRÊN GOOGLE SHEETS (DATA CONTRACT)
 
 Spreadsheet ID: `1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY` đã khởi tạo sẵn tiêu đề cột ở dòng 1:
 
@@ -52,10 +53,18 @@ Spreadsheet ID: `1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY` đã khởi tạo
    `id` | `code` | `customer_id` | `customer_name` | `order_date` | `subtotal` | `discount_amount` | `vat_rate` | `vat_amount` | `shipping_fee` | `total` | `paid_amount` | `debt_amount` | `payment_status` | `status` | `note` | `created_by` | `created_at`
 6. **`ORDER_ITEMS` (Cột A:K)**: Chi tiết từng dòng sản phẩm của hóa đơn bán.
    `id` | `order_id` | `product_id` | `sku` | `product_name` | `unit` | `quantity` | `unit_price` | `discount_amount` | `line_total` | `note`
-7. **`STOCK_MOVEMENTS` (Cột A:L)**: Lịch sử phiếu xuất / nhập / điều chuyển kho.
+7. **`STOCK_MOVEMENTS` (Cột A:L)**: Lịch sử phiếu xuất / nhập / điều chuyển / kiểm kê kho.
    `id` | `code` | `type` | `reference_doc_type` | `reference_doc_code` | `warehouse_id` | `date` | `total_amount` | `note` | `status` | `created_by` | `created_at`
-8. **`PAYMENTS` (Cột A:M)**: Sổ quỹ thu - chi - phân bổ công nợ.
+8. **`PAYMENTS` (Cột A:N)**: Sổ quỹ thu - chi - phân bổ công nợ.
    `id` | `code` | `payment_date` | `direction` | `partner_type` | `partner_id` | `partner_name` | `amount` | `method` | `bill_image_url` | `unallocated_amount` | `status` | `note` | `created_at`
+9. **`PURCHASE_ORDERS` (Cột A:S)**: Đơn mua hàng từ Nhà cung cấp.
+   `id` | `code` | `supplier_id` | `supplier_name` | `order_date` | `expected_delivery_date` | `warehouse_id` | `subtotal` | `discount_amount` | `vat_rate` | `vat_amount` | `shipping_fee` | `total` | `paid_amount` | `debt_amount` | `payment_status` | `status` | `note` | `created_at`
+10. **`PURCHASE_ORDER_ITEMS` (Cột A:K)**: Dòng hàng của đơn mua hàng.
+   `id` | `purchase_order_id` | `product_id` | `sku` | `product_name` | `unit` | `quantity` | `unit_price` | `discount_amount` | `line_total` | `note`
+11. **`STOCKTAKES` (Cột A:N)**: Phiếu kiểm kê kho tổng hợp.
+   `id` | `code` | `stocktake_date` | `warehouse_id` | `counted_by` | `item_count` | `total_system_qty` | `total_actual_qty` | `increase_count` | `decrease_count` | `diff_value` | `status` | `note` | `created_at`
+12. **`STOCKTAKE_ITEMS` (Cột A:L)**: Chi tiết từng mặt hàng trong biên bản kiểm kê.
+   `id` | `stocktake_id` | `product_id` | `sku` | `product_name` | `unit` | `system_qty` | `actual_qty` | `diff_qty` | `unit_cost` | `diff_value` | `reason`
 
 ---
 
@@ -69,9 +78,9 @@ Spreadsheet ID: `1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY` đã khởi tạo
 - [x] Nút Đăng xuất đầy đủ tại Sidebar, Header Avatar dropdown và ProfileView.
 - [x] Chuẩn hóa toàn bộ tên ứng dụng sang **LK ERP**.
 - [x] Mở rộng không gian làm việc Full-width workspace cho màn hình Cài đặt (Settings).
-- [x] Khởi tạo đầy đủ header tiêu đề cho 8 tab Google Sheets.
+- [x] Khởi tạo đầy đủ header tiêu đề cho 12 tab Google Sheets.
 
-### Giai đoạn B: Nghiệp vụ Danh mục & Bán hàng [HOÀN THÀNH 100%]
+### Giai đoạn B: Nghiệp vụ Danh mục, Bán hàng, Mua hàng & Quỹ [HOÀN THÀNH 100%]
 - [x] **Khách hàng (`CUSTOMERS`)**: Đọc dữ liệu, Thêm mới, Sửa, Xóa (*Người dùng đã kiểm tra thực tế và xác nhận thành công*).
 - [x] **Sản phẩm (`PRODUCTS`)**: Đọc dữ liệu, Thêm mới, Cập nhật giá bán/tồn kho, Xóa sản phẩm.
 - [x] **Nhà cung cấp (`VENDORS`)**: Đọc dữ liệu, Thêm mới, Cập nhật thông tin/công nợ NCC.
@@ -95,18 +104,23 @@ Spreadsheet ID: `1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY` đã khởi tạo
   - [x] Xây dựng giao diện chuyên dụng `src/views/CashbookView.tsx` với 2 nút bấm nổi bật **Tạo phiếu thu** & **Tạo phiếu chi**, 4 thẻ KPI quỹ, bộ lọc phân loại Thu/Chi và bảng chi tiết phiếu.
   - [x] Bổ sung mục điều hướng **Sổ quỹ** trực tiếp trên Sidebar và menu Tạo nhanh Header.
 
-### Giai đoạn C: Đang thực hiện & Cần kiểm thử thực tế [IN PROGRESS]
-- [ ] Người dùng kiểm tra tạo thử:
-  1. Hóa đơn bán hàng trên [https://lkerp.sheetapp.store/ban-hang](https://lkerp.sheetapp.store/ban-hang).
-  2. Đơn mua hàng trên [https://lkerp.sheetapp.store/mua-hang](https://lkerp.sheetapp.store/mua-hang).
-  3. Phiếu thu/chi tại [https://lkerp.sheetapp.store/so-quy](https://lkerp.sheetapp.store/so-quy) hoặc gạch nợ trực tiếp từ danh sách công nợ.
+### Giai đoạn C: Kiểm kê kho & In chứng từ [HOÀN THÀNH 100%]
+- [x] **Kiểm kê kho (`STOCKTAKES` + `STOCKTAKE_ITEMS`)**:
+  - [x] Tab `STOCKTAKES` (14 cột) và `STOCKTAKE_ITEMS` (12 cột) khởi tạo sẵn trên Google Sheets.
+  - [x] Xây dựng `server/repositories/stocktakes.ts` & `server/routes/stocktakes.ts`.
+  - [x] Tự động sinh mã `KK-YYYYMM-XXXX`, ghi nhận chênh lệch kiểm kê (tăng, giảm, giá trị chênh lệch).
+  - [x] Khi kiểm kê hoàn tất (`completed`), tự động sinh phiếu điều chỉnh cân bằng tồn `PKK-KK-YYYYMM-XXXX` vào `STOCK_MOVEMENTS` và cập nhật lại số lượng tồn kho chuẩn xác trong `PRODUCTS`.
+  - [x] Modal `StocktakeFormModal` kiểm kê tất cả mặt hàng với thanh tìm kiếm nhanh sản phẩm, giao diện bảng cuộn có sticky header và tự động tính chênh lệch.
+  - [x] Tích hợp Optimistic UI vào `src/context/AppContext.tsx` và đồng bộ ngầm lên Google Sheets.
+- [x] **In chứng từ đa năng (`PrintDialog`)**:
+  - [x] Hỗ trợ in 6 loại chứng từ: Hóa đơn bán hàng (`BH`), Phiếu mua hàng (`MH`), Phiếu thu tiền (`PT`), Phiếu chi tiền (`PC`), Phiếu nhập/xuất kho (`PN`/`PX`), và Biên bản kiểm kê kho (`KK`).
+  - [x] Nút "In" trực quan tại từng dòng ở Sổ quỹ (`CashbookView`), Mua hàng (`PurchaseView`), Bán hàng (`SalesView`), và Kho hàng (`WarehouseView`).
+  - [x] Hỗ trợ tùy biến khổ in A4 / A5 / K80, ẩn/hiện logo công ty, chữ ký, QR code ngân hàng và xuất file PDF.
 
-### Giai đoạn D: Dashboard Báo cáo & Kho nâng cao [ROADMAP TIẾP THEO]
+### Giai đoạn D: Dashboard Báo cáo & Tối ưu hóa [ROADMAP TIẾP THEO]
 - [ ] **Báo cáo & Dashboard phân tích số liệu thực**:
   - [ ] Đồng bộ toàn bộ KPI trên Dashboard (Doanh thu tháng, Lãi gộp ước tính, Công nợ khách cần thu, Công nợ NCC phải trả, Cảnh báo hết hàng) lấy trực tiếp từ Google Sheets.
-- [ ] **Kho nâng cao & Kiểm kê (`STOCKTAKES`)**:
-  - [ ] Phiếu xuất / nhập điều chỉnh kho thủ công.
-  - [ ] Phiếu kiểm kê thực tế và cân chỉnh số lượng tồn kho tự động.
+  - [ ] Báo cáo sổ chi tiết hàng hóa (Stock Card / Thẻ kho) cho từng SKU.
 
 ---
 

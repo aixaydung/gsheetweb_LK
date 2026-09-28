@@ -241,13 +241,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     const fetchSheetsData = async () => {
       try {
-        const [custRes, prodRes, vendRes, orderRes, poRes, payRes] = await Promise.allSettled([
+        const [custRes, prodRes, vendRes, orderRes, poRes, payRes, stkRes] = await Promise.allSettled([
           fetch('/api/customers'),
           fetch('/api/products'),
           fetch('/api/vendors'),
           fetch('/api/orders'),
           fetch('/api/purchases'),
-          fetch('/api/payments')
+          fetch('/api/payments'),
+          fetch('/api/stocktakes')
         ]);
         if (custRes.status === 'fulfilled' && custRes.value.ok) {
           const data = await custRes.value.json();
@@ -283,6 +284,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const data = await payRes.value.json();
           if (Array.isArray(data.payments) && data.payments.length > 0) {
             setPayments(data.payments);
+          }
+        }
+        if (stkRes.status === 'fulfilled' && stkRes.value.ok) {
+          const data = await stkRes.value.json();
+          if (Array.isArray(data.stocktakes) && data.stocktakes.length > 0) {
+            setStocktakes(data.stocktakes);
           }
         }
       } catch (err) {
@@ -1101,9 +1108,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Stocktake
   const createStocktake = (stocktakeData: Partial<Stocktake>): Stocktake => {
-    const nextNum = stocktakes.length + 6;
-    const code = stocktakeData.code || `KK${String(nextNum).padStart(2, '0')}`;
-    const now = new Date().toISOString();
+    const dateObj = new Date();
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const ym = `${year}${month}`;
+    const nextNum = stocktakes.filter(s => s.code && s.code.startsWith(`KK-${ym}`)).length + 1;
+    const code = stocktakeData.code || `KK-${ym}-${String(nextNum).padStart(4, '0')}`;
+    const now = dateObj.toISOString();
 
     const items = stocktakeData.items || [];
     const increaseCount = items.filter(it => it.diff_qty > 0).length;
@@ -1127,6 +1138,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setStocktakes(prev => [newStocktake, ...prev]);
+
+    // Background sync to Google Sheets (Option A: Optimistic UI)
+    fetch('/api/stocktakes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        stocktake: newStocktake,
+        items: newStocktake.items,
+      }),
+    }).catch(err => {
+      console.error('Background sync stocktake to Google Sheets failed:', err);
+    });
 
     // Apply adjustments to stock
     if (newStocktake.status === 'completed') {

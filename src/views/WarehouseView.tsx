@@ -20,6 +20,7 @@ interface WarehouseViewProps {
   onOpenImportDialog: () => void;
   onOpenStocktakeModal: () => void;
   onOpenStockVoucherModal: (direction: 'in' | 'out') => void;
+  onPrintDocument?: (type: string, code: string, doc: any) => void;
 }
 
 export const WarehouseView: React.FC<WarehouseViewProps> = ({
@@ -30,6 +31,7 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
   onOpenImportDialog,
   onOpenStocktakeModal,
   onOpenStockVoucherModal,
+  onPrintDocument,
 }) => {
   const {
     products,
@@ -287,6 +289,42 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
       header: 'GHI CHÚ',
       render: row => <span className="text-[12.5px] text-[#6B7280]">{row.note || '—'}</span>,
     },
+    {
+      key: 'actions',
+      header: 'THAO TÁC',
+      align: 'center',
+      render: row => (
+        <button
+          type="button"
+          onClick={() => {
+            if (onPrintDocument) {
+              const docType = row.direction === 'in' ? 'PHIẾU NHẬP KHO' : 'PHIẾU XUẤT KHO';
+              onPrintDocument(docType, row.code, {
+                ...row,
+                payment_date: row.voucher_date,
+                items: [
+                  {
+                    sku: row.code,
+                    product_name: row.summary,
+                    unit: 'lần',
+                    quantity: row.total_quantity,
+                    unit_price: row.total_quantity > 0 ? Math.round(row.total_value / row.total_quantity) : 0,
+                    line_total: row.total_value,
+                  },
+                ],
+                total: row.total_value,
+                subtotal: row.total_value,
+              });
+            }
+          }}
+          className="px-2.5 py-1 text-[12px] font-semibold text-[#6D3EEB] hover:bg-[#F3E8FF] rounded-[8px] flex items-center gap-1 transition-colors"
+          title="In phiếu kho"
+        >
+          <Icon name="print" size={15} />
+          <span>In</span>
+        </button>
+      ),
+    },
   ];
 
   // Tab 4 Stocktake Columns
@@ -355,6 +393,50 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
       key: 'note',
       header: 'GHI CHÚ',
       render: row => <span className="text-[12.5px] text-[#6B7280]">{row.note || '—'}</span>,
+    },
+    {
+      key: 'actions',
+      header: 'THAO TÁC',
+      align: 'center',
+      render: row => (
+        <button
+          type="button"
+          onClick={() => {
+            if (onPrintDocument) {
+              onPrintDocument('PHIẾU KIỂM KÊ KHO', row.code, {
+                ...row,
+                payment_date: row.stocktake_date,
+                partner_name: `Người kiểm kê: ${row.counted_by}`,
+                note: row.note || `Kiểm kê kho hàng định kỳ (${row.item_count} mặt hàng, tăng ${row.increase_count}, giảm ${row.decrease_count})`,
+                items: (row.items && row.items.length > 0) ? row.items.map((it: any) => ({
+                  sku: it.sku || 'SKU',
+                  product_name: it.product_name,
+                  unit: it.unit || 'cái',
+                  quantity: it.actual_qty,
+                  unit_price: it.unit_cost,
+                  line_total: it.diff_value,
+                })) : [
+                  {
+                    sku: 'KK',
+                    product_name: `Kiểm kê kho (${row.item_count} mặt hàng, lệch ${row.diff_value > 0 ? '+' : ''}${formatCurrency(row.diff_value)})`,
+                    unit: 'lần',
+                    quantity: 1,
+                    unit_price: Math.abs(row.diff_value),
+                    line_total: row.diff_value,
+                  },
+                ],
+                total: Math.abs(row.diff_value),
+                subtotal: Math.abs(row.diff_value),
+              });
+            }
+          }}
+          className="px-2.5 py-1 text-[12px] font-semibold text-[#6D3EEB] hover:bg-[#F3E8FF] rounded-[8px] flex items-center gap-1 transition-colors"
+          title="In biên bản kiểm kê"
+        >
+          <Icon name="print" size={15} />
+          <span>In</span>
+        </button>
+      ),
     },
   ];
 

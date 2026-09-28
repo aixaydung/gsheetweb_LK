@@ -322,6 +322,7 @@ function AppContent() {
                 if (dir === 'in') setIsCreatePOOpen(true);
                 else setIsCreateInvoiceOpen(true);
               }}
+              onPrintDocument={handlePrintDocument}
             />
           )}
 
@@ -333,6 +334,7 @@ function AppContent() {
               onOpenCreatePayment={() =>
                 setPaymentModalState({ isOpen: true, direction: 'out' })
               }
+              onPrintDocument={handlePrintDocument}
             />
           )}
 
@@ -469,27 +471,27 @@ function AppContent() {
           onClose={() => setPrintDocState(prev => ({ ...prev, isOpen: false }))}
           documentType={printDocState.type}
           code={printDocState.code}
-          date={printDocState.doc?.invoice_date || printDocState.doc?.order_date || new Date().toISOString()}
-          partnerName={printDocState.doc?.customer_name || printDocState.doc?.supplier_name}
+          date={printDocState.doc?.payment_date || printDocState.doc?.invoice_date || printDocState.doc?.order_date || new Date().toISOString()}
+          partnerName={printDocState.doc?.partner_name || printDocState.doc?.customer_name || printDocState.doc?.supplier_name}
           partnerPhone={printDocState.doc?.customer_phone || printDocState.doc?.phone}
           items={
             printDocState.doc?.items || [
               {
-                sku: 'CP001',
-                product_name: 'Cà phê rang xay Robusta thượng hạng',
-                unit: 'kg',
+                sku: printDocState.type.includes('THU') ? 'PT' : printDocState.type.includes('CHI') ? 'PC' : 'SP',
+                product_name: printDocState.doc?.note || 'Thanh toán tiền hàng / công nợ',
+                unit: 'lần',
                 quantity: 1,
-                unit_price: 120000,
-                line_total: 120000,
+                unit_price: printDocState.doc?.amount || printDocState.doc?.total || 0,
+                line_total: printDocState.doc?.amount || printDocState.doc?.total || 0,
               },
             ]
           }
-          subtotal={printDocState.doc?.subtotal || 120000}
+          subtotal={printDocState.doc?.subtotal || printDocState.doc?.amount || 0}
           discountAmount={printDocState.doc?.discount_amount || 0}
           vatAmount={printDocState.doc?.vat_amount || 0}
           shippingFee={printDocState.doc?.shipping_fee || 0}
-          total={printDocState.doc?.total || 120000}
-          paidAmount={printDocState.doc?.paid_amount || 0}
+          total={printDocState.doc?.total || printDocState.doc?.amount || 0}
+          paidAmount={printDocState.doc?.paid_amount || printDocState.doc?.amount || 0}
           debtAmount={printDocState.doc?.debt_amount || 0}
           note={printDocState.doc?.note}
         />

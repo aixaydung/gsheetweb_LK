@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Modal } from '../ui/Modal';
 import { StocktakeItem } from '../../types';
@@ -15,13 +15,13 @@ export const StocktakeFormModal: React.FC<StocktakeFormModalProps> = ({ isOpen, 
 
   const [warehouseId, setWarehouseId] = useState(warehouses[0]?.id || 'wh-01');
   const [countedBy, setCountedBy] = useState('Nguyễn Văn Quản');
-  const [note, setNote] = useState('Kiểm kê định kỳ tháng 9');
+  const [note, setNote] = useState('Kiểm kê định kỳ');
+  const [itemSearch, setItemSearch] = useState('');
 
   // Initialize stocktake items from existing physical products
   const [items, setItems] = useState<StocktakeItem[]>(() => {
     return products
       .filter(p => !p.is_service)
-      .slice(0, 8)
       .map(p => ({
         id: `stk-it-${p.id}`,
         product_id: p.id,
@@ -36,6 +36,29 @@ export const StocktakeFormModal: React.FC<StocktakeFormModalProps> = ({ isOpen, 
         reason: '',
       }));
   });
+
+  // Re-sync items if empty and products become available
+  React.useEffect(() => {
+    if (items.length === 0 && products.length > 0) {
+      setItems(
+        products
+          .filter(p => !p.is_service)
+          .map(p => ({
+            id: `stk-it-${p.id}`,
+            product_id: p.id,
+            sku: p.sku,
+            product_name: p.name,
+            unit: p.unit,
+            system_qty: p.stock_quantity,
+            actual_qty: p.stock_quantity,
+            diff_qty: 0,
+            unit_cost: p.cost_price,
+            diff_value: 0,
+            reason: '',
+          }))
+      );
+    }
+  }, [products]);
 
   const handleActualQtyChange = (productId: string, actual: number) => {
     setItems(prev =>
@@ -62,6 +85,16 @@ export const StocktakeFormModal: React.FC<StocktakeFormModalProps> = ({ isOpen, 
   const totalDiffValue = items.reduce((sum, it) => sum + it.diff_value, 0);
   const increaseCount = items.filter(it => it.diff_qty > 0).length;
   const decreaseCount = items.filter(it => it.diff_qty < 0).length;
+
+  const displayedItems = useMemo(() => {
+    if (!itemSearch.trim()) return items;
+    const q = itemSearch.toLowerCase();
+    return items.filter(
+      it =>
+        it.product_name.toLowerCase().includes(q) ||
+        it.sku.toLowerCase().includes(q)
+    );
+  }, [items, itemSearch]);
 
   const handleSave = (status: 'draft' | 'completed') => {
     createStocktake({
@@ -178,11 +211,28 @@ export const StocktakeFormModal: React.FC<StocktakeFormModalProps> = ({ isOpen, 
           </div>
         </div>
 
+        {/* Table Search & Filter Toolbar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="relative flex-1 max-w-sm">
+            <Icon name="search" size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+            <input
+              type="text"
+              placeholder="Tìm nhanh SKU hoặc tên sản phẩm..."
+              value={itemSearch}
+              onChange={e => setItemSearch(e.target.value)}
+              className="w-full h-9 pl-9 pr-3 text-[13px] bg-white border border-[#E5E7EB] rounded-[10px] focus:outline-none focus:border-[#6D3EEB]"
+            />
+          </div>
+          <div className="text-[12.5px] text-[#6B7280]">
+            Hiển thị <span className="font-semibold text-[#111827]">{displayedItems.length}</span> / {items.length} mặt hàng
+          </div>
+        </div>
+
         {/* Table */}
-        <div className="border border-[#F1F2F5] rounded-[14px] overflow-hidden">
+        <div className="border border-[#F1F2F5] rounded-[14px] overflow-hidden max-h-[420px] overflow-y-auto">
           <table className="w-full text-left border-collapse text-[13px]">
-            <thead>
-              <tr className="bg-[#F9FAFB] border-b border-[#F1F2F5] text-[#6B7280] font-semibold text-[11.5px] uppercase tracking-wider">
+            <thead className="sticky top-0 bg-[#F9FAFB] shadow-xs z-10">
+              <tr className="border-b border-[#F1F2F5] text-[#6B7280] font-semibold text-[11.5px] uppercase tracking-wider">
                 <th className="p-3">SẢN PHẨM</th>
                 <th className="p-3 text-center">ĐVT</th>
                 <th className="p-3 text-center">TỒN HỆ THỐNG</th>
@@ -193,7 +243,14 @@ export const StocktakeFormModal: React.FC<StocktakeFormModalProps> = ({ isOpen, 
               </tr>
             </thead>
             <tbody className="divide-y divide-[#F1F2F5]">
-              {items.map(it => (
+              {displayedItems.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-6 text-center text-[#9CA3AF]">
+                    Không tìm thấy sản phẩm nào khớp với "{itemSearch}"
+                  </td>
+                </tr>
+              ) : (
+                displayedItems.map(it => (
                 <tr key={it.id} className="hover:bg-gray-50">
                   <td className="p-3">
                     <div className="font-semibold text-[#111827]">{it.product_name}</div>
@@ -248,7 +305,7 @@ export const StocktakeFormModal: React.FC<StocktakeFormModalProps> = ({ isOpen, 
                     />
                   </td>
                 </tr>
-              ))}
+              )))}
             </tbody>
           </table>
         </div>
