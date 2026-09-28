@@ -3,6 +3,8 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import * as dotenv from 'dotenv';
 import authRouter from './auth.js';
+import customersRouter from './routes/customers.js';
+import productsRouter from './routes/products.js';
 
 dotenv.config();
 
@@ -23,6 +25,12 @@ app.use(cookieParser());
 // Mount routes for both with and without /api prefix (for Vercel serverless rewrites resilience)
 app.use('/api/auth', authRouter);
 app.use('/auth', authRouter);
+
+app.use('/api/customers', customersRouter);
+app.use('/customers', customersRouter);
+
+app.use('/api/products', productsRouter);
+app.use('/products', productsRouter);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

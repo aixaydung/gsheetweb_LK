@@ -237,6 +237,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setThemeState(prev => (prev === 'dark' ? 'light' : 'dark'));
   };
 
+  // Initial fetch from Google Sheets (Merges with or loads live records)
+  useEffect(() => {
+    const fetchSheetsData = async () => {
+      try {
+        const [custRes, prodRes] = await Promise.allSettled([
+          fetch('/api/customers'),
+          fetch('/api/products')
+        ]);
+        if (custRes.status === 'fulfilled' && custRes.value.ok) {
+          const data = await custRes.value.json();
+          if (Array.isArray(data.customers) && data.customers.length > 0) {
+            setCustomers(data.customers);
+          }
+        }
+        if (prodRes.status === 'fulfilled' && prodRes.value.ok) {
+          const data = await prodRes.value.json();
+          if (Array.isArray(data.products) && data.products.length > 0) {
+            setProducts(data.products);
+          }
+        }
+      } catch (err) {
+        console.warn('Initial fetch from Google Sheets bypassed, using local state:', err);
+      }
+    };
+    fetchSheetsData();
+  }, []);
+
   // Sync to local storage
   useEffect(() => {
     localStorage.setItem(STORAGE_PREFIX + 'products', JSON.stringify(products));
@@ -1086,7 +1113,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         : 'ok',
     };
 
+    // 1. Optimistic UI update
     setProducts(prev => [newProd, ...prev]);
+
+    // 2. Background sync to Google Sheets (Option A)
+    fetch('/api/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newProd),
+    }).catch(err => {
+      console.error('Background sync product to Google Sheets failed:', err);
+    });
+
     return newProd;
   };
 
@@ -1102,10 +1140,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return updated;
       })
     );
+
+    // Background sync to Google Sheets
+    fetch(`/api/products/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(prodData),
+    }).catch(err => {
+      console.error('Background sync update product failed:', err);
+    });
   };
 
   const deleteProduct = (id: string) => {
     setProducts(prev => prev.filter(p => p.id !== id));
+    fetch(`/api/products/${id}`, { method: 'DELETE' }).catch(err => {
+      console.error('Background sync delete product failed:', err);
+    });
   };
 
   // Customer CRUD
@@ -1129,7 +1179,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       overdue_amount: 0,
       open_docs_count: 0,
     };
+
+    // 1. Optimistic UI update
     setCustomers(prev => [newCust, ...prev]);
+
+    // 2. Background sync to Google Sheets (Option A)
+    fetch('/api/customers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newCust),
+    }).catch(err => {
+      console.error('Background sync customer to Google Sheets failed:', err);
+    });
+
     return newCust;
   };
 
@@ -1144,10 +1206,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return updated;
       })
     );
+
+    // Background sync to Google Sheets
+    fetch(`/api/customers/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(custData),
+    }).catch(err => {
+      console.error('Background sync update customer failed:', err);
+    });
   };
 
   const deleteCustomer = (id: string) => {
     setCustomers(prev => prev.filter(c => c.id !== id));
+    fetch(`/api/customers/${id}`, { method: 'DELETE' }).catch(err => {
+      console.error('Background sync delete customer failed:', err);
+    });
   };
 
   // Supplier CRUD
