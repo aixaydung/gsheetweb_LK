@@ -481,10 +481,35 @@ function AppContent() {
   );
 }
 
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { LoginView } from './views/LoginView';
+import { GoogleOAuthProvider } from '@react-oauth/google';
+
+function AppContentWrapper() {
+  const { isAuthenticated, isLoading } = useAuth();
+  
+  if (isLoading) {
+    return <div className="min-h-screen flex items-center justify-center">Đang tải...</div>;
+  }
+  
+  if (!isAuthenticated) {
+    return <LoginView />;
+  }
+  
+  return <AppContent />;
+}
+
 export default function App() {
+  // Use Vite env variable
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'dummy-client-id';
+  
   return (
-    <AppProvider>
-      <AppContent />
-    </AppProvider>
+    <GoogleOAuthProvider clientId={clientId}>
+      <AuthProvider>
+        <AppProvider>
+          <AppContentWrapper />
+        </AppProvider>
+      </AuthProvider>
+    </GoogleOAuthProvider>
   );
 }
