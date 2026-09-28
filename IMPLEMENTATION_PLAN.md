@@ -117,10 +117,19 @@ Spreadsheet ID: `1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY` đã khởi tạo
   - [x] Nút "In" trực quan tại từng dòng ở Sổ quỹ (`CashbookView`), Mua hàng (`PurchaseView`), Bán hàng (`SalesView`), và Kho hàng (`WarehouseView`).
   - [x] Hỗ trợ tùy biến khổ in A4 / A5 / K80, ẩn/hiện logo công ty, chữ ký, QR code ngân hàng và xuất file PDF.
 
-### Giai đoạn D: Dashboard Báo cáo & Tối ưu hóa [ROADMAP TIẾP THEO]
-- [ ] **Báo cáo & Dashboard phân tích số liệu thực**:
-  - [ ] Đồng bộ toàn bộ KPI trên Dashboard (Doanh thu tháng, Lãi gộp ước tính, Công nợ khách cần thu, Công nợ NCC phải trả, Cảnh báo hết hàng) lấy trực tiếp từ Google Sheets.
-  - [ ] Báo cáo sổ chi tiết hàng hóa (Stock Card / Thẻ kho) cho từng SKU.
+### Giai đoạn D: Dashboard Báo cáo & Tối ưu hóa [ĐÃ HOÀN THÀNH GÓI 1]
+- [x] **Dashboard phân tích tài chính & vận hành thực tế**:
+  - [x] Động hóa 100% biểu đồ `ComposedChart` trên Dashboard: nhóm dữ liệu theo ngày / tuần / tháng dựa trên hóa đơn bán hàng và giá vốn thực tế thay vì mock data cứng.
+  - [x] Bổ sung khối **Báo cáo Hiệu quả Kinh doanh (P&L) & Dòng tiền thực tế**:
+    - Doanh thu thuần (100% doanh số từ các đơn bán hoàn tất).
+    - Giá vốn hàng bán (COGS) & Tỷ trọng giá vốn.
+    - Lợi nhuận gộp (Gross Profit) & Biên lãi gộp (%).
+    - Chi phí vận hành (OpEx) tính từ các Phiếu chi `PC` thực tế trong kỳ từ Sổ quỹ.
+    - Lợi nhuận ròng (Net Profit) & Biên lãi ròng sau khi trừ chi phí vận hành.
+    - Thống kê Thực thu, Thực chi và Dòng tiền thuần kỳ kinh doanh.
+  - [x] Đồng bộ bộ lọc nhanh (Hôm nay, 7 ngày, Tháng này, Quý này) tự động cập nhật biểu đồ và các thẻ KPI.
+- [ ] **Thẻ kho (Stock Card) chi tiết cho từng SKU** *(Kế hoạch Gói 2 tiếp theo)*:
+  - [ ] Báo cáo sổ chi tiết hàng hóa tra cứu biến động Nhập (`PN`) – Xuất (`PX`) – Cân bằng kiểm kê (`PKK`) cùng số dư tồn lũy kế theo thời gian cho từng mặt hàng.
 
 ---
 
