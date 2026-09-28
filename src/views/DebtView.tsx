@@ -8,6 +8,7 @@ import { DataTable, Column } from '../components/ui/DataTable';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { Icon } from '../components/ui/Icon';
 import { formatCurrency, formatDate } from '../lib/format';
+import { exportToExcelFile, ExportColumn } from '../lib/excelExport';
 import { Customer, Supplier, SalesInvoice, PurchaseOrder, Payment } from '../types';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 
@@ -291,11 +292,86 @@ export const DebtView: React.FC<DebtViewProps> = ({
     },
   ];
 
+  // Handle Export Excel based on active debt tab
+  const handleExportExcel = () => {
+    if (currentTab === 'no-ncc') {
+      const columns: ExportColumn<Supplier>[] = [
+        { key: 'code', header: 'Mã NCC' },
+        { key: 'name', header: 'Tên nhà cung cấp' },
+        { key: 'phone', header: 'Số điện thoại', accessor: s => s.phone || '' },
+        { key: 'open_docs_count', header: 'Số CT còn nợ', accessor: s => s.open_docs_count || 1 },
+        { key: 'total_purchase', header: 'Tổng mua', accessor: s => s.total_purchase },
+        { key: 'debt_amount', header: 'Còn nợ NCC', accessor: s => s.debt_amount },
+        { key: 'overdue_amount', header: 'Quá hạn', accessor: s => s.overdue_amount || 0 },
+      ];
+      exportToExcelFile(filteredSupplierDebtors, columns, 'Cong_no_nha_cung_cap');
+    } else if (currentTab === 'phai-thu') {
+      const columns: ExportColumn<any>[] = [
+        { key: 'code', header: 'Số hóa đơn' },
+        { key: 'invoice_date', header: 'Ngày hóa đơn', accessor: i => i.invoice_date || i.order_date || '' },
+        { key: 'customer_name', header: 'Khách hàng' },
+        { key: 'total', header: 'Tổng tiền', accessor: i => i.total || i.total_amount },
+        { key: 'paid_amount', header: 'Đã thanh toán', accessor: i => i.paid_amount },
+        { key: 'debt_amount', header: 'Còn nợ', accessor: i => i.debt_amount },
+        { key: 'due_date', header: 'Hạn thanh toán', accessor: i => i.due_date || '' },
+        { key: 'isOverdue', header: 'Quá hạn', accessor: i => (i.isOverdue ? 'Quá hạn' : 'Trong hạn') },
+      ];
+      exportToExcelFile(openInvoices, columns, 'Chi_tiet_phai_thu');
+    } else if (currentTab === 'phai-tra') {
+      const columns: ExportColumn<any>[] = [
+        { key: 'code', header: 'Số đơn mua' },
+        { key: 'order_date', header: 'Ngày đơn mua', accessor: p => p.order_date || '' },
+        { key: 'supplier_name', header: 'Nhà cung cấp' },
+        { key: 'total', header: 'Tổng tiền', accessor: p => p.total || p.total_amount },
+        { key: 'paid_amount', header: 'Đã thanh toán', accessor: p => p.paid_amount },
+        { key: 'debt_amount', header: 'Còn nợ', accessor: p => p.debt_amount },
+        { key: 'due_date', header: 'Hạn thanh toán', accessor: p => p.due_date || '' },
+        { key: 'isOverdue', header: 'Quá hạn', accessor: p => (p.isOverdue ? 'Quá hạn' : 'Trong hạn') },
+      ];
+      exportToExcelFile(openPOs, columns, 'Chi_tiet_phai_tra');
+    } else if (currentTab === 'lich-su-thanh-toan') {
+      const columns: ExportColumn<Payment>[] = [
+        { key: 'code', header: 'Mã phiếu' },
+        { key: 'payment_date', header: 'Ngày thanh toán', accessor: p => formatDate(p.payment_date) },
+        { key: 'direction', header: 'Loại phiếu', accessor: p => (p.direction === 'in' ? 'Phiếu thu' : 'Phiếu chi') },
+        { key: 'partner_name', header: 'Đối tác' },
+        { key: 'amount', header: 'Số tiền', accessor: p => p.amount },
+        { key: 'method', header: 'Hình thức', accessor: p => (p.method === 'cash' ? 'Tiền mặt' : 'Chuyển khoản') },
+        { key: 'status', header: 'Trạng thái', accessor: p => (p.status === 'active' ? 'Đã ghi sổ' : 'Đã hủy') },
+      ];
+      exportToExcelFile(payments, columns, 'Lich_su_thanh_toan_cong_no');
+    } else {
+      // Default: Khách hàng nợ / Tổng quan / Quá hạn
+      const columns: ExportColumn<Customer>[] = [
+        { key: 'code', header: 'Mã KH' },
+        { key: 'name', header: 'Tên khách hàng' },
+        { key: 'phone', header: 'Số điện thoại', accessor: c => c.phone || '' },
+        { key: 'open_docs_count', header: 'Số CT còn nợ', accessor: c => c.open_docs_count || 1 },
+        { key: 'total_purchase', header: 'Tổng mua', accessor: c => c.total_purchase },
+        { key: 'debt_amount', header: 'Còn nợ', accessor: c => c.debt_amount },
+        { key: 'overdue_amount', header: 'Quá hạn', accessor: c => c.overdue_amount || 0 },
+        { key: 'earliest_due_date', header: 'Hạn sớm nhất', accessor: c => formatDate(c.earliest_due_date) },
+      ];
+      exportToExcelFile(filteredDebtors, columns, 'Cong_no_khach_hang');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Quản lý Công nợ"
         subtitle="Tổng hợp công nợ phải thu khách hàng và phải trả nhà cung cấp"
+        rightAction={
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-[12px] border border-[#E5E7EB] bg-white hover:bg-[#F9FAFB] text-[#374151] text-[13px] sm:text-[14px] font-semibold transition-all shadow-xs active:scale-98"
+            title="Xuất dữ liệu tab hiện tại ra file Excel (CSV UTF-8 BOM)"
+          >
+            <Icon name="download" size={17} className="text-[#6D3EEB]" />
+            <span>Xuất Excel</span>
+          </button>
+        }
       />
 
       <Tabs items={tabs} activeId={currentTab} onChange={onTabChange} />

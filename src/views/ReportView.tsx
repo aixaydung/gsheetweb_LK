@@ -155,7 +155,19 @@ export const ReportView: React.FC<ReportViewProps> = ({ currentTab, onTabChange 
   // =========================================================================
   // DATASET 2: TỒN KHO (matching Screenshot 2.png)
   // =========================================================================
-  const rawInventoryProducts = useMemo(() => [
+  const rawInventoryProducts = useMemo(() => {
+    if (contextProducts && contextProducts.length > 0) {
+      return contextProducts.map(p => ({
+        id: p.id,
+        name: p.name,
+        sku: p.sku || '',
+        stock: p.stock_quantity,
+        value: p.stock_value || (p.stock_quantity * p.cost_price),
+        status: p.stock_quantity <= 0 ? 'out' : p.stock_quantity <= (p.min_stock || 5) ? 'low' : 'ok',
+        statusText: p.stock_quantity <= 0 ? 'Hết hàng' : p.stock_quantity <= (p.min_stock || 5) ? 'Sắp hết' : 'Còn hàng',
+      }));
+    }
+    return [
     {
       id: 'inv-01',
       name: 'Thiết bị giám sát, điều khiển hệ thống điện mặt trời mái nhà (Nexatus) LK',
@@ -273,7 +285,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ currentTab, onTabChange 
       status: 'ok',
       statusText: 'Còn hàng',
     },
-  ], []);
+    ];
+  }, [contextProducts]);
 
   const filteredInventory = useMemo(() => {
     return rawInventoryProducts
@@ -301,10 +314,22 @@ export const ReportView: React.FC<ReportViewProps> = ({ currentTab, onTabChange 
   // =========================================================================
   // DATASET 3: CÔNG NỢ (matching Screenshot 3.png)
   // =========================================================================
-  const rawDebtCustomers = useMemo(() => [
-    { id: 'dc-1', name: 'Công ty Minh An', totalPurchase: 1467000, remainingDebt: 250000 },
-    { id: 'dc-2', name: 'Shop Mộc Nhiên', totalPurchase: 643500, remainingDebt: 643500 },
-  ], []);
+  const rawDebtCustomers = useMemo(() => {
+    if (contextCustomers && contextCustomers.some(c => c.debt_amount > 0)) {
+      return contextCustomers
+        .filter(c => c.debt_amount > 0)
+        .map(c => ({
+          id: c.id,
+          name: c.name,
+          totalPurchase: c.total_purchase,
+          remainingDebt: c.debt_amount,
+        }));
+    }
+    return [
+      { id: 'dc-1', name: 'Công ty Minh An', totalPurchase: 1467000, remainingDebt: 250000 },
+      { id: 'dc-2', name: 'Shop Mộc Nhiên', totalPurchase: 643500, remainingDebt: 643500 },
+    ];
+  }, [contextCustomers]);
 
   const filteredDebtCustomers = useMemo(() => {
     return rawDebtCustomers

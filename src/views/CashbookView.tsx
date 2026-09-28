@@ -7,6 +7,7 @@ import { DataTable, Column } from '../components/ui/DataTable';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { Icon } from '../components/ui/Icon';
 import { formatCurrency, formatDateTime } from '../lib/format';
+import { exportToExcelFile, ExportColumn } from '../lib/excelExport';
 import { Payment } from '../types';
 
 interface CashbookViewProps {
@@ -71,6 +72,60 @@ export const CashbookView: React.FC<CashbookViewProps> = ({
     if (window.confirm(`Bạn có chắc muốn hủy phiếu ${payment.code}? Công nợ hóa đơn/đơn mua tương ứng sẽ được tự động hoàn lại.`)) {
       cancelPayment(payment.id);
     }
+  };
+
+  // Handle Export Excel
+  const handleExportExcel = () => {
+    const exportColumns: ExportColumn<Payment>[] = [
+      { key: 'code', header: 'Mã phiếu' },
+      {
+        key: 'payment_date',
+        header: 'Ngày ghi sổ',
+        accessor: p => formatDateTime(p.payment_date),
+      },
+      {
+        key: 'direction',
+        header: 'Loại phiếu',
+        accessor: p => (p.direction === 'in' ? 'Phiếu thu' : 'Phiếu chi'),
+      },
+      {
+        key: 'partner_name',
+        header: 'Đối tác',
+        accessor: p => p.partner_name || 'Khách vãng lai',
+      },
+      {
+        key: 'partner_type',
+        header: 'Loại đối tác',
+        accessor: p => (p.partner_type === 'customer' ? 'Khách hàng' : 'Nhà cung cấp'),
+      },
+      {
+        key: 'method',
+        header: 'Hình thức',
+        accessor: p => (p.method === 'cash' ? 'Tiền mặt' : p.method === 'transfer' ? 'Chuyển khoản' : 'Khác'),
+      },
+      {
+        key: 'amount',
+        header: 'Số tiền',
+        accessor: p => p.amount,
+      },
+      {
+        key: 'reference_code',
+        header: 'Chứng từ tham chiếu',
+        accessor: p => (p.allocations || []).map(a => a.doc_code || a.doc_id).join('; '),
+      },
+      {
+        key: 'note',
+        header: 'Ghi chú',
+        accessor: p => p.note || '',
+      },
+      {
+        key: 'status',
+        header: 'Trạng thái',
+        accessor: p => (p.status === 'active' ? 'Đã ghi sổ' : 'Đã hủy'),
+      },
+    ];
+
+    exportToExcelFile(filteredPayments, exportColumns, 'So_quy_thu_chi');
   };
 
   const columns: Column<Payment>[] = [
@@ -253,6 +308,15 @@ export const CashbookView: React.FC<CashbookViewProps> = ({
         subtitle="Quản lý toàn diện các khoản thu, chi, gạch nợ và đối chiếu dòng tiền"
         rightAction={
           <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-[12px] border border-[#E5E7EB] bg-white hover:bg-[#F9FAFB] text-[#374151] text-[13px] sm:text-[14px] font-semibold transition-all shadow-xs active:scale-98"
+              title="Xuất danh sách sổ quỹ ra file Excel (CSV UTF-8 BOM)"
+            >
+              <Icon name="download" size={17} className="text-[#6D3EEB]" />
+              <span>Xuất Excel</span>
+            </button>
             <button
               type="button"
               onClick={onOpenCreatePayment}

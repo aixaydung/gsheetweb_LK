@@ -24,7 +24,7 @@ export const Header: React.FC<HeaderProps> = ({
   alertCount = 6111,
   onNavigate,
 }) => {
-  const { theme, toggleTheme } = useApp();
+  const { theme, toggleTheme, syncStatus, lastSyncTime, triggerManualSync } = useApp();
   const { user, logout } = useAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -116,6 +116,50 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <Icon name="search" size={22} />
         </button>
+
+        {/* Google Sheets Sync Status Indicator */}
+        <div
+          onClick={() => syncStatus !== 'syncing' && triggerManualSync()}
+          title={
+            syncStatus === 'synced'
+              ? `Google Sheets: Đã đồng bộ ${lastSyncTime ? `(lúc ${lastSyncTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })})` : ''}. Nhấn để đồng bộ lại.`
+              : syncStatus === 'syncing'
+              ? 'Đang đồng bộ dữ liệu với Google Sheets...'
+              : 'Lỗi kết nối Google Sheets. Nhấn để thử lại.'
+          }
+          className={`h-[36px] sm:h-[40px] px-2.5 sm:px-3 rounded-[10px] sm:rounded-[12px] flex items-center gap-1.5 sm:gap-2 text-[12px] sm:text-[13px] font-medium border transition-all cursor-pointer select-none ${
+            syncStatus === 'synced'
+              ? 'bg-emerald-50/80 hover:bg-emerald-100/80 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+              : syncStatus === 'syncing'
+              ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 animate-pulse'
+              : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
+          }`}
+        >
+          {syncStatus === 'synced' && (
+            <>
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span className="hidden md:inline font-semibold">Sheets:</span>
+              <span className="hidden sm:inline">Đã đồng bộ</span>
+              <Icon name="sync" size={14} className="text-emerald-600 opacity-60 hover:opacity-100 transition-opacity ml-0.5" />
+            </>
+          )}
+          {syncStatus === 'syncing' && (
+            <>
+              <Icon name="sync" size={15} className="animate-spin text-amber-600" />
+              <span className="font-medium text-amber-800 dark:text-amber-300">Đang đồng bộ...</span>
+            </>
+          )}
+          {syncStatus === 'error' && (
+            <>
+              <Icon name="warning" size={15} className="text-rose-600" />
+              <span className="hidden sm:inline font-semibold">Lỗi Sheets</span>
+              <span className="text-[11px] underline">Thử lại</span>
+            </>
+          )}
+        </div>
 
         {/* Desktop "+ Tạo nhanh" Button (Hidden on small mobile because bottom bar has floating action button) */}
         <button

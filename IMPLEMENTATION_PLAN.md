@@ -117,7 +117,7 @@ Spreadsheet ID: `1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY` đã khởi tạo
   - [x] Nút "In" trực quan tại từng dòng ở Sổ quỹ (`CashbookView`), Mua hàng (`PurchaseView`), Bán hàng (`SalesView`), và Kho hàng (`WarehouseView`).
   - [x] Hỗ trợ tùy biến khổ in A4 / A5 / K80, ẩn/hiện logo công ty, chữ ký, QR code ngân hàng và xuất file PDF.
 
-### Giai đoạn D: Dashboard Báo cáo, Thẻ kho & Tối ưu hóa [ĐÃ HOÀN THÀNH GÓI 1 & 2]
+### Giai đoạn D: Dashboard Báo cáo, Thẻ kho, Google Sheets Sync & Xuất Excel [ĐÃ HOÀN THÀNH GÓI 1, 2 & 3]
 - [x] **Dashboard phân tích tài chính & vận hành thực tế (Gói 1)**:
   - [x] Động hóa 100% biểu đồ `ComposedChart` trên Dashboard: nhóm dữ liệu theo ngày / tuần / tháng dựa trên hóa đơn bán hàng và giá vốn thực tế thay vì mock data cứng.
   - [x] Bổ sung khối **Báo cáo Hiệu quả Kinh doanh (P&L) & Dòng tiền thực tế**:
@@ -136,6 +136,20 @@ Spreadsheet ID: `1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY` đã khởi tạo
   - [x] Bảng dòng chảy lịch sử xuất - nhập - tồn lũy kế tự động gom từ Phiếu nhập mua (`PN`), Phiếu xuất bán (`PX`), Phiếu cân bằng kiểm kê (`PKK`) và Xuất trả NCC (`PR`).
   - [x] Nút **"Xuất Excel"** xuất dữ liệu Thẻ kho chuẩn CSV UTF-8 BOM mở trực tiếp bằng Microsoft Excel.
   - [x] Nút **"In Thẻ kho"** sinh mẫu biểu THẺ KHO (SỔ KHO) Mẫu số S12-DNN ban hành theo TT 133/2016/TT-BTC với đầy đủ tiêu đề công ty, thông tin mặt hàng, bảng chi tiết và 4 vị trí chữ ký phê duyệt.
+- [x] **Trạng thái đồng bộ Google Sheets Real-time & Xuất Excel toàn diện (Gói 3)**:
+  - [x] **Google Sheets Sync Indicator** trên thanh Header:
+    - Hiển thị badge trạng thái động: 🟢 Đã đồng bộ (chấm xanh hiệu ứng radar ping, hiển thị giờ đồng bộ gần nhất), 🟡 Đang đồng bộ (icon spinner quay tròn), 🔴 Lỗi kết nối (nhấn để thử lại).
+    - Hỗ trợ nhấn trực tiếp vào badge để kích hoạt đồng bộ thủ công (`triggerManualSync()`) với Google Sheets.
+  - [x] **Tích hợp `syncStatus`, `lastSyncTime`, `syncWithApi` trong `AppContext.tsx`**:
+    - Tự động bao bọc tất cả các thao tác CRUD (Tạo/Hủy Hóa đơn bán, Mua hàng, Kiểm kê kho, Thu/Chi sổ quỹ, Sản phẩm, Khách hàng, Nhà cung cấp).
+    - Cập nhật thời gian đồng bộ `lastSyncTime` chính xác khi API backend trả về thành công.
+  - [x] **Xuất Excel toàn diện cho Sổ quỹ (`CashbookView.tsx`)**:
+    - Nút "Xuất Excel" xuất danh sách các phiếu thu/chi kèm đối tác, chứng từ tham chiếu, số tiền, hình thức thanh toán theo đúng bộ lọc đang chọn.
+  - [x] **Xuất Excel đa tab cho Quản lý Công nợ (`DebtView.tsx`)**:
+    - Nút "Xuất Excel" linh hoạt theo tab đang mở: Công nợ khách hàng, Công nợ nhà cung cấp, Chi tiết hóa đơn phải thu, Chi tiết đơn mua phải trả, Lịch sử thanh toán thu chi.
+  - [x] **Xuất Excel cho Báo cáo Vận hành (`ReportView.tsx`)**:
+    - Kết nối dữ liệu live với context Google Sheets (`contextProducts`, `contextCustomers`, `contextSuppliers`), hỗ trợ xuất Excel cho cả 6 tab báo cáo: Tổng hợp, Tồn kho, Công nợ, Top sản phẩm, Top khách hàng, Top nhà cung cấp.
+  - [x] Đảm bảo 100% file xuất dùng chuẩn UTF-8 BOM (`\uFEFF`) để font tiếng Việt có dấu hiển thị sắc nét trong Excel mà không bị lỗi font/ký tự lạ.
 
 ---
 
