@@ -11,13 +11,15 @@ const initGoogleSheets = () => {
     throw new Error('Thiếu cấu hình GOOGLE_CLIENT_EMAIL hoặc GOOGLE_PRIVATE_KEY trong biến môi trường!');
   }
   
-  // Format lại Private Key (Vercel thường hay bị lỗi format chuỗi \n)
+  // Format lại Private Key (Vercel thường hay bị lỗi format chuỗi \n hoặc bao quanh bởi ngoặc kép)
   let privateKey = process.env.GOOGLE_PRIVATE_KEY;
+  if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+    privateKey = privateKey.slice(1, -1);
+  } else if (privateKey.startsWith("'") && privateKey.endsWith("'")) {
+    privateKey = privateKey.slice(1, -1);
+  }
   if (privateKey.includes('\\n')) {
     privateKey = privateKey.replace(/\\n/g, '\n');
-  } else if (!privateKey.includes('\n')) {
-    // Trường hợp key liền mạch, cố gắng format lại (không khuyến khích)
-    // Cách an toàn nhất là người dùng dán đúng chuỗi có \n
   }
 
   auth = new google.auth.GoogleAuth({

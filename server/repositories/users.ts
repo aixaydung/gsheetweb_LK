@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { getSheetData, appendSheetData, updateSheetData } from '../google-sheets.js';
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID!;
@@ -22,7 +23,7 @@ export interface User {
 
 export const getAllUsers = async (): Promise<User[]> => {
   const rows = await getSheetData(SPREADSHEET_ID, `${USERS_SHEET}!A2:K`);
-  return rows.map((row, index) => ({
+  return rows.map((row: any, index: number) => ({
     id: row[0] || '',
     email: row[1] || '',
     password_hash: row[2] || '',

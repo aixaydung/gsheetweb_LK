@@ -68,7 +68,8 @@ router.post('/google-login', async (req, res) => {
           google_email: email!,
           auth_provider: 'google',
           last_login_at: new Date().toISOString(),
-          session_version: '1'
+          session_version: '1',
+          created_at: new Date().toISOString()
         }) as any;
       }
     } else {
