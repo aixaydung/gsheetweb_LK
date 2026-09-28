@@ -177,10 +177,12 @@ export interface DocumentLineItem {
   quantity: number;
   unit_price: number;
   line_discount: number;
+  discount_amount?: number;
   line_total: number;
   unit_cost?: number; // Snapshot of cost at sale/purchase
   returned_quantity?: number;
   available_stock?: number;
+  note?: string;
 }
 
 export interface SalesInvoice {

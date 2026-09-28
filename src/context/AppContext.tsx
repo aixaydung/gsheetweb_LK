@@ -241,9 +241,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     const fetchSheetsData = async () => {
       try {
-        const [custRes, prodRes] = await Promise.allSettled([
+        const [custRes, prodRes, vendRes, orderRes] = await Promise.allSettled([
           fetch('/api/customers'),
-          fetch('/api/products')
+          fetch('/api/products'),
+          fetch('/api/vendors'),
+          fetch('/api/orders')
         ]);
         if (custRes.status === 'fulfilled' && custRes.value.ok) {
           const data = await custRes.value.json();
@@ -255,6 +257,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const data = await prodRes.value.json();
           if (Array.isArray(data.products) && data.products.length > 0) {
             setProducts(data.products);
+          }
+        }
+        if (vendRes.status === 'fulfilled' && vendRes.value.ok) {
+          const data = await vendRes.value.json();
+          if (Array.isArray(data.vendors) && data.vendors.length > 0) {
+            setSuppliers(data.vendors);
+          }
+        }
+        if (orderRes.status === 'fulfilled' && orderRes.value.ok) {
+          const data = await orderRes.value.json();
+          if (Array.isArray(data.orders) && data.orders.length > 0) {
+            setInvoices(data.orders);
           }
         }
       } catch (err) {
@@ -385,9 +399,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Create Sales Invoice (Section 5.2.1, 7.2, 7.3, 7.5, 7.7)
   const createInvoice = (invData: Partial<SalesInvoice>, items: DocumentLineItem[]): SalesInvoice => {
-    const nextNum = invoices.length + 105;
-    const code = invData.code || `HD${String(nextNum).padStart(3, '0')}`;
-    const now = new Date().toISOString();
+    const dateObj = new Date();
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const ym = `${year}${month}`;
+    const nextNum = invoices.filter(i => i.code && i.code.startsWith(`BH-${ym}`)).length + 1;
+    const code = invData.code || `BH-${ym}-${String(nextNum).padStart(4, '0')}`;
+    const now = dateObj.toISOString();
 
     const subtotal = items.reduce((sum, item) => sum + item.line_total, 0);
     const discountType = invData.discount_type || 'amount';
@@ -443,6 +461,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const updatedInvoices = [newInvoice, ...invoices];
     setInvoices(updatedInvoices);
+
+    // Background sync to Google Sheets (Option A: Optimistic UI)
+    fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        order: {
+          id: newInvoice.id,
+          code: newInvoice.code,
+          customer_id: newInvoice.customer_id,
+          customer_name: newInvoice.customer_name,
+          order_date: newInvoice.invoice_date,
+          subtotal: newInvoice.subtotal,
+          discount_amount: newInvoice.discount_amount,
+          vat_rate: newInvoice.vat_rate,
+          vat_amount: newInvoice.vat_amount,
+          shipping_fee: newInvoice.shipping_fee,
+          total: newInvoice.total,
+          paid_amount: newInvoice.paid_amount,
+          debt_amount: newInvoice.debt_amount,
+          payment_status: newInvoice.payment_status,
+          status: newInvoice.status,
+          note: newInvoice.note,
+        },
+        items: newInvoice.items.map(it => ({
+          product_id: it.product_id,
+          sku: it.sku,
+          product_name: it.product_name,
+          unit: it.unit,
+          quantity: it.quantity,
+          unit_price: it.unit_price,
+          discount_amount: it.discount_amount ?? it.line_discount ?? 0,
+          line_total: it.line_total,
+          note: it.note || '',
+        })),
+      }),
+    }).catch(err => {
+      console.error('Background sync order to Google Sheets failed:', err);
+    });
 
     // If completed or processing, deduct stock and create StockVoucher (Xuất bán) + StockMovement
     if (newInvoice.status !== 'cancelled') {
@@ -568,6 +625,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setInvoices(prev =>
       prev.map(inv => (inv.id === id ? { ...inv, status } : inv))
     );
+    fetch(`/api/orders/${id}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    }).catch(err => {
+      console.error('Background sync update order status failed:', err);
+    });
   };
 
   const cancelInvoice = (id: string) => {
@@ -579,6 +643,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return inv;
       })
     );
+    fetch(`/api/orders/${id}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'cancelled' }),
+    }).catch(err => {
+      console.error('Background sync cancel order status failed:', err);
+    });
   };
 
   const deleteInvoice = (id: string) => {
@@ -1247,6 +1318,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       open_docs_count: 0,
     };
     setSuppliers(prev => [newSup, ...prev]);
+
+    // Background sync to Google Sheets (Option A: Optimistic UI)
+    fetch('/api/vendors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newSup),
+    }).catch(err => {
+      console.error('Background sync vendor to Google Sheets failed:', err);
+    });
+
     return newSup;
   };
 
@@ -1261,10 +1342,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return updated;
       })
     );
+
+    // Background sync to Google Sheets
+    fetch(`/api/vendors/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(supData),
+    }).catch(err => {
+      console.error('Background sync update vendor failed:', err);
+    });
   };
 
   const deleteSupplier = (id: string) => {
     setSuppliers(prev => prev.filter(s => s.id !== id));
+    fetch(`/api/vendors/${id}`, { method: 'DELETE' }).catch(err => {
+      console.error('Background sync delete vendor failed:', err);
+    });
   };
 
   // Warehouse CRUD
