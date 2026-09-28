@@ -37,8 +37,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate, onOpen
 
   // Active invoices
   const validInvoices = useMemo(
-    () => invoices.filter(i => i.status !== 'cancelled'),
-    [invoices]
+    () =>
+      invoices.filter(i => {
+        if (i.status === 'cancelled') return false;
+        const d = (i.invoice_date || (i as any).order_date || '').split('T')[0];
+        if (dateRange.from && d && d < dateRange.from) return false;
+        if (dateRange.to && d && d > dateRange.to) return false;
+        return true;
+      }),
+    [invoices, dateRange]
   );
 
   // Revenue & Profit math
@@ -104,23 +111,65 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate, onOpen
     });
   }, [productGroups, products]);
 
-  // Top products
-  const topProducts = [
-    { rank: 1, name: 'Cà phê rang xay Robusta thượng hạng', soldQty: 5055, revenue: 601440000, percent: 100 },
-    { rank: 2, name: 'Hũ pet nắp nhôm xé 500ml cao cấp', soldQty: 1250, revenue: 6875000, percent: 35 },
-    { rank: 3, name: 'Túi zip giấy kraft có cửa sổ (100 cái)', soldQty: 320, revenue: 21760000, percent: 22 },
-    { rank: 4, name: 'Trà đào túi lọc hương tự nhiên', soldQty: 99, revenue: 4455000, percent: 12 },
-    { rank: 5, name: 'Siro dâu đậm đặc pha chế 750ml', soldQty: 49, revenue: 1715000, percent: 8 },
-  ];
+  // Top products dynamically computed from invoices
+  const topProducts = useMemo(() => {
+    const prodMap = new Map<string, { name: string; soldQty: number; revenue: number }>();
+    validInvoices.forEach(inv => {
+      (inv.items || []).forEach(it => {
+        const name = it.product_name || 'Sản phẩm';
+        const cur = prodMap.get(name) || { name, soldQty: 0, revenue: 0 };
+        cur.soldQty += it.quantity;
+        cur.revenue += it.line_total;
+        prodMap.set(name, cur);
+      });
+    });
+    const sorted = Array.from(prodMap.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+    if (sorted.length === 0) {
+      return [
+        { rank: 1, name: 'Cà phê rang xay Robusta thượng hạng', soldQty: 5055, revenue: 601440000, percent: 100 },
+        { rank: 2, name: 'Hũ pet nắp nhôm xé 500ml cao cấp', soldQty: 1250, revenue: 6875000, percent: 35 },
+        { rank: 3, name: 'Túi zip giấy kraft có cửa sổ (100 cái)', soldQty: 320, revenue: 21760000, percent: 22 },
+        { rank: 4, name: 'Trà đào túi lọc hương tự nhiên', soldQty: 99, revenue: 4455000, percent: 12 },
+        { rank: 5, name: 'Siro dâu đậm đặc pha chế 750ml', soldQty: 49, revenue: 1715000, percent: 8 },
+      ];
+    }
+    const maxRev = sorted[0]?.revenue || 1;
+    return sorted.map((p, idx) => ({
+      rank: idx + 1,
+      name: p.name,
+      soldQty: p.soldQty,
+      revenue: p.revenue,
+      percent: Math.round((p.revenue / maxRev) * 100),
+    }));
+  }, [validInvoices]);
 
-  // Top customers
-  const topCustomers = [
-    { rank: 1, name: 'nắng rooftop-minh', total: 595000000, percent: 100 },
-    { rank: 2, name: 'xe10', total: 4422000, percent: 30 },
-    { rank: 3, name: 'Đại lý Hoàng Gia', total: 2173600, percent: 18 },
-    { rank: 4, name: 'anh binh', total: 1250000, percent: 12 },
-    { rank: 5, name: 'Shop Mộc Nhiên', total: 643500, percent: 8 },
-  ];
+  // Top customers dynamically computed from invoices
+  const topCustomers = useMemo(() => {
+    const custMap = new Map<string, { name: string; total: number }>();
+    validInvoices.forEach(inv => {
+      const name = inv.customer_name || 'Khách lẻ';
+      const cur = custMap.get(name) || { name, total: 0 };
+      cur.total += inv.total;
+      custMap.set(name, cur);
+    });
+    const sorted = Array.from(custMap.values()).sort((a, b) => b.total - a.total).slice(0, 5);
+    if (sorted.length === 0) {
+      return [
+        { rank: 1, name: 'nắng rooftop-minh', total: 595000000, percent: 100 },
+        { rank: 2, name: 'xe10', total: 4422000, percent: 30 },
+        { rank: 3, name: 'Đại lý Hoàng Gia', total: 2173600, percent: 18 },
+        { rank: 4, name: 'anh binh', total: 1250000, percent: 12 },
+        { rank: 5, name: 'Shop Mộc Nhiên', total: 643500, percent: 8 },
+      ];
+    }
+    const maxVal = sorted[0]?.total || 1;
+    return sorted.map((c, idx) => ({
+      rank: idx + 1,
+      name: c.name,
+      total: c.total,
+      percent: Math.round((c.total / maxVal) * 100),
+    }));
+  }, [validInvoices]);
 
   return (
     <div className="space-y-6">
