@@ -124,7 +124,7 @@ export const LoginView: React.FC = () => {
             </div>
             <div>
               <span className="text-[20px] font-black tracking-wider text-white flex items-center gap-2">
-                LK ERM <span className="text-[12px] font-semibold px-2 py-0.5 rounded-full bg-white/10 text-purple-200 border border-white/10">v2.0</span>
+                LK ERP <span className="text-[12px] font-semibold px-2 py-0.5 rounded-full bg-white/10 text-purple-200 border border-white/10">v2.0</span>
               </span>
               <p className="text-[12px] text-purple-200/70 font-medium">Hệ thống Điều hành Doanh nghiệp Toàn diện</p>
             </div>
@@ -191,7 +191,7 @@ export const LoginView: React.FC = () => {
             <span>•</span>
             <span>Mã hóa TLS 1.3 End-to-End</span>
           </div>
-          <div>© 2026 NexUpOne Solution</div>
+          <div>© 2026 LK ERP Solution</div>
         </div>
       </div>
 
@@ -209,7 +209,7 @@ export const LoginView: React.FC = () => {
               <Layers className="w-4.5 h-4.5" />
             </div>
             <span className="text-[17px] font-black text-[#6D3EEB] dark:text-[#C084FC] tracking-wider">
-              LK ERM
+              LK ERP
             </span>
           </div>
 
@@ -438,7 +438,7 @@ export const LoginView: React.FC = () => {
 
             <div className="space-y-3.5 text-[13.5px] text-[#4B5563] dark:text-[#CBD5E1] leading-relaxed">
               <p>
-                Hệ thống <strong>LK ERM</strong> là ứng dụng nghiệp vụ nội bộ doanh nghiệp. Mọi tài khoản và phân quyền đều được quản lý bởi Bộ phận Quản trị Hệ thống.
+                Hệ thống <strong>LK ERP</strong> là ứng dụng nghiệp vụ nội bộ doanh nghiệp. Mọi tài khoản và phân quyền đều được quản lý bởi Bộ phận Quản trị Hệ thống.
               </p>
               
               <div className="p-3.5 rounded-[12px] bg-[#F9FAFB] dark:bg-slate-800 border border-[#E5E7EB] dark:border-[#334155] space-y-2">

@@ -23,16 +23,16 @@ import {
 } from '../types';
 
 export const INITIAL_COMPANY_SETTINGS: CompanySettings = {
-  company_name: 'CÔNG TY NEXUP TECHNOLOGY',
+  company_name: 'CÔNG TY LK ERP',
   address: 'Tòa nhà Landmark, 720A Điện Biên Phủ, Phường 22, Bình Thạnh, TP. Hồ Chí Minh',
   phone: '0908 123 456',
-  email: 'contact@nexup.vn',
+  email: 'contact@lkerp.vn',
   tax_code: '0316889988',
-  website: 'https://nexup.vn',
+  website: 'https://lkerp.sheetapp.store',
   logo_url: '',
   bank_name: 'MB Bank - CN Sài Gòn',
   bank_account_no: '988886666888',
-  bank_account_name: 'CONG TY TNHH NEXUP TECHNOLOGY',
+  bank_account_name: 'CONG TY LK ERP',
   bank_bin: '970422',
   allow_negative_stock: true,
   default_min_stock: 10,

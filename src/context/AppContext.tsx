@@ -130,11 +130,11 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | null>(null);
 
-const STORAGE_PREFIX = 'nexupone_';
+const STORAGE_PREFIX = 'lkerp_';
 
 function getInitialState<T>(key: string, fallback: T): T {
   try {
-    const saved = localStorage.getItem(STORAGE_PREFIX + key);
+    const saved = localStorage.getItem(STORAGE_PREFIX + key) || localStorage.getItem('nexupone_' + key);
     return saved ? JSON.parse(saved) : fallback;
   } catch {
     return fallback;
@@ -209,7 +209,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   );
 
   const [theme, setThemeState] = useState<'light' | 'dark'>(() => {
-    const saved = localStorage.getItem('lk_erm_theme');
+    const saved = localStorage.getItem('lkerp_theme') || localStorage.getItem('lk_erm_theme');
     if (saved === 'dark' || saved === 'light') return saved;
     if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
       return 'dark';
@@ -226,7 +226,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       root.classList.remove('dark');
       root.style.colorScheme = 'light';
     }
-    localStorage.setItem('lk_erm_theme', theme);
+    localStorage.setItem('lkerp_theme', theme);
   }, [theme]);
 
   const setTheme = (newTheme: 'light' | 'dark') => {

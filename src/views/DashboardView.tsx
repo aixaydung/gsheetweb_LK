@@ -128,7 +128,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate, onOpen
       <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3 sm:gap-4">
         <div>
           <h1 className="text-[22px] sm:text-[30px] font-bold text-[#111827] tracking-tight leading-tight">
-            Tổng quan vận hành LK ERM
+            Tổng quan vận hành LK ERP
           </h1>
           <p className="text-[13.5px] sm:text-[15px] font-normal text-[#6B7280] mt-0.5 sm:mt-1">
             Theo dõi doanh thu, tồn kho, mua bán và công nợ theo thời gian thực

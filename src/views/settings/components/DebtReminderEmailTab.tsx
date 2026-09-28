@@ -9,19 +9,19 @@ export const DebtReminderEmailTab: React.FC = () => {
 
   // Settings State from LocalStorage or Defaults
   const [recipientEmails, setRecipientEmails] = useState(() => {
-    return localStorage.getItem('nexup_reminder_emails') || 'dpthao9197@gmail.com';
+    return localStorage.getItem('lkerp_reminder_emails') || localStorage.getItem('nexup_reminder_emails') || 'dpthao9197@gmail.com';
   });
   const [autoDailyReminder, setAutoDailyReminder] = useState(() => {
-    return localStorage.getItem('nexup_auto_daily_reminder') === 'true';
+    return (localStorage.getItem('lkerp_auto_daily_reminder') || localStorage.getItem('nexup_auto_daily_reminder')) === 'true';
   });
   const [sendHour, setSendHour] = useState(() => {
-    return localStorage.getItem('nexup_reminder_hour') || '8';
+    return localStorage.getItem('lkerp_reminder_hour') || localStorage.getItem('nexup_reminder_hour') || '8';
   });
   const [enableCustomerReminder, setEnableCustomerReminder] = useState(() => {
-    return localStorage.getItem('nexup_enable_cust_reminder') !== 'false';
+    return (localStorage.getItem('lkerp_enable_cust_reminder') || localStorage.getItem('nexup_enable_cust_reminder')) !== 'false';
   });
   const [reminderIntervalDays, setReminderIntervalDays] = useState(() => {
-    return localStorage.getItem('nexup_reminder_interval_days') || '7';
+    return localStorage.getItem('lkerp_reminder_interval_days') || localStorage.getItem('nexup_reminder_interval_days') || '7';
   });
 
   const [saved, setSaved] = useState(false);
@@ -89,11 +89,11 @@ export const DebtReminderEmailTab: React.FC = () => {
   };
 
   const handleSaveSettings = () => {
-    localStorage.setItem('nexup_reminder_emails', recipientEmails);
-    localStorage.setItem('nexup_auto_daily_reminder', String(autoDailyReminder));
-    localStorage.setItem('nexup_reminder_hour', sendHour);
-    localStorage.setItem('nexup_enable_cust_reminder', String(enableCustomerReminder));
-    localStorage.setItem('nexup_reminder_interval_days', reminderIntervalDays);
+    localStorage.setItem('lkerp_reminder_emails', recipientEmails);
+    localStorage.setItem('lkerp_auto_daily_reminder', String(autoDailyReminder));
+    localStorage.setItem('lkerp_reminder_hour', sendHour);
+    localStorage.setItem('lkerp_enable_cust_reminder', String(enableCustomerReminder));
+    localStorage.setItem('lkerp_reminder_interval_days', reminderIntervalDays);
 
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
@@ -497,7 +497,7 @@ export const DebtReminderEmailTab: React.FC = () => {
               <span>Nội dung gửi mẫu cho khách hàng:</span>
             </div>
             <p className="italic leading-relaxed text-[#374151] dark:text-[#CBD5E1]">
-              &ldquo;Kính gửi Quý khách hàng, NexUp xin thông báo số dư công nợ hiện tại là <strong>[Số tiền nợ]</strong>. Quý khách vui lòng chuyển khoản theo thông tin hoặc quét mã VietQR tự động đính kèm. Trân trọng cảm ơn!&rdquo;
+              &ldquo;Kính gửi Quý khách hàng, LK ERP xin thông báo số dư công nợ hiện tại là <strong>[Số tiền nợ]</strong>. Quý khách vui lòng chuyển khoản theo thông tin hoặc quét mã VietQR tự động đính kèm. Trân trọng cảm ơn!&rdquo;
             </p>
           </div>
         </div>

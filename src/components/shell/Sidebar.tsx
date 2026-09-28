@@ -65,7 +65,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <div>
                 <div className="text-[19px] font-black text-[#6D3EEB] tracking-wider leading-none">
-                  LK ERM
+                  LK ERP
                 </div>
                 <div className="text-[11px] text-[#6B7280] font-normal mt-0.5">
                   Quản trị doanh nghiệp
@@ -211,12 +211,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className="w-full p-2 rounded-[12px] hover:bg-[#F9FAFB] flex items-center justify-between transition-colors text-left"
           >
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#6D3EEB] to-[#A855F7] flex items-center justify-center text-white font-bold text-[13px] shadow-sm">
-                N
+              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#6D3EEB] to-[#A855F7] flex items-center justify-center text-white font-bold text-[12px] shadow-sm">
+                LK
               </div>
               <div className="overflow-hidden">
-                <div className="text-[13.5px] font-semibold text-[#111827] truncate leading-tight">
-                  NexUp
+                <div className="text-[13.5px] font-semibold text-[#111827] dark:text-[#F8FAFC] truncate leading-tight">
+                  LK ERP
                 </div>
                 <div className="text-[11px] text-[#6B7280] leading-none mt-0.5">
                   Hồ sơ cá nhân

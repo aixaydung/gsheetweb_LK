@@ -141,7 +141,7 @@ export const DebtAccountingLockTab: React.FC = () => {
         {/* Debt Age Buckets Reference (No background / Trong suốt) */}
         <div className="p-4 bg-transparent rounded-[12px] border border-gray-200 dark:border-[#334155] space-y-2.5">
           <span className="text-[13px] font-bold text-[#374151] dark:text-[#CBD5E1] uppercase tracking-wide block">
-            Phân loại tuổi nợ tiêu chuẩn trên báo cáo NexUpOne
+            Phân loại tuổi nợ tiêu chuẩn trên báo cáo LK ERP
           </span>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-[13.5px]">
             <div className="p-3 bg-transparent rounded-[10px] border border-gray-200 dark:border-[#334155]">

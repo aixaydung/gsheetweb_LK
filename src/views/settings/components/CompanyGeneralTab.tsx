@@ -10,7 +10,7 @@ export const CompanyGeneralTab: React.FC = () => {
   const [phone, setPhone] = useState(companySettings.phone);
   const [email, setEmail] = useState(companySettings.email);
   const [taxCode, setTaxCode] = useState(companySettings.tax_code);
-  const [website, setWebsite] = useState(companySettings.website || 'https://nexupone.vn');
+  const [website, setWebsite] = useState(companySettings.website || 'https://lkerp.sheetapp.store');
   const [saved, setSaved] = useState(false);
 
   const handleSave = () => {
@@ -126,7 +126,7 @@ export const CompanyGeneralTab: React.FC = () => {
               type="text"
               value={website}
               onChange={e => setWebsite(e.target.value)}
-              placeholder="https://nexupone.vn"
+              placeholder="https://lkerp.sheetapp.store"
               className="w-full h-10 px-3.5 bg-white dark:bg-[#0F172A] border border-[#E5E7EB] dark:border-[#334155] rounded-[10px] text-[14.5px] text-[#111827] dark:text-[#F8FAFC] focus:outline-none focus:border-[#6D3EEB]"
             />
           </div>

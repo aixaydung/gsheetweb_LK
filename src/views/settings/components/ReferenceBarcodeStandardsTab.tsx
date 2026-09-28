@@ -26,7 +26,7 @@ export const ReferenceBarcodeStandardsTab: React.FC = () => {
           Quy chuẩn Mã định danh & Mã vạch EAN-13 chuẩn GS1
         </h3>
         <p className="text-[14.5px] text-[#4B5563] dark:text-[#94A3B8] mt-0.5">
-          Quy tắc cấu trúc tiền tố chứng từ hệ thống NexUpOne và hướng dẫn đăng ký/tạo mã vạch thương phẩm quốc gia
+          Quy tắc cấu trúc tiền tố chứng từ hệ thống LK ERP và hướng dẫn đăng ký/tạo mã vạch thương phẩm quốc gia
         </p>
       </div>
 
@@ -86,7 +86,7 @@ export const ReferenceBarcodeStandardsTab: React.FC = () => {
       <div className="bg-transparent rounded-[16px] border border-[#E5E7EB] dark:border-[#334155] shadow-xs overflow-hidden">
         <div className="p-4 bg-transparent border-b border-[#E5E7EB] dark:border-[#334155]">
           <h4 className="text-[15px] font-bold text-[#111827] dark:text-[#F8FAFC]">
-            Bảng quy tắc tiền tố chứng từ tự động của NexUpOne
+            Bảng quy tắc tiền tố chứng từ tự động của LK ERP
           </h4>
         </div>
 

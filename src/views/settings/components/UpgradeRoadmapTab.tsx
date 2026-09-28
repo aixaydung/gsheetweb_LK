@@ -62,7 +62,7 @@ export const UpgradeRoadmapTab: React.FC = () => {
             Lộ trình Module Nâng cấp các đợt tiếp theo
           </h2>
           <p className="text-[13px] sm:text-[14px] text-gray-300 leading-relaxed">
-            Các phân hệ mở rộng dưới đây nằm trong kế hoạch phát hành tiếp theo của LK ERM nhằm đáp ứng toàn diện
+            Các phân hệ mở rộng dưới đây nằm trong kế hoạch phát hành tiếp theo của LK ERP nhằm đáp ứng toàn diện
             nhu cầu từ doanh nghiệp thương mại chuỗi, đồng bộ đa sàn TMĐT, xưởng sản xuất định mức BOM và hóa đơn điện tử CQT.
           </p>
           <div className="flex flex-wrap items-center gap-3 sm:gap-4 pt-1 text-[12px] sm:text-[12.5px] text-purple-200/90 font-medium">

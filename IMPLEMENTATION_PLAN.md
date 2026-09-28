@@ -1,6 +1,6 @@
-# Kế hoạch triển khai Hệ thống ERP/CRM (Google Sheets + React/Vite/Express)
+# Kế hoạch triển khai Hệ thống LK ERP (Google Sheets + React/Vite/Express)
 
-Dựa trên tài liệu đặc tả `NexUpOne_SPEC.md` và chuẩn `/gsheet_auth_crud`. Do dự án hiện tại đã khởi tạo bằng React + Vite + Express, chúng ta sẽ áp dụng kiến trúc này (thay vì Next.js) để xây dựng hạ tầng Google Sheets.
+Dựa trên tài liệu đặc tả LK ERP và chuẩn `/gsheet_auth_crud`. Do dự án hiện tại đã khởi tạo bằng React + Vite + Express, chúng ta sẽ áp dụng kiến trúc này (thay vì Next.js) để xây dựng hạ tầng Google Sheets.
 
 ## Giai đoạn 0: Khởi tạo & Thiết lập hạ tầng cốt lõi (Current)
 - [x] Tạo file kế hoạch `IMPLEMENTATION_PLAN.md`.

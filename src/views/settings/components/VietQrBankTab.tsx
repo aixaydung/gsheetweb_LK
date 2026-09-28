@@ -21,7 +21,7 @@ export const VietQrBankTab: React.FC = () => {
   // Load multiple bank accounts from localStorage or initialize with existing company settings
   const [bankAccounts, setBankAccounts] = useState<BankAccountItem[]>(() => {
     try {
-      const saved = localStorage.getItem('nexupone_bank_accounts');
+      const saved = localStorage.getItem('lkerp_bank_accounts') || localStorage.getItem('nexupone_bank_accounts');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -40,9 +40,9 @@ export const VietQrBankTab: React.FC = () => {
         bankBin: companySettings.bank_bin || '970422',
         bankName: companySettings.bank_name || 'MB Bank (Quân Đội)',
         accountNo: companySettings.bank_account_no || '0336243202',
-        accountName: companySettings.bank_account_name || 'CTY NEXUP',
+        accountName: companySettings.bank_account_name || 'CTY LK ERP',
         defaultContent: 'Thanh toan don hang',
-        printLine: `MB - ${companySettings.bank_account_no || '0336243202'} - ${companySettings.bank_account_name || 'CTY NEXUP'}`,
+        printLine: `MB - ${companySettings.bank_account_no || '0336243202'} - ${companySettings.bank_account_name || 'CTY LK ERP'}`,
         isDefault: true,
       },
     ];
@@ -53,7 +53,7 @@ export const VietQrBankTab: React.FC = () => {
 
   // Auto-sync the default account to companySettings and localStorage
   const syncToSettings = (accounts: BankAccountItem[]) => {
-    localStorage.setItem('nexupone_bank_accounts', JSON.stringify(accounts));
+    localStorage.setItem('lkerp_bank_accounts', JSON.stringify(accounts));
     const defaultAcc = accounts.find(a => a.isDefault) || accounts[0];
     if (defaultAcc) {
       updateSettings({
@@ -119,7 +119,7 @@ export const VietQrBankTab: React.FC = () => {
       bankBin: '970436',
       bankName: 'Vietcombank',
       accountNo: '',
-      accountName: bankAccounts[0]?.accountName || 'CTY NEXUP',
+      accountName: bankAccounts[0]?.accountName || 'CTY LK ERP',
       defaultContent: 'Thanh toan don hang',
       printLine: '',
       isDefault: false,
@@ -223,7 +223,7 @@ export const VietQrBankTab: React.FC = () => {
           // Construct VietQR URL
           const bankIdentifier = account.bankBin || account.bankCode || '970422';
           const qrImageUrl = account.accountNo
-            ? `https://img.vietqr.io/image/${bankIdentifier}-${account.accountNo}-compact2.png?amount=0&addInfo=${encodeURIComponent(account.defaultContent || 'Thanh toan don hang')}&accountName=${encodeURIComponent(account.accountName || 'CTY NEXUP')}`
+            ? `https://img.vietqr.io/image/${bankIdentifier}-${account.accountNo}-compact2.png?amount=0&addInfo=${encodeURIComponent(account.defaultContent || 'Thanh toan don hang')}&accountName=${encodeURIComponent(account.accountName || 'CTY LK ERP')}`
             : '';
 
           return (
@@ -358,7 +358,7 @@ export const VietQrBankTab: React.FC = () => {
                       type="text"
                       value={account.accountName}
                       onChange={e => handleUpdateField(account.id, 'accountName', e.target.value)}
-                      placeholder="CTY NEXUP"
+                      placeholder="CTY LK ERP"
                       className="w-full h-10 px-3.5 bg-white dark:bg-[#0F172A] border border-[#E5E7EB] dark:border-[#334155] rounded-[10px] text-[14.5px] text-[#111827] dark:text-[#F8FAFC] uppercase placeholder:text-[#9CA3AF] focus:outline-none focus:border-[#6D3EEB]"
                     />
                   </div>
@@ -386,7 +386,7 @@ export const VietQrBankTab: React.FC = () => {
                       type="text"
                       value={account.printLine}
                       onChange={e => handleUpdateField(account.id, 'printLine', e.target.value)}
-                      placeholder="VD: VCB - 0123456789 - CTY NEXUP"
+                      placeholder="VD: VCB - 0123456789 - CTY LK ERP"
                       className="w-full h-10 px-3.5 bg-white dark:bg-[#0F172A] border border-[#E5E7EB] dark:border-[#334155] rounded-[10px] text-[14.5px] text-[#111827] dark:text-[#F8FAFC] placeholder:text-[#9CA3AF] focus:outline-none focus:border-[#6D3EEB]"
                     />
                   </div>

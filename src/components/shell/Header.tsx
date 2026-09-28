@@ -42,7 +42,7 @@ export const Header: React.FC<HeaderProps> = ({
             <Icon name="layers" size={17} />
           </div>
           <span className="text-[17px] font-black text-[#6D3EEB] tracking-wider">
-            LK ERM
+            LK ERP
           </span>
         </div>
 

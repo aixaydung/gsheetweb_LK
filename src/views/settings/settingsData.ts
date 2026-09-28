@@ -1,4 +1,4 @@
-// NexUpOne Settings Data & Reference Tables
+// LK ERP Settings Data & Reference Tables
 
 export interface SettingTabGroup {
   id: string;
@@ -320,7 +320,7 @@ export interface UpgradeModule {
   highlightPoints: { label: string; value: string }[];
   tags: string[];
   status: 'planning' | 'in_development' | 'upcoming_wave_1' | 'upcoming_wave_2';
-  isImplemented?: boolean; // True nếu phân hệ này đã có sẵn trong hệ thống LK ERM
+  isImplemented?: boolean; // True nếu phân hệ này đã có sẵn trong hệ thống LK ERP
 }
 
 export const UPGRADE_MODULES_ROADMAP: UpgradeModule[] = [

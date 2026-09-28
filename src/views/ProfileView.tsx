@@ -13,11 +13,11 @@ export const ProfileView: React.FC = () => {
       <div className="bg-white rounded-[20px] p-6 border border-[#F1F2F5] shadow-sm space-y-6">
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-[#6D3EEB] to-[#A855F7] flex items-center justify-center text-white text-2xl font-bold shadow-md">
-            N
+            LK
           </div>
           <div>
-            <h3 className="text-[18px] font-bold text-[#111827]">Quản trị viên NexUp</h3>
-            <p className="text-[13px] text-[#6B7280]">admin@nexupone.local</p>
+            <h3 className="text-[18px] font-bold text-[#111827]">Quản trị viên LK ERP</h3>
+            <p className="text-[13px] text-[#6B7280]">admin@lkerp.vn</p>
             <span className="inline-block mt-1 text-[11.5px] font-semibold px-2.5 py-0.5 rounded-full bg-[#ECFDF5] text-[#059669]">
               Vai trò: Quản trị cấp cao (Admin)
             </span>
@@ -27,7 +27,7 @@ export const ProfileView: React.FC = () => {
         <div className="space-y-3 pt-4 border-t border-[#F1F2F5] text-[13.5px]">
           <div className="flex justify-between py-2 border-b border-gray-100">
             <span className="text-[#6B7280]">Hệ thống:</span>
-            <span className="font-semibold text-[#111827]">NexUpOne ERP v1.0 Enterprise</span>
+            <span className="font-semibold text-[#111827]">LK ERP v2.0 Enterprise</span>
           </div>
           <div className="flex justify-between py-2 border-b border-gray-100">
             <span className="text-[#6B7280]">Ngôn ngữ:</span>

@@ -1,4 +1,4 @@
-// Formatting helpers adhering strictly to NexUpOne specifications
+// Formatting helpers adhering strictly to LK ERP specifications
 
 /**
  * Format currency in VND:

@@ -1,4 +1,4 @@
-// NexUpOne Core Types & Enums based on specification
+// LK ERP Core Types & Enums based on specification
 
 export type PaymentStatus = 'unpaid' | 'partial' | 'paid' | 'overpaid';
 export type InvoiceStatus = 'processing' | 'completed' | 'partially_returned' | 'cancelled' | 'locked';

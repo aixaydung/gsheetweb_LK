@@ -13,7 +13,7 @@ export const PrintTemplatesTab: React.FC = () => {
 
   const handleSave = () => {
     localStorage.setItem(
-      'nexupone_print_config',
+      'lkerp_print_config',
       JSON.stringify({
         paperSize,
         invoiceTitle,
@@ -170,7 +170,7 @@ export const PrintTemplatesTab: React.FC = () => {
           <div className="w-52 bg-transparent border border-gray-300 dark:border-[#334155] shadow-xs rounded-[6px] p-4 text-left text-[9.5px] space-y-2.5 font-mono">
             <div className="flex justify-between border-b border-gray-200 dark:border-[#334155] pb-1.5">
               <div>
-                <span className="font-bold text-[10.5px] block text-[#111827] dark:text-[#F8FAFC]">NEXUP VIETNAM</span>
+                <span className="font-bold text-[10.5px] block text-[#111827] dark:text-[#F8FAFC]">LK ERP VIETNAM</span>
                 <span className="text-gray-500 dark:text-[#94A3B8]">MST: 0108927891</span>
               </div>
               {showQr && (

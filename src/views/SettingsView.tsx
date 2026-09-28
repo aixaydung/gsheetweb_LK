@@ -106,7 +106,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentTab, onTabCha
           <button
             type="button"
             onClick={() => {
-              if (confirm('Khôi phục toàn bộ dữ liệu mẫu ban đầu theo tài liệu đặc tả LK ERM?')) {
+              if (confirm('Khôi phục toàn bộ dữ liệu mẫu ban đầu theo tài liệu đặc tả LK ERP?')) {
                 resetAllData();
                 alert('Đã khôi phục dữ liệu mẫu gốc ban đầu!');
               }
@@ -145,7 +145,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentTab, onTabCha
             <button
               type="button"
               onClick={() => {
-                if (confirm('Khôi phục toàn bộ dữ liệu mẫu ban đầu theo tài liệu đặc tả LK ERM?')) {
+                if (confirm('Khôi phục toàn bộ dữ liệu mẫu ban đầu theo tài liệu đặc tả LK ERP?')) {
                   resetAllData();
                   alert('Đã khôi phục dữ liệu mẫu gốc ban đầu!');
                 }

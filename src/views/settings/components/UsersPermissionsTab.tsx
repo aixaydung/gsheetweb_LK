@@ -12,10 +12,10 @@ interface SystemUser {
 }
 
 const INITIAL_USERS: SystemUser[] = [
-  { id: 'U001', name: 'Nguyễn Văn Quản Trị', email: 'admin@lkerm.vn', role: 'Quản trị viên', phone: '0988 123 456', status: 'active', lastActive: 'Vừa xong' },
-  { id: 'U002', name: 'Trần Thị Thu Thảo', email: 'ketoan@lkerm.vn', role: 'Kế toán trưởng', phone: '0912 345 678', status: 'active', lastActive: '15 phút trước' },
-  { id: 'U003', name: 'Phạm Minh Kho', email: 'thukho@lkerm.vn', role: 'Thủ kho', phone: '0977 888 999', status: 'active', lastActive: '1 giờ trước' },
-  { id: 'U004', name: 'Lê Hoàng Bán Hàng', email: 'sales@lkerm.vn', role: 'Nhân viên Sale', phone: '0933 222 111', status: 'active', lastActive: 'Hôm nay 08:30' },
+  { id: 'U001', name: 'Nguyễn Văn Quản Trị', email: 'admin@lkerp.vn', role: 'Quản trị viên', phone: '0988 123 456', status: 'active', lastActive: 'Vừa xong' },
+  { id: 'U002', name: 'Trần Thị Thu Thảo', email: 'ketoan@lkerp.vn', role: 'Kế toán trưởng', phone: '0912 345 678', status: 'active', lastActive: '15 phút trước' },
+  { id: 'U003', name: 'Phạm Minh Kho', email: 'thukho@lkerp.vn', role: 'Thủ kho', phone: '0977 888 999', status: 'active', lastActive: '1 giờ trước' },
+  { id: 'U004', name: 'Lê Hoàng Bán Hàng', email: 'sales@lkerp.vn', role: 'Nhân viên Sale', phone: '0933 222 111', status: 'active', lastActive: 'Hôm nay 08:30' },
 ];
 
 export const UsersPermissionsTab: React.FC = () => {
