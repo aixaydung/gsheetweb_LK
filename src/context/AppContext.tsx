@@ -241,12 +241,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     const fetchSheetsData = async () => {
       try {
-        const [custRes, prodRes, vendRes, orderRes, poRes] = await Promise.allSettled([
+        const [custRes, prodRes, vendRes, orderRes, poRes, payRes] = await Promise.allSettled([
           fetch('/api/customers'),
           fetch('/api/products'),
           fetch('/api/vendors'),
           fetch('/api/orders'),
-          fetch('/api/purchases')
+          fetch('/api/purchases'),
+          fetch('/api/payments')
         ]);
         if (custRes.status === 'fulfilled' && custRes.value.ok) {
           const data = await custRes.value.json();
@@ -276,6 +277,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const data = await poRes.value.json();
           if (Array.isArray(data.purchases) && data.purchases.length > 0) {
             setPurchaseOrders(data.purchases);
+          }
+        }
+        if (payRes.status === 'fulfilled' && payRes.value.ok) {
+          const data = await payRes.value.json();
+          if (Array.isArray(data.payments) && data.payments.length > 0) {
+            setPayments(data.payments);
           }
         }
       } catch (err) {
@@ -1142,9 +1149,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Payment creation with multiple allocations (Section 5.5.2, 7.10)
   const createPayment = (paymentData: Partial<Payment>, allocations: PaymentAllocation[]): Payment => {
-    const nextNum = payments.length + 178;
-    const code = paymentData.code || `TT${nextNum}`;
-    const now = new Date().toISOString();
+    const dateObj = new Date();
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const ym = `${year}${month}`;
+    const direction = paymentData.direction || 'in';
+    const prefix = direction === 'in' ? 'PT' : 'PC';
+    const nextNum = payments.filter(p => p.code && p.code.startsWith(`${prefix}-${ym}`)).length + 1;
+    const code = paymentData.code || `${prefix}-${ym}-${String(nextNum).padStart(4, '0')}`;
+    const now = dateObj.toISOString();
     const totalAllocated = allocations.reduce((sum, al) => sum + al.amount, 0);
     const amount = paymentData.amount || totalAllocated;
     const unallocated = Math.max(0, amount - totalAllocated);
@@ -1153,7 +1166,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `pay-${Date.now()}`,
       code,
       payment_date: paymentData.payment_date || now,
-      direction: paymentData.direction || 'in',
+      direction,
       partner_type: paymentData.partner_type || 'customer',
       partner_id: paymentData.partner_id,
       partner_name: paymentData.partner_name || 'Đối tác',
@@ -1167,6 +1180,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setPayments(prev => [newPayment, ...prev]);
+
+    // Background sync to Google Sheets (Option A: Optimistic UI)
+    fetch('/api/payments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...newPayment,
+        allocations: newPayment.allocations,
+      }),
+    }).catch(err => {
+      console.error('Background sync payment to Google Sheets failed:', err);
+    });
 
     // Apply allocations to invoices or purchase orders
     if (newPayment.direction === 'in') {
@@ -1210,6 +1235,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPayments(prev =>
       prev.map(p => (p.id === id ? { ...p, status: 'cancelled' } : p))
     );
+    fetch(`/api/payments/${id}/cancel`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+    }).catch(err => {
+      console.error('Background sync cancel payment failed:', err);
+    });
   };
 
   // Product CRUD

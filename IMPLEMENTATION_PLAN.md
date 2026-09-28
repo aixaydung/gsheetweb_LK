@@ -87,20 +87,24 @@ Spreadsheet ID: `1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY` đã khởi tạo
   - [x] Tự động cộng tồn kho và tính lại giá vốn bình quân gia quyền trong tab `PRODUCTS`.
   - [x] Cập nhật `src/context/AppContext.tsx` với Optimistic UI và đồng bộ ngầm lên Google Sheets.
 
-### Giai đoạn C: Đang thực hiện & Cần kiểm thử thực tế [IN PROGRESS]
-- [ ] Người dùng kiểm tra tạo thử đơn hàng bán trên [https://lkerp.sheetapp.store/ban-hang](https://lkerp.sheetapp.store/ban-hang) và đơn mua hàng trên [https://lkerp.sheetapp.store/mua-hang](https://lkerp.sheetapp.store/mua-hang).
-- [ ] Chuẩn bị triển khai Phân hệ Sổ quỹ Thu/Chi (`PAYMENTS`) & Gạch công nợ.
+- [x] **Sổ quỹ & Thu chi (`PAYMENTS`)**:
+  - [x] Tab `PAYMENTS` (14 cột) trên Google Sheets.
+  - [x] Xây dựng `server/repositories/payments.ts` & `server/routes/payments.ts`.
+  - [x] Tự động sinh mã phiếu thu `PT-YYYYMM-XXXX` và phiếu chi `PC-YYYYMM-XXXX`.
+  - [x] Tự động gạch nợ hóa đơn bán hoặc đơn mua, cập nhật công nợ tức thì và đồng bộ ngầm lên Google Sheets.
 
-### Giai đoạn D: Sổ quỹ, Kho nâng cao & Báo cáo [ROADMAP TIẾP THEO]
-- [ ] **Sổ quỹ & Thu chi (`PAYMENTS`)**:
-  - [ ] Tạo phiếu thu tiền bán hàng (`PT-YYYYMM-XXXX`) theo hóa đơn hoặc thu trước.
-  - [ ] Tạo phiếu chi tiền mua hàng NCC (`PC-YYYYMM-XXXX`).
-  - [ ] Tự động giảm trừ công nợ khách hàng / nhà cung cấp và ghi chép dòng tiền vào tab `PAYMENTS`.
+### Giai đoạn C: Đang thực hiện & Cần kiểm thử thực tế [IN PROGRESS]
+- [ ] Người dùng kiểm tra tạo thử:
+  1. Hóa đơn bán hàng trên [https://lkerp.sheetapp.store/ban-hang](https://lkerp.sheetapp.store/ban-hang).
+  2. Đơn mua hàng trên [https://lkerp.sheetapp.store/mua-hang](https://lkerp.sheetapp.store/mua-hang).
+  3. Phiếu thu/chi tại [https://lkerp.sheetapp.store/so-quy](https://lkerp.sheetapp.store/so-quy) hoặc gạch nợ trực tiếp từ danh sách công nợ.
+
+### Giai đoạn D: Dashboard Báo cáo & Kho nâng cao [ROADMAP TIẾP THEO]
+- [ ] **Báo cáo & Dashboard phân tích số liệu thực**:
+  - [ ] Đồng bộ toàn bộ KPI trên Dashboard (Doanh thu tháng, Lãi gộp ước tính, Công nợ khách cần thu, Công nợ NCC phải trả, Cảnh báo hết hàng) lấy trực tiếp từ Google Sheets.
 - [ ] **Kho nâng cao & Kiểm kê (`STOCKTAKES`)**:
   - [ ] Phiếu xuất / nhập điều chỉnh kho thủ công.
   - [ ] Phiếu kiểm kê thực tế và cân chỉnh số lượng tồn kho tự động.
-- [ ] **Báo cáo & Dashboard phân tích**:
-  - [ ] Tổng hợp doanh thu, lãi gộp, công nợ quá hạn và cảnh báo tồn kho dựa trên dữ liệu Google Sheets trực tiếp.
 
 ---
 
