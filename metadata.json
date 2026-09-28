@@ -1,0 +1,8 @@
+{
+  "name": "LK ERP- Quản trị Doanh nghiệp",
+  "description": "Hệ thống quản trị doanh nghiệp toàn diện: Bán hàng, Mua hàng, Kho hàng, Công nợ và Báo cáo tài chính thông minh.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
