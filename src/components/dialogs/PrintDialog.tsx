@@ -58,13 +58,16 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
   const { companySettings } = useApp();
   const [paperSize, setPaperSize] = useState<'A4' | 'A5' | 'K80'>('A4');
   const [docTitle, setDocTitle] = useState(documentType);
-  const [recipientEmail, setRecipientEmail] = useState(partnerEmail || '');
+  const [recipientEmail, setRecipientEmail] = useState(partnerEmail ? partnerEmail.trim() : '');
+  const [emailError, setEmailError] = useState<string>('');
+  const emailInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (partnerEmail) {
-      setRecipientEmail(partnerEmail);
+    if (isOpen) {
+      setRecipientEmail(partnerEmail ? partnerEmail.trim() : '');
+      setEmailError('');
     }
-  }, [partnerEmail]);
+  }, [partnerEmail, isOpen]);
 
   useEffect(() => {
     setDocTitle(documentType);
@@ -237,6 +240,28 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
     }, 250);
   };
 
+  const handleSendEmail = () => {
+    const trimmed = recipientEmail.trim();
+    if (!trimmed) {
+      setEmailError('Vui lòng nhập địa chỉ email người nhận trước khi gửi!');
+      alert('Vui lòng nhập địa chỉ email người nhận trước khi gửi!');
+      emailInputRef.current?.focus();
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmed)) {
+      setEmailError('Địa chỉ email không đúng định dạng. Vui lòng kiểm tra lại!');
+      alert('Địa chỉ email không đúng định dạng. Vui lòng kiểm tra lại!');
+      emailInputRef.current?.focus();
+      return;
+    }
+
+    setEmailError('');
+    alert(`Đã gửi email chứng từ ${code} tới ${trimmed} thành công!`);
+    onClose();
+  };
+
   const isPurchase =
     documentType.includes('MUA') || documentType.includes('NCC');
 
@@ -271,10 +296,7 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => {
-              alert(`Đã gửi email chứng từ ${code} tới ${recipientEmail || 'người nhận'} thành công!`);
-              onClose();
-            }}
+            onClick={handleSendEmail}
             className="px-5 py-2 bg-[#6D3EEB] hover:bg-[#5B2BD6] text-white text-[13.5px] font-semibold rounded-[12px] shadow-[0_8px_20px_-6px_rgba(109,62,235,0.55)] flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
           >
             <Icon name="send" size={18} />
@@ -326,12 +348,26 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
               Email người nhận (để gửi)
             </label>
             <input
+              ref={emailInputRef}
               type="email"
-              placeholder="optimatevn@gmail.com"
+              placeholder="Nhập email nhận chứng từ (ví dụ: ketoan@congty.com)..."
               value={recipientEmail}
-              onChange={e => setRecipientEmail(e.target.value)}
-              className="w-full h-10 px-3.5 bg-white dark:bg-gray-800 border border-[#E5E7EB] dark:border-gray-700 rounded-[10px] text-[13.5px] text-[#111827] dark:text-white focus:outline-none focus:border-[#6D3EEB]"
+              onChange={e => {
+                setRecipientEmail(e.target.value);
+                if (emailError) setEmailError('');
+              }}
+              className={`w-full h-10 px-3.5 bg-white dark:bg-gray-800 border ${
+                emailError
+                  ? 'border-rose-500 focus:border-rose-500 ring-2 ring-rose-200 dark:ring-rose-900/30'
+                  : 'border-[#E5E7EB] dark:border-gray-700 focus:border-[#6D3EEB]'
+              } rounded-[10px] text-[13.5px] text-[#111827] dark:text-white focus:outline-none transition-colors`}
             />
+            {emailError && (
+              <p className="text-[12px] font-medium text-rose-500 mt-1 flex items-center gap-1">
+                <Icon name="error" size={14} />
+                <span>{emailError}</span>
+              </p>
+            )}
           </div>
 
           {/* 10 Toggle Checkboxes (Matching Image exactly) */}

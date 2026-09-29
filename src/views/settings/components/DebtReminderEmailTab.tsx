@@ -9,7 +9,7 @@ export const DebtReminderEmailTab: React.FC = () => {
 
   // Settings State from LocalStorage or Defaults
   const [recipientEmails, setRecipientEmails] = useState(() => {
-    return localStorage.getItem('lkerp_reminder_emails') || localStorage.getItem('nexup_reminder_emails') || 'dpthao9197@gmail.com';
+    return localStorage.getItem('lkerp_reminder_emails') || '';
   });
   const [autoDailyReminder, setAutoDailyReminder] = useState(() => {
     return (localStorage.getItem('lkerp_auto_daily_reminder') || localStorage.getItem('nexup_auto_daily_reminder')) === 'true';
@@ -202,7 +202,7 @@ export const DebtReminderEmailTab: React.FC = () => {
             type="text"
             value={recipientEmails}
             onChange={e => setRecipientEmails(e.target.value)}
-            placeholder="dpthao9197@gmail.com, ceo@company.vn"
+            placeholder="ketoan@congty.com, giamdoc@congty.com"
             className="w-full h-11 px-4 bg-white dark:bg-[#0F172A] border border-[#E5E7EB] dark:border-[#334155] rounded-[10px] text-[14.5px] text-[#111827] dark:text-[#F8FAFC] focus:outline-none focus:border-[#6D3EEB]"
           />
           <span className="text-[13px] text-[#6B7280] dark:text-[#94A3B8] mt-1.5 block">
