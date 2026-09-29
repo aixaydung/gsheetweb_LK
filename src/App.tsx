@@ -32,7 +32,7 @@ import { SettingsView } from './views/SettingsView';
 import { ProfileView } from './views/ProfileView';
 import { CashbookView } from './views/CashbookView';
 
-import { Product } from './types';
+import { Product, Customer } from './types';
 
 function AppContent() {
   const {
@@ -74,6 +74,7 @@ function AppContent() {
   const [isCreateProductOpen, setIsCreateProductOpen] = useState(false);
   const [productToEdit, setProductToEdit] = useState<Product | null>(null);
   const [isCreateCustomerOpen, setIsCreateCustomerOpen] = useState(false);
+  const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null);
   const [isCreateSupplierOpen, setIsCreateSupplierOpen] = useState(false);
   const [isStocktakeOpen, setIsStocktakeOpen] = useState(false);
 
@@ -297,7 +298,14 @@ function AppContent() {
               onOpenCreateInvoice={() => setIsCreateInvoiceOpen(true)}
               onOpenCreateQuotation={() => setIsCreateQuoteOpen(true)}
               onOpenCreateReturn={() => setIsCreateSalesReturnOpen(true)}
-              onOpenCreateCustomer={() => setIsCreateCustomerOpen(true)}
+              onOpenCreateCustomer={() => {
+                setCustomerToEdit(null);
+                setIsCreateCustomerOpen(true);
+              }}
+              onOpenEditCustomer={cust => {
+                setCustomerToEdit(cust);
+                setIsCreateCustomerOpen(true);
+              }}
               onOpenImportCustomerDialog={() => {
                 setImportType('customers');
                 setIsImportOpen(true);
@@ -482,7 +490,11 @@ function AppContent() {
 
       <CustomerFormModal
         isOpen={isCreateCustomerOpen}
-        onClose={() => setIsCreateCustomerOpen(false)}
+        customerToEdit={customerToEdit}
+        onClose={() => {
+          setIsCreateCustomerOpen(false);
+          setCustomerToEdit(null);
+        }}
       />
 
       <SupplierFormModal

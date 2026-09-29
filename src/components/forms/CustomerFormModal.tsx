@@ -27,6 +27,20 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
   const [paymentTermDays, setPaymentTermDays] = useState(customerToEdit?.payment_term_days || 15);
   const [note, setNote] = useState(customerToEdit?.note || '');
 
+  React.useEffect(() => {
+    if (isOpen) {
+      setCode(customerToEdit?.code || '');
+      setName(customerToEdit?.name || '');
+      setPhone(customerToEdit?.phone || '');
+      setEmail(customerToEdit?.email || '');
+      setAddress(customerToEdit?.address || '');
+      setTaxCode(customerToEdit?.tax_code || '');
+      setGroupId(customerToEdit?.group_id || customerGroups[0]?.id || '');
+      setPaymentTermDays(customerToEdit?.payment_term_days || 15);
+      setNote(customerToEdit?.note || '');
+    }
+  }, [customerToEdit, isOpen, customerGroups]);
+
   const handleSave = () => {
     if (!name.trim()) {
       alert('Vui lòng nhập tên khách hàng');

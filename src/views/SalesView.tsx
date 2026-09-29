@@ -13,6 +13,7 @@ import { DateRange } from '../components/ui/DateRangePicker';
 import { formatCurrency, formatDate } from '../lib/format';
 import { SalesInvoice, Customer, Quotation, SalesReturn } from '../types';
 import { ExportDialog } from '../components/dialogs/ExportDialog';
+import { CustomerDetailModal } from '../components/dialogs/CustomerDetailModal';
 
 interface SalesViewProps {
   currentTab: string;
@@ -21,6 +22,7 @@ interface SalesViewProps {
   onOpenCreateQuotation: () => void;
   onOpenCreateReturn: () => void;
   onOpenCreateCustomer: () => void;
+  onOpenEditCustomer?: (customer: Customer) => void;
   onOpenImportCustomerDialog?: () => void;
   onOpenPaymentAllocation: (customerId?: string, invoiceId?: string) => void;
   onPrintDocument: (type: string, code: string, doc: any) => void;
@@ -33,6 +35,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
   onOpenCreateQuotation,
   onOpenCreateReturn,
   onOpenCreateCustomer,
+  onOpenEditCustomer,
   onOpenImportCustomerDialog,
   onOpenPaymentAllocation,
   onPrintDocument,
@@ -60,6 +63,10 @@ export const SalesView: React.FC<SalesViewProps> = ({
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isExportOpen, setIsExportOpen] = useState(false);
+
+  // Customer Detail Modal State
+  const [selectedCustomerDetail, setSelectedCustomerDetail] = useState<Customer | null>(null);
+  const [isCustomerDetailOpen, setIsCustomerDetailOpen] = useState(false);
 
   const tabs: TabItem[] = [
     { id: 'tong-quan', label: 'Tổng quan bán hàng' },
@@ -283,12 +290,32 @@ export const SalesView: React.FC<SalesViewProps> = ({
     {
       key: 'code',
       header: 'MÃ',
-      render: row => <span className="font-mono text-[#6B7280]">{row.code}</span>,
+      render: row => (
+        <span
+          onClick={() => {
+            setSelectedCustomerDetail(row);
+            setIsCustomerDetailOpen(true);
+          }}
+          className="font-mono text-[#6B7280] hover:text-[#6D3EEB] cursor-pointer hover:underline"
+        >
+          {row.code}
+        </span>
+      ),
     },
     {
       key: 'name',
       header: 'TÊN KHÁCH HÀNG',
-      render: row => <span className="font-semibold text-[#111827]">{row.name}</span>,
+      render: row => (
+        <span
+          onClick={() => {
+            setSelectedCustomerDetail(row);
+            setIsCustomerDetailOpen(true);
+          }}
+          className="font-semibold text-[#111827] hover:text-[#6D3EEB] cursor-pointer hover:underline"
+        >
+          {row.name}
+        </span>
+      ),
     },
     {
       key: 'phone',
@@ -348,6 +375,17 @@ export const SalesView: React.FC<SalesViewProps> = ({
         <div className="flex items-center justify-end gap-2 text-[#6B7280]">
           <button
             type="button"
+            title="Xem đầy đủ thông tin khách hàng"
+            onClick={() => {
+              setSelectedCustomerDetail(row);
+              setIsCustomerDetailOpen(true);
+            }}
+            className="p-1.5 hover:text-[#6D3EEB] text-[#6D3EEB] rounded-full hover:bg-purple-50 transition-colors cursor-pointer"
+          >
+            <Icon name="visibility" size={18} />
+          </button>
+          <button
+            type="button"
             title="Thu nợ khách hàng này"
             disabled={row.debt_amount === 0}
             onClick={() => onOpenPaymentAllocation(row.id)}
@@ -363,7 +401,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
             onClick={() => {
               if (confirm(`Xoá khách hàng ${row.name}?`)) deleteCustomer(row.id);
             }}
-            className="p-1.5 hover:text-[#E11D48] rounded-full hover:bg-gray-100 transition-colors"
+            className="p-1.5 hover:text-[#E11D48] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
           >
             <Icon name="delete" size={18} />
           </button>
@@ -932,6 +970,21 @@ export const SalesView: React.FC<SalesViewProps> = ({
           />
         </div>
       )}
+
+      {/* Customer Full Detail Modal */}
+      <CustomerDetailModal
+        isOpen={isCustomerDetailOpen}
+        customer={selectedCustomerDetail}
+        onClose={() => {
+          setIsCustomerDetailOpen(false);
+          setSelectedCustomerDetail(null);
+        }}
+        onEditCustomer={cust => {
+          setIsCustomerDetailOpen(false);
+          setSelectedCustomerDetail(null);
+          onOpenEditCustomer?.(cust);
+        }}
+      />
     </div>
   );
 };
