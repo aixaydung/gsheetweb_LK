@@ -36,6 +36,8 @@ import { Product, Customer } from './types';
 
 function AppContent() {
   const {
+    customers,
+    suppliers,
     recentTabs,
     addRecentTab,
     alerts,
