@@ -393,7 +393,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (movRes.status === 'fulfilled' && movRes.value.ok) {
         const data = await movRes.value.json();
         if (Array.isArray(data.movements)) {
-          setStockMovements(data.movements);
+          const mappedVouchers: StockVoucher[] = data.movements.map((m: any) => {
+            const isOut = m.type === 'sale' || m.reference_doc_type === 'sales_invoice' || (m.code && m.code.startsWith('PX-')) || m.type === 'purchase_return';
+            return {
+              id: m.id || `sv-${m.code || Math.random()}`,
+              code: m.code || '',
+              direction: isOut ? 'out' : 'in',
+              type: m.type || (isOut ? 'sale' : 'purchase'),
+              status: m.status || (isOut ? 'delivered' : 'received'),
+              voucher_date: m.date || m.created_at || new Date().toISOString(),
+              warehouse_id: m.warehouse_id || 'wh-01',
+              warehouse_name: 'Kho Tổng TP.HCM',
+              ref_type: m.reference_doc_type,
+              ref_code: m.reference_doc_code,
+              partner_name: m.note || '',
+              item_count: 1,
+              total_quantity: 1,
+              total_value: Number(m.total_amount) || 0,
+              summary: m.note || m.code || '',
+              note: m.note || '',
+            };
+          });
+          setStockVouchers(mappedVouchers);
+
+          const mappedMovements: StockMovement[] = data.movements.map((m: any) => {
+            const isOut = m.type === 'sale' || m.reference_doc_type === 'sales_invoice' || (m.code && m.code.startsWith('PX-')) || m.type === 'purchase_return';
+            return {
+              id: m.id || `mv-${m.code || Math.random()}`,
+              code: m.code || '',
+              movement_date: m.date || m.created_at || new Date().toISOString(),
+              type: m.type || (isOut ? 'sale' : 'purchase'),
+              product_id: '',
+              product_name: m.note || m.reference_doc_code || m.code || 'Hàng hóa xuất/nhập kho',
+              sku: m.reference_doc_code || m.code || 'SKU',
+              warehouse_id: m.warehouse_id || 'wh-01',
+              qty_in: isOut ? 0 : 1,
+              qty_out: isOut ? 1 : 0,
+              unit_cost: 0,
+              balance_after: 0,
+              avg_cost_after: 0,
+              source_code: m.reference_doc_code || m.code || '',
+              note: m.note || '',
+            };
+          });
+          setStockMovements(mappedMovements);
         }
       }
 

@@ -9,6 +9,7 @@ import { AlertsPopover } from './components/dialogs/AlertsPopover';
 import { NotificationsModal } from './components/dialogs/NotificationsModal';
 import { ImportModal, ImportType } from './components/ui/ImportModal';
 import { PrintDialog } from './components/dialogs/PrintDialog';
+import { ErrorBoundary } from './components/ui/ErrorBoundary';
 
 import { InvoiceFormModal } from './components/forms/InvoiceFormModal';
 import { PurchaseOrderFormModal } from './components/forms/PurchaseOrderFormModal';
@@ -280,6 +281,7 @@ function AppContent() {
 
         {/* Content Container (Full width, minimized horizontal padding for larger workspace) */}
         <main className="flex-1 w-full max-w-full mx-auto p-2 sm:px-4 sm:py-4 lg:px-6 lg:py-6 pb-24 lg:pb-6">
+          <ErrorBoundary fallbackTitle="Lỗi hiển thị phân hệ">
           {currentPath === '/' && (
             <DashboardView
               onNavigate={navigateTo}
@@ -385,6 +387,7 @@ function AppContent() {
           )}
 
           {currentPath === '/ho-so' && <ProfileView />}
+          </ErrorBoundary>
         </main>
 
         {/* Professional Mobile Bottom Navigation Bar */}

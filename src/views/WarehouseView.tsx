@@ -75,8 +75,8 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
 
   // 5 KPIs for Tab 1
   const kpis = useMemo(() => {
-    const totalVal = products.reduce((sum, p) => sum + p.stock_value, 0);
-    const totalQty = products.reduce((sum, p) => sum + (p.is_service ? 0 : p.stock_quantity), 0);
+    const totalVal = products.reduce((sum, p) => sum + (p.stock_value || ((p.stock_quantity || 0) * (p.cost_price || 0)) || 0), 0);
+    const totalQty = products.reduce((sum, p) => sum + (p.is_service ? 0 : (p.stock_quantity || 0)), 0);
     const skuCount = products.length;
     const lowCount = products.filter(p => !p.is_service && p.stock_level === 'low').length;
     const outCount = products.filter(p => !p.is_service && p.stock_level === 'out').length;
@@ -87,8 +87,8 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
       const matchSearch =
-        p.name.toLowerCase().includes(search.toLowerCase()) ||
-        p.sku.toLowerCase().includes(search.toLowerCase());
+        (p.name || '').toLowerCase().includes(search.toLowerCase()) ||
+        (p.sku || '').toLowerCase().includes(search.toLowerCase());
       const matchGroup = filterGroup === 'all' || p.group_name === filterGroup;
       const matchStatus = filterStatus === 'all' || p.stock_level === filterStatus;
       return matchSearch && matchGroup && matchStatus;
@@ -100,8 +100,8 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
     return stockVouchers.filter(
       v =>
         v.direction === 'in' &&
-        (v.code.toLowerCase().includes(search.toLowerCase()) ||
-          v.summary.toLowerCase().includes(search.toLowerCase()))
+        ((v.code || '').toLowerCase().includes(search.toLowerCase()) ||
+          (v.summary || '').toLowerCase().includes(search.toLowerCase()))
     );
   }, [stockVouchers, search]);
 
@@ -109,8 +109,8 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
     return stockVouchers.filter(
       v =>
         v.direction === 'out' &&
-        (v.code.toLowerCase().includes(search.toLowerCase()) ||
-          v.summary.toLowerCase().includes(search.toLowerCase()))
+        ((v.code || '').toLowerCase().includes(search.toLowerCase()) ||
+          (v.summary || '').toLowerCase().includes(search.toLowerCase()))
     );
   }, [stockVouchers, search]);
 
@@ -118,8 +118,8 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
   const filteredStocktakes = useMemo(() => {
     return stocktakes.filter(
       st =>
-        st.code.toLowerCase().includes(search.toLowerCase()) ||
-        st.counted_by.toLowerCase().includes(search.toLowerCase())
+        (st.code || '').toLowerCase().includes(search.toLowerCase()) ||
+        (st.counted_by || '').toLowerCase().includes(search.toLowerCase())
     );
   }, [stocktakes, search]);
 
@@ -127,9 +127,9 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
   const filteredMovements = useMemo(() => {
     return stockMovements.filter(
       m =>
-        m.product_name.toLowerCase().includes(search.toLowerCase()) ||
-        m.sku.toLowerCase().includes(search.toLowerCase()) ||
-        m.source_code.toLowerCase().includes(search.toLowerCase())
+        (m.product_name || '').toLowerCase().includes(search.toLowerCase()) ||
+        (m.sku || '').toLowerCase().includes(search.toLowerCase()) ||
+        (m.source_code || '').toLowerCase().includes(search.toLowerCase())
     );
   }, [stockMovements, search]);
 
@@ -471,12 +471,12 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
     {
       key: 'code',
       header: 'MÃ',
-      render: row => <span className="font-mono text-[#6B7280]">{row.code}</span>,
+      render: row => <span className="font-mono text-[#6B7280]">{row.code || '—'}</span>,
     },
     {
       key: 'date',
       header: 'NGÀY',
-      render: row => <span className="text-[#4B5563]">{formatDate(row.movement_date)}</span>,
+      render: row => <span className="text-[#4B5563]">{formatDate(row.movement_date || (row as any).date)}</span>,
     },
     {
       key: 'type',
@@ -489,8 +489,8 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
       header: 'SẢN PHẨM',
       render: row => (
         <div>
-          <span className="font-semibold text-[#111827]">{row.product_name}</span>
-          <span className="text-[11.5px] text-[#6B7280] font-mono ml-2">({row.sku})</span>
+          <span className="font-semibold text-[#111827]">{row.product_name || row.code || '—'}</span>
+          <span className="text-[11.5px] text-[#6B7280] font-mono ml-2">({row.sku || '—'})</span>
         </div>
       ),
     },
@@ -500,7 +500,7 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
       align: 'right',
       render: row => (
         <span className="text-emerald-600 font-semibold tabular-nums">
-          {row.qty_in > 0 ? `+${formatQuantity(row.qty_in)}` : '—'}
+          {Number(row.qty_in || 0) > 0 ? `+${formatQuantity(row.qty_in)}` : '—'}
         </span>
       ),
     },
@@ -510,14 +510,14 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
       align: 'right',
       render: row => (
         <span className="text-rose-600 font-semibold tabular-nums">
-          {row.qty_out > 0 ? `-${formatQuantity(row.qty_out)}` : '—'}
+          {Number(row.qty_out || 0) > 0 ? `-${formatQuantity(row.qty_out)}` : '—'}
         </span>
       ),
     },
     {
       key: 'source',
       header: 'NGUỒN',
-      render: row => <span className="font-mono text-[#6D3EEB] font-semibold">{row.source_code}</span>,
+      render: row => <span className="font-mono text-[#6D3EEB] font-semibold">{row.source_code || row.code || '—'}</span>,
     },
     {
       key: 'note',
@@ -573,15 +573,15 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
         }
 
         events.push({
-          id: m.id,
-          date: m.movement_date,
-          code: m.code || m.source_code,
+          id: m.id || `m-${Math.random()}`,
+          date: m.movement_date || (m as any).date || new Date().toISOString(),
+          code: m.code || m.source_code || '',
           type: typeLabel,
-          partner: m.note || m.source_code,
-          qtyIn: m.qty_in || 0,
-          qtyOut: m.qty_out || 0,
-          unitCost: m.unit_cost,
-          note: m.note,
+          partner: m.note || m.source_code || 'Biến động kho',
+          qtyIn: Number(m.qty_in) || 0,
+          qtyOut: Number(m.qty_out) || 0,
+          unitCost: Number(m.unit_cost) || 0,
+          note: m.note || '',
           rawDocType,
         });
         if (m.source_code) seenCodes.add(m.source_code);
@@ -663,7 +663,7 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
     });
 
     // Sort chronologically ascending
-    return events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return events.sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime());
   }, [selectedProduct, stockMovements, purchaseOrders, invoices, stocktakes]);
 
   // Compute stock card ledger numbers
@@ -715,14 +715,14 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
     const filteredRows = computedRows.filter(r => {
       const matchSearch =
         !stockCardSearch ||
-        r.code.toLowerCase().includes(stockCardSearch.toLowerCase()) ||
-        r.partner.toLowerCase().includes(stockCardSearch.toLowerCase()) ||
-        (r.note && r.note.toLowerCase().includes(stockCardSearch.toLowerCase()));
+        (r.code || '').toLowerCase().includes(stockCardSearch.toLowerCase()) ||
+        (r.partner || '').toLowerCase().includes(stockCardSearch.toLowerCase()) ||
+        (r.note && (r.note || '').toLowerCase().includes(stockCardSearch.toLowerCase()));
 
       let matchType = true;
-      if (stockCardTypeFilter === 'in') matchType = r.qtyIn > 0;
-      else if (stockCardTypeFilter === 'out') matchType = r.qtyOut > 0;
-      else if (stockCardTypeFilter === 'stocktake') matchType = r.type.includes('kiểm kê');
+      if (stockCardTypeFilter === 'in') matchType = (r.qtyIn || 0) > 0;
+      else if (stockCardTypeFilter === 'out') matchType = (r.qtyOut || 0) > 0;
+      else if (stockCardTypeFilter === 'stocktake') matchType = (r.type || '').includes('kiểm kê');
 
       return matchSearch && matchType;
     });
