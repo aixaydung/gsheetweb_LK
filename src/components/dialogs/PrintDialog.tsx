@@ -3,8 +3,6 @@ import { Modal } from '../ui/Modal';
 import { Icon } from '../ui/Icon';
 import { useApp } from '../../context/AppContext';
 import { formatCurrency, formatDate, formatDateTime } from '../../lib/format';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 
 interface PrintDialogProps {
   isOpen: boolean;
@@ -17,7 +15,7 @@ interface PrintDialogProps {
   partnerAddress?: string;
   partnerEmail?: string;
   partnerTaxCode?: string;
-  items: Array<{
+  items?: Array<{
     sku: string;
     product_name: string;
     unit: string;
@@ -26,11 +24,11 @@ interface PrintDialogProps {
     line_discount?: number;
     line_total: number;
   }>;
-  subtotal: number;
+  subtotal?: number;
   discountAmount?: number;
   vatAmount?: number;
   shippingFee?: number;
-  total: number;
+  total?: number;
   paidAmount?: number;
   debtAmount?: number;
   note?: string;
@@ -61,7 +59,6 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
   const [paperSize, setPaperSize] = useState<'A4' | 'A5' | 'K80'>('A4');
   const [docTitle, setDocTitle] = useState(documentType);
   const [recipientEmail, setRecipientEmail] = useState(partnerEmail || '');
-  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   useEffect(() => {
     if (partnerEmail) {
@@ -151,18 +148,32 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
             margin: 0 auto;
             background: #ffffff;
           }
-          table {
+          /* Standard accounting data table with crisp borders */
+          .data-table {
             width: 100%;
             border-collapse: collapse;
             border: 1px solid #000000;
+            margin: 8px 0;
           }
-          th, td {
+          .data-table th, .data-table td {
             border: 1px solid #000000;
-            padding: ${paperSize === 'K80' ? '4px 3px' : '5px 7px'};
+            padding: ${paperSize === 'K80' ? '4px 3px' : '6px 7px'};
           }
-          th {
+          .data-table th {
             background-color: #f3f4f6;
             font-weight: 700;
+            text-align: center;
+          }
+          /* Layout table with no borders for headers and signatures */
+          .layout-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: none !important;
+          }
+          .layout-table td, .layout-table th {
+            border: none !important;
+            padding: 2px 4px;
+            vertical-align: top;
           }
           .tabular-nums {
             font-variant-numeric: tabular-nums;
@@ -180,20 +191,27 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
             width: 100%;
             margin: 8px 0 12px 0;
           }
-          .grid-2 {
+          .totals-box {
+            display: flex;
+            justify-content: flex-end;
+            margin: 8px 0;
+          }
+          .totals-table {
+            width: 250px;
+            text-align: right;
+            font-size: 12.5px;
+          }
+          .totals-row {
             display: flex;
             justify-content: space-between;
+            padding: 2px 0;
           }
-          .space-y-1 > * + * { margin-top: 3px; }
-          .mt-2 { margin-top: 8px; }
-          .mt-4 { margin-top: 16px; }
-          .mt-8 { margin-top: 32px; }
-          .mb-1 { margin-bottom: 4px; }
-          .mb-3 { margin-bottom: 12px; }
-          .flex { display: flex; }
-          .justify-between { justify-content: space-between; }
-          .items-center { align-items: center; }
-          img { max-height: 50px; max-width: 150px; object-contain: contain; }
+          .signatures-table {
+            width: 100%;
+            margin-top: 36px;
+            text-align: center;
+          }
+          img { max-height: 50px; max-width: 150px; object-fit: contain; }
         </style>
       </head>
       <body>
@@ -219,60 +237,6 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
     }, 250);
   };
 
-  // Real PDF generator & downloader using html2canvas & jsPDF
-  const handleDownloadPdf = async () => {
-    if (!printPaperRef.current) return;
-    setIsExportingPdf(true);
-    try {
-      const element = printPaperRef.current;
-
-      const canvas = await html2canvas(element, {
-        scale: 2.5,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-      });
-
-      const imgData = canvas.toDataURL('image/jpeg', 0.98);
-
-      let pdfWidth = 210;
-      let pdfHeight = 297;
-      let format: any = 'a4';
-
-      if (paperSize === 'A5') {
-        pdfWidth = 148;
-        pdfHeight = 210;
-        format = 'a5';
-      } else if (paperSize === 'K80') {
-        pdfWidth = 80;
-        const calculatedHeight = (canvas.height * 80) / canvas.width;
-        pdfHeight = Math.max(120, calculatedHeight);
-        format = [80, pdfHeight];
-      }
-
-      const pdf = new jsPDF({
-        orientation: 'p',
-        unit: 'mm',
-        format: format,
-      });
-
-      const margin = paperSize === 'K80' ? 2 : 8;
-      const contentWidth = pdfWidth - margin * 2;
-      const contentHeight = (canvas.height * contentWidth) / canvas.width;
-
-      pdf.addImage(imgData, 'JPEG', margin, margin, contentWidth, contentHeight);
-
-      const safeDocName = (docTitle || 'CHUNG_TU').replace(/[\/\\?%*:|"<>]/g, '_');
-      const safeCode = (code || 'LK').replace(/[\/\\?%*:|"<>]/g, '_');
-      pdf.save(`${safeDocName}_${safeCode}.pdf`);
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      alert('Không thể tạo file PDF. Vui lòng thử lại hoặc chọn nút In rồi Lưu dưới dạng PDF.');
-    } finally {
-      setIsExportingPdf(false);
-    }
-  };
-
   const isPurchase =
     documentType.includes('MUA') || documentType.includes('NCC');
 
@@ -291,28 +255,10 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
           <button
             type="button"
             onClick={handlePrint}
-            className="px-4 py-2 bg-white border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-[#1F2937] dark:text-gray-200 text-[13.5px] font-semibold rounded-[12px] flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer active:scale-95"
+            className="px-5 py-2 bg-white border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-[#1F2937] dark:text-gray-200 text-[13.5px] font-semibold rounded-[12px] flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer active:scale-95"
           >
             <Icon name="print" size={18} className="text-[#4B5563]" />
             <span>In</span>
-          </button>
-          <button
-            type="button"
-            disabled={isExportingPdf}
-            onClick={handleDownloadPdf}
-            className="px-4 py-2 bg-white border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-[#1F2937] dark:text-gray-200 text-[13.5px] font-semibold rounded-[12px] flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer disabled:opacity-60 active:scale-95"
-          >
-            {isExportingPdf ? (
-              <>
-                <Icon name="sync" size={18} className="animate-spin text-[#6D3EEB]" />
-                <span>Đang tạo PDF...</span>
-              </>
-            ) : (
-              <>
-                <Icon name="download" size={18} className="text-[#4B5563]" />
-                <span>Tải PDF</span>
-              </>
-            )}
           </button>
           <button
             type="button"
@@ -329,7 +275,7 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
       }
     >
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Settings Panel (Matching Image 1) */}
+        {/* Left Settings Panel (Matching Image) */}
         <div className="lg:col-span-4 space-y-4 border-b lg:border-b-0 lg:border-r border-[#F1F2F5] dark:border-gray-800 pb-4 lg:pb-0 lg:pr-4">
           {/* Paper Size dropdown */}
           <div>
@@ -496,144 +442,269 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
             {/* 1. Company Information Header (Top left) */}
             {options.logo && (
               <div>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="font-bold text-[14px] uppercase text-black leading-tight tracking-wide">
-                      {companySettings.company_name || 'CÔNG TY NEXUP TECHNOLOGY'}
-                    </h3>
-                    <p className="text-[12px] text-gray-700 mt-0.5">
-                      {companySettings.address || 'Hồ Chí Minh'}
-                    </p>
-                  </div>
-                  {companySettings.logo_url && (
-                    <img
-                      src={companySettings.logo_url}
-                      alt="Logo"
-                      className="max-h-12 max-w-[130px] object-contain shrink-0"
-                    />
-                  )}
-                </div>
+                <table className="layout-table" style={{ width: '100%', border: 'none' }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ border: 'none', textAlign: 'left', verticalAlign: 'top', padding: 0 }}>
+                        <h3
+                          style={{
+                            fontWeight: 700,
+                            fontSize: '14px',
+                            textTransform: 'uppercase',
+                            color: '#000000',
+                            margin: 0,
+                            letterSpacing: '0.3px',
+                          }}
+                        >
+                          {companySettings.company_name || 'CÔNG TY LK ERP'}
+                        </h3>
+                        <p style={{ fontSize: '12px', color: '#333333', margin: '2px 0 0 0' }}>
+                          {companySettings.address || 'Hồ Chí Minh'}
+                        </p>
+                      </td>
+                      {companySettings.logo_url && (
+                        <td
+                          style={{
+                            border: 'none',
+                            textAlign: 'right',
+                            verticalAlign: 'top',
+                            padding: 0,
+                            width: '130px',
+                          }}
+                        >
+                          <img
+                            src={companySettings.logo_url}
+                            alt="Logo"
+                            style={{ maxHeight: '48px', maxWidth: '120px', objectFit: 'contain' }}
+                          />
+                        </td>
+                      )}
+                    </tr>
+                  </tbody>
+                </table>
                 {/* Solid Divider Line */}
-                <div className="border-b-[1.5px] border-black my-2.5 w-full" />
+                <div style={{ borderBottom: '1.5px solid #000000', width: '100%', margin: '8px 0 12px 0' }} />
               </div>
             )}
 
             {/* 2. Document Title and Header Meta (Matching Image) */}
-            <div className="my-2">
-              <div className="grid grid-cols-12 items-start">
-                <div className="col-span-8 text-center pl-8">
-                  <h2 className="text-[19px] font-black uppercase tracking-wider text-black leading-tight">
-                    {docTitle}
-                  </h2>
-                  <p className="text-[12px] text-gray-800 mt-1">
-                    Ngày lập phiếu:{' '}
-                    <strong className="text-black font-bold">{formatDate(date)}</strong>
-                  </p>
-                </div>
-                <div className="col-span-4 text-right text-[11.5px] text-black space-y-0.5">
-                  <div>
-                    Số phiếu: <strong className="font-bold">{code}</strong>
-                  </div>
-                  <div>
-                    Ngày giờ in: <span className="text-gray-800">{printTimeStr}</span>
-                  </div>
-                  <div>
-                    Đơn vị tiền tệ: <span className="text-gray-800">Việt Nam đồng</span>
-                  </div>
-                </div>
-              </div>
+            <div style={{ margin: '8px 0 12px 0' }}>
+              <table className="layout-table" style={{ width: '100%', border: 'none' }}>
+                <tbody>
+                  <tr>
+                    <td
+                      style={{
+                        border: 'none',
+                        textAlign: 'center',
+                        verticalAlign: 'middle',
+                        width: '65%',
+                        padding: 0,
+                      }}
+                    >
+                      <h2
+                        style={{
+                          fontSize: '19px',
+                          fontWeight: 900,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.8px',
+                          color: '#000000',
+                          margin: 0,
+                        }}
+                      >
+                        {docTitle}
+                      </h2>
+                      <p style={{ fontSize: '12px', color: '#333333', margin: '3px 0 0 0' }}>
+                        Ngày lập phiếu: <strong style={{ color: '#000000' }}>{formatDate(date)}</strong>
+                      </p>
+                    </td>
+                    <td
+                      style={{
+                        border: 'none',
+                        textAlign: 'right',
+                        verticalAlign: 'middle',
+                        width: '35%',
+                        fontSize: '11.5px',
+                        color: '#000000',
+                        lineHeight: '1.45',
+                        padding: 0,
+                      }}
+                    >
+                      <div>
+                        Số phiếu: <strong>{code}</strong>
+                      </div>
+                      <div>
+                        Ngày giờ in: <span style={{ color: '#333333' }}>{printTimeStr}</span>
+                      </div>
+                      <div>
+                        Đơn vị tiền tệ: <span style={{ color: '#333333' }}>Việt Nam đồng</span>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
 
-            {/* 3. Partner Information Section (2 Columns matching Image) */}
+            {/* 3. Partner Information Section (2 Columns using robust layout-table) */}
             {options.partnerInfo && (
-              <div className="grid grid-cols-12 text-[12.5px] text-black my-3.5 leading-relaxed">
-                <div className="col-span-7 space-y-1">
-                  <div className="flex">
-                    <span className="font-semibold w-24 shrink-0 text-black">
-                      {isPurchase ? 'Nhà cung cấp:' : 'Khách hàng:'}
-                    </span>
-                    <span className="font-bold text-black">{partnerName || 'Công ty Minh An'}</span>
-                  </div>
-                  <div className="flex">
-                    <span className="font-semibold w-24 shrink-0 text-black">Địa chỉ:</span>
-                    <span className="text-gray-900">{partnerAddress || 'Quận 1, TP.HCM'}</span>
-                  </div>
-                  <div className="flex">
-                    <span className="font-semibold w-24 shrink-0 text-black">Email/Website:</span>
-                    <span className="text-gray-900">
-                      {partnerEmail || recipientEmail || 'optimatevn@gmail.com'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="col-span-5 space-y-1 pl-2">
-                  <div className="flex">
-                    <span className="font-semibold w-24 shrink-0 text-black">Điện thoại:</span>
-                    <span className="text-gray-900">{partnerPhone || '0874xxx664'}</span>
-                  </div>
-                  <div className="flex">
-                    <span className="font-semibold w-24 shrink-0 text-black">Mã số thuế:</span>
-                    <span className="text-gray-900 font-mono">{partnerTaxCode || '---'}</span>
-                  </div>
-                </div>
+              <div style={{ margin: '10px 0 12px 0' }}>
+                <table
+                  className="layout-table"
+                  style={{ width: '100%', border: 'none', fontSize: '12.5px', color: '#000000' }}
+                >
+                  <tbody>
+                    <tr>
+                      <td style={{ border: 'none', width: '58%', padding: '2px 0', verticalAlign: 'top' }}>
+                        <span style={{ fontWeight: 600 }}>{isPurchase ? 'Nhà cung cấp:' : 'Khách hàng:'}</span>{' '}
+                        <strong>{partnerName || 'Công ty Minh An'}</strong>
+                      </td>
+                      <td style={{ border: 'none', width: '42%', padding: '2px 0', verticalAlign: 'top' }}>
+                        <span style={{ fontWeight: 600 }}>Điện thoại:</span>{' '}
+                        <span>{partnerPhone || '---'}</span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style={{ border: 'none', padding: '2px 0', verticalAlign: 'top' }}>
+                        <span style={{ fontWeight: 600 }}>Địa chỉ:</span>{' '}
+                        <span>{partnerAddress || '---'}</span>
+                      </td>
+                      <td style={{ border: 'none', padding: '2px 0', verticalAlign: 'top' }}>
+                        <span style={{ fontWeight: 600 }}>Mã số thuế:</span>{' '}
+                        <span style={{ fontFamily: 'monospace' }}>{partnerTaxCode || '---'}</span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style={{ border: 'none', padding: '2px 0', verticalAlign: 'top' }}>
+                        <span style={{ fontWeight: 600 }}>Email/Website:</span>{' '}
+                        <span>{partnerEmail || recipientEmail || '---'}</span>
+                      </td>
+                      <td style={{ border: 'none', padding: '2px 0', verticalAlign: 'top' }}></td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             )}
 
             {/* 4. Products Table (Accounting standard black border matching Image) */}
-            <div className="my-3 overflow-hidden">
-              <table className="w-full border-collapse border border-black text-[12px]">
+            <div style={{ margin: '10px 0' }}>
+              <table
+                className="data-table"
+                style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  border: '1px solid #000000',
+                  fontSize: '12px',
+                }}
+              >
                 <thead>
-                  <tr className="bg-gray-100/70 border-b border-black text-black font-bold">
-                    <th className="border border-black p-2 text-center w-9">STT</th>
+                  <tr style={{ backgroundColor: '#f3f4f6', borderBottom: '1px solid #000000', color: '#000000' }}>
+                    <th style={{ border: '1px solid #000000', padding: '5px 4px', textAlign: 'center', width: '36px' }}>
+                      STT
+                    </th>
                     {options.sku && (
-                      <th className="border border-black p-2 text-center w-20">Mã hàng</th>
+                      <th style={{ border: '1px solid #000000', padding: '5px 6px', textAlign: 'center', width: '75px' }}>
+                        Mã hàng
+                      </th>
                     )}
-                    <th className="border border-black p-2 text-center">Tên hàng</th>
+                    <th style={{ border: '1px solid #000000', padding: '5px 8px', textAlign: 'center' }}>
+                      Tên hàng
+                    </th>
                     {options.unit && (
-                      <th className="border border-black p-2 text-center w-12">ĐV</th>
+                      <th style={{ border: '1px solid #000000', padding: '5px 4px', textAlign: 'center', width: '45px' }}>
+                        ĐV
+                      </th>
                     )}
-                    <th className="border border-black p-2 text-center w-12">SL</th>
+                    <th style={{ border: '1px solid #000000', padding: '5px 4px', textAlign: 'center', width: '45px' }}>
+                      SL
+                    </th>
                     {options.priceTotal && (
-                      <th className="border border-black p-2 text-center w-24">Đơn giá</th>
+                      <th style={{ border: '1px solid #000000', padding: '5px 6px', textAlign: 'center', width: '90px' }}>
+                        Đơn giá
+                      </th>
                     )}
                     {options.lineDiscount && (
-                      <th className="border border-black p-2 text-center w-20">Chiết khấu</th>
+                      <th style={{ border: '1px solid #000000', padding: '5px 6px', textAlign: 'center', width: '75px' }}>
+                        Chiết khấu
+                      </th>
                     )}
                     {options.priceTotal && (
-                      <th className="border border-black p-2 text-center w-28">Thành tiền</th>
+                      <th style={{ border: '1px solid #000000', padding: '5px 6px', textAlign: 'center', width: '100px' }}>
+                        Thành tiền
+                      </th>
                     )}
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((it, idx) => (
-                    <tr key={idx} className="border-b border-black">
-                      <td className="border border-black p-2 text-center">{idx + 1}</td>
+                    <tr key={idx} style={{ borderBottom: '1px solid #000000' }}>
+                      <td style={{ border: '1px solid #000000', padding: '5px 4px', textAlign: 'center' }}>
+                        {idx + 1}
+                      </td>
                       {options.sku && (
-                        <td className="border border-black p-2 text-center font-mono text-[11.5px]">
-                          {it.sku || 'CP001'}
+                        <td
+                          style={{
+                            border: '1px solid #000000',
+                            padding: '5px 6px',
+                            textAlign: 'center',
+                            fontFamily: 'monospace',
+                            fontSize: '11.5px',
+                          }}
+                        >
+                          {it.sku || '---'}
                         </td>
                       )}
-                      <td className="border border-black p-2 text-left font-medium">
+                      <td style={{ border: '1px solid #000000', padding: '5px 8px', textAlign: 'left', fontWeight: 500 }}>
                         {it.product_name}
                       </td>
                       {options.unit && (
-                        <td className="border border-black p-2 text-center">{it.unit || 'Cái'}</td>
+                        <td style={{ border: '1px solid #000000', padding: '5px 4px', textAlign: 'center' }}>
+                          {it.unit || 'Cái'}
+                        </td>
                       )}
-                      <td className="border border-black p-2 text-center font-semibold">
+                      <td
+                        style={{
+                          border: '1px solid #000000',
+                          padding: '5px 4px',
+                          textAlign: 'center',
+                          fontWeight: 600,
+                        }}
+                      >
                         {it.quantity}
                       </td>
                       {options.priceTotal && (
-                        <td className="border border-black p-2 text-right tabular-nums">
+                        <td
+                          style={{
+                            border: '1px solid #000000',
+                            padding: '5px 6px',
+                            textAlign: 'right',
+                            fontVariantNumeric: 'tabular-nums',
+                          }}
+                        >
                           {formatCurrency(it.unit_price).replace(/\s*₫|\s*đ/g, '')}
                         </td>
                       )}
                       {options.lineDiscount && (
-                        <td className="border border-black p-2 text-right tabular-nums text-gray-700">
+                        <td
+                          style={{
+                            border: '1px solid #000000',
+                            padding: '5px 6px',
+                            textAlign: 'right',
+                            fontVariantNumeric: 'tabular-nums',
+                            color: '#333333',
+                          }}
+                        >
                           {it.line_discount ? formatCurrency(it.line_discount).replace(/\s*₫|\s*đ/g, '') : '0'}
                         </td>
                       )}
                       {options.priceTotal && (
-                        <td className="border border-black p-2 text-right font-medium tabular-nums">
+                        <td
+                          style={{
+                            border: '1px solid #000000',
+                            padding: '5px 6px',
+                            textAlign: 'right',
+                            fontWeight: 500,
+                            fontVariantNumeric: 'tabular-nums',
+                          }}
+                        >
                           {formatCurrency(it.line_total).replace(/\s*₫|\s*đ/g, '')}
                         </td>
                       )}
@@ -644,81 +715,190 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
             </div>
 
             {/* 5. Summary Totals (Matching Right alignment in Image) */}
-            <div className="flex justify-end my-2">
-              <div className="w-64 text-right space-y-1 text-[12.5px] text-black">
-                <div className="flex justify-between">
-                  <span className="text-gray-800">Tạm tính</span>
-                  <span className="font-semibold tabular-nums">{formatCurrency(subtotal)}</span>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%', margin: '8px 0 12px 0' }}>
+              <div style={{ width: '260px', marginLeft: 'auto', textAlign: 'right', fontSize: '12.5px', color: '#000000' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1.5px 0' }}>
+                  <span style={{ color: '#333333' }}>Tạm tính</span>
+                  <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                    {formatCurrency(subtotal)}
+                  </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-800">Chiết khấu</span>
-                  <span className="tabular-nums">
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1.5px 0' }}>
+                  <span style={{ color: '#333333' }}>Chiết khấu</span>
+                  <span style={{ fontVariantNumeric: 'tabular-nums' }}>
                     {discountAmount > 0 ? `-${formatCurrency(discountAmount)}` : '0 đ'}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-800">VAT</span>
-                  <span className="tabular-nums">
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1.5px 0' }}>
+                  <span style={{ color: '#333333' }}>VAT</span>
+                  <span style={{ fontVariantNumeric: 'tabular-nums' }}>
                     {vatAmount > 0 ? `+${formatCurrency(vatAmount)}` : '0 đ'}
                   </span>
                 </div>
                 {shippingFee > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-800">Phí vận chuyển</span>
-                    <span className="tabular-nums">+{formatCurrency(shippingFee)}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1.5px 0' }}>
+                    <span style={{ color: '#333333' }}>Phí vận chuyển</span>
+                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>+{formatCurrency(shippingFee)}</span>
                   </div>
                 )}
-                <div className="flex justify-between pt-1 border-t border-gray-400 font-bold text-[14px] text-black">
-                  <span className="uppercase">TỔNG CỘNG</span>
-                  <span className="font-black tabular-nums">{formatCurrency(total)}</span>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    paddingTop: '5px',
+                    borderTop: '1px solid #777777',
+                    fontWeight: 'bold',
+                    fontSize: '14px',
+                    color: '#000000',
+                    marginTop: '2px',
+                  }}
+                >
+                  <span style={{ textTransform: 'uppercase' }}>TỔNG CỘNG</span>
+                  <span style={{ fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}>
+                    {formatCurrency(total)}
+                  </span>
                 </div>
                 {options.oldDebt && debtAmount > 0 && (
-                  <div className="flex justify-between text-red-600 font-semibold pt-0.5">
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      color: '#dc2626',
+                      fontWeight: 600,
+                      paddingTop: '2px',
+                    }}
+                  >
                     <span>Còn nợ:</span>
-                    <span className="tabular-nums">{formatCurrency(debtAmount)}</span>
+                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(debtAmount)}</span>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* QR Code if enabled */}
-            {options.qrCode && (
-              <div className="my-3 p-2 border border-gray-300 rounded flex items-center gap-3 bg-gray-50 w-64">
-                <div className="w-14 h-14 bg-white border flex items-center justify-center font-mono text-[9px] text-center p-1 text-purple-700">
-                  VietQR
-                </div>
-                <div className="text-[11px] leading-tight">
-                  <div className="font-bold text-gray-800">Quét mã VietQR</div>
-                  <div className="text-gray-600 mt-0.5">Số TK: {companySettings.bank_account_no}</div>
-                  <div className="text-purple-700 font-semibold">{companySettings.bank_name}</div>
-                </div>
-              </div>
-            )}
-
             {/* Note Section */}
             {options.note && note && (
-              <div className="text-[12px] text-gray-800 italic mt-2">
+              <div style={{ fontSize: '12px', color: '#111111', fontStyle: 'italic', margin: '4px 0 12px 0' }}>
                 <strong>Ghi chú:</strong> {note}
               </div>
             )}
 
-            {/* 6. Signatures Section (Matching Image: Khách hàng / Người bán hàng) */}
+            {/* QR Code if enabled */}
+            {options.qrCode && (
+              <div
+                style={{
+                  margin: '8px 0',
+                  padding: '8px',
+                  border: '1px solid #cccccc',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  backgroundColor: '#f9f9f9',
+                  width: '240px',
+                }}
+              >
+                <div
+                  style={{
+                    width: '56px',
+                    height: '56px',
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #ddd',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontFamily: 'monospace',
+                    fontSize: '9px',
+                    textAlign: 'center',
+                    padding: '4px',
+                    color: '#6d3eeb',
+                  }}
+                >
+                  VietQR
+                </div>
+                <div style={{ fontSize: '11px', lineHeight: '1.3' }}>
+                  <div style={{ fontWeight: 'bold', color: '#111827' }}>Quét mã VietQR</div>
+                  <div style={{ color: '#4b5563', marginTop: '2px' }}>
+                    Số TK: {companySettings.bank_account_no}
+                  </div>
+                  <div style={{ color: '#6d3eeb', fontWeight: 600 }}>{companySettings.bank_name}</div>
+                </div>
+              </div>
+            )}
+
+            {/* 6. Signatures Section (Table-based 2 columns: KHÁCH HÀNG / NGƯỜI BÁN HÀNG) */}
             {options.signature && (
-              <div className="grid grid-cols-2 text-center mt-12 pt-4 text-[12.5px] text-black">
-                <div>
-                  <div className="font-bold uppercase tracking-tight">
-                    {isPurchase ? 'Nhà cung cấp' : 'Khách hàng'}
-                  </div>
-                  <div className="text-[11px] text-gray-600 italic mt-0.5">(Ký, ghi rõ họ tên)</div>
-                  <div className="h-16" />
-                </div>
-                <div>
-                  <div className="font-bold uppercase tracking-tight">
-                    {isPurchase ? 'Người mua hàng' : 'Người bán hàng'}
-                  </div>
-                  <div className="text-[11px] text-gray-600 italic mt-0.5">(Ký, ghi rõ họ tên)</div>
-                  <div className="h-16" />
-                </div>
+              <div style={{ marginTop: '36px' }}>
+                <table
+                  className="layout-table signatures-table"
+                  style={{ width: '100%', border: 'none', textAlign: 'center', fontSize: '12.5px', color: '#000000' }}
+                >
+                  <tbody>
+                    <tr>
+                      <td
+                        style={{
+                          width: '50%',
+                          border: 'none',
+                          textAlign: 'center',
+                          verticalAlign: 'top',
+                          padding: 0,
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.4px',
+                            color: '#000000',
+                          }}
+                        >
+                          {isPurchase ? 'NHÀ CUNG CẤP' : 'KHÁCH HÀNG'}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '11px',
+                            color: '#555555',
+                            fontStyle: 'italic',
+                            marginTop: '3px',
+                          }}
+                        >
+                          (Ký, ghi rõ họ tên)
+                        </div>
+                        <div style={{ height: '65px' }} />
+                      </td>
+                      <td
+                        style={{
+                          width: '50%',
+                          border: 'none',
+                          textAlign: 'center',
+                          verticalAlign: 'top',
+                          padding: 0,
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.4px',
+                            color: '#000000',
+                          }}
+                        >
+                          {isPurchase ? 'NGƯỜI MUA HÀNG' : 'NGƯỜI BÁN HÀNG'}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '11px',
+                            color: '#555555',
+                            fontStyle: 'italic',
+                            marginTop: '3px',
+                          }}
+                        >
+                          (Ký, ghi rõ họ tên)
+                        </div>
+                        <div style={{ height: '65px' }} />
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
