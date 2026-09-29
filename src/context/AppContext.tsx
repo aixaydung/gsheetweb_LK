@@ -103,21 +103,36 @@ interface AppContextType {
   deleteInvoice: (id: string) => void;
 
   createQuotation: (quo: Partial<Quotation>, items: DocumentLineItem[]) => Quotation;
+  updateQuotation: (id: string, quo: Partial<Quotation>, items?: DocumentLineItem[]) => void;
   convertQuotationToInvoice: (quotationId: string) => SalesInvoice;
   updateQuotationStatus: (id: string, status: any) => void;
   deleteQuotation: (id: string) => void;
+  deleteQuotationsBatch: (ids: string[]) => void;
 
   createSalesReturn: (ret: Partial<SalesReturn>, items: DocumentLineItem[]) => SalesReturn;
+  updateSalesReturn: (id: string, ret: Partial<SalesReturn>, items?: DocumentLineItem[]) => void;
+  deleteSalesReturn: (id: string) => void;
+  deleteSalesReturnsBatch: (ids: string[]) => void;
+
   createPurchaseOrder: (po: Partial<PurchaseOrder>, items: DocumentLineItem[]) => PurchaseOrder;
+  updatePurchaseOrder: (id: string, po: Partial<PurchaseOrder>, items?: DocumentLineItem[]) => void;
   updatePurchaseOrderStatus: (id: string, status: any) => void;
+  deletePurchaseOrder: (id: string) => void;
+  deletePurchaseOrdersBatch: (ids: string[]) => void;
+
   createPurchaseReturn: (ret: Partial<PurchaseReturn>, items: DocumentLineItem[]) => PurchaseReturn;
+  updatePurchaseReturn: (id: string, ret: Partial<PurchaseReturn>, items?: DocumentLineItem[]) => void;
+  deletePurchaseReturn: (id: string) => void;
+  deletePurchaseReturnsBatch: (ids: string[]) => void;
   updateReturnStatus: (id: string, status: any) => void;
 
   createStockVoucher: (voucher: Partial<StockVoucher>, items: DocumentLineItem[]) => StockVoucher;
   createStocktake: (stocktake: Partial<Stocktake>) => Stocktake;
 
   createPayment: (payment: Partial<Payment>, allocations: PaymentAllocation[]) => Payment;
+  updatePayment: (id: string, payment: Partial<Payment>) => void;
   cancelPayment: (id: string) => void;
+  deletePaymentsBatch: (ids: string[]) => void;
 
   createProduct: (prod: Partial<Product>) => Product;
   updateProduct: (id: string, prod: Partial<Product>) => void;
@@ -126,13 +141,16 @@ interface AppContextType {
   createCustomer: (cust: Partial<Customer>) => Customer;
   updateCustomer: (id: string, cust: Partial<Customer>) => void;
   deleteCustomer: (id: string) => void;
+  deleteCustomersBatch: (ids: string[]) => void;
 
   createSupplier: (sup: Partial<Supplier>) => Supplier;
   updateSupplier: (id: string, sup: Partial<Supplier>) => void;
   deleteSupplier: (id: string) => void;
+  deleteSuppliersBatch: (ids: string[]) => void;
 
   createWarehouse: (wh: Partial<Warehouse>) => Warehouse;
   updateWarehouse: (id: string, wh: Partial<Warehouse>) => void;
+  deleteWarehouse: (id: string) => void;
 
   // Batch Import Excel
   importProductsBatch: (items: Partial<Product>[]) => Promise<{ successCount: number; errorCount: number }>;
@@ -1111,7 +1129,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
           items: newQuote.items.map(it => ({
             product_id: it.product_id,
-            sku: it.sku || it.product_sku || '',
+            sku: it.sku || (it as any).product_sku || '',
             product_name: it.product_name,
             unit: it.unit,
             quantity: it.quantity,
@@ -1192,6 +1210,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       entity_code: quote?.code || id,
       title: `Xoá báo giá ${quote?.code || id}`,
       details: `Đã huỷ/xoá báo giá của khách hàng ${quote?.customer_name || ''}`,
+    });
+  };
+
+  const updateQuotation = (id: string, quoData: Partial<Quotation>, items?: DocumentLineItem[]) => {
+    const quote = quotations.find(q => q.id === id);
+    if (!quote) return;
+
+    const currentItems = items || quote.items;
+    const subtotal = currentItems.reduce((sum, item) => sum + item.line_total, 0);
+    const discountType = quoData.discount_type !== undefined ? quoData.discount_type : quote.discount_type;
+    const discountVal = quoData.discount_value !== undefined ? quoData.discount_value : quote.discount_value;
+    const discountAmount =
+      discountType === 'amount' ? discountVal : Math.round((subtotal * discountVal) / 100);
+    const afterDiscount = Math.max(0, subtotal - discountAmount);
+    const vatRate = quoData.vat_rate !== undefined ? quoData.vat_rate : quote.vat_rate;
+    const vatAmount = Math.round((afterDiscount * vatRate) / 100);
+    const shippingFee = quoData.shipping_fee !== undefined ? quoData.shipping_fee : quote.shipping_fee;
+    const total = afterDiscount + vatAmount + shippingFee;
+
+    const updatedQuote: Quotation = {
+      ...quote,
+      ...quoData,
+      subtotal,
+      discount_type: discountType,
+      discount_value: discountVal,
+      discount_amount: discountAmount,
+      vat_rate: vatRate,
+      vat_amount: vatAmount,
+      shipping_fee: shippingFee,
+      total,
+      items: currentItems.map((it, idx) => ({ ...it, id: it.id || `qli-${Date.now()}-${idx}` })),
+    };
+
+    setQuotations(prev => prev.map(q => (q.id === id ? updatedQuote : q)));
+    syncWithApi(
+      fetch(`/api/quotations/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quotation: updatedQuote, items: updatedQuote.items }),
+      })
+    );
+    logActivity({
+      action: 'update',
+      entity_type: 'quotation',
+      entity_id: id,
+      entity_code: updatedQuote.code,
+      title: `Cập nhật báo giá ${updatedQuote.code}`,
+      details: `Cập nhật báo giá cho ${updatedQuote.customer_name}`,
+    });
+  };
+
+  const deleteQuotationsBatch = (ids: string[]) => {
+    if (!ids || ids.length === 0) return;
+    setQuotations(prev => prev.filter(q => !ids.includes(q.id)));
+    ids.forEach(id => syncWithApi(fetch(`/api/quotations/${id}`, { method: 'DELETE' })));
+    logActivity({
+      action: 'delete',
+      entity_type: 'quotation',
+      entity_id: ids.join(','),
+      entity_code: 'BATCH',
+      title: `Xóa hàng loạt ${ids.length} báo giá`,
+      details: `Đã xóa các báo giá: ${ids.join(', ')}`,
     });
   };
 
@@ -1299,6 +1379,67 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     return newReturn;
+  };
+
+  const updateSalesReturn = (id: string, retData: Partial<SalesReturn>, items?: DocumentLineItem[]) => {
+    const sret = salesReturns.find(r => r.id === id);
+    if (!sret) return;
+    const currentItems = items || sret.items;
+    const totalValue = currentItems.reduce((sum, item) => sum + item.line_total, 0);
+
+    const updatedReturn: SalesReturn = {
+      ...sret,
+      ...retData,
+      total_value: totalValue,
+      offset_amount: (retData.handling || sret.handling) === 'debt_offset' ? totalValue : 0,
+      refund_due: (retData.handling || sret.handling) === 'refund' ? totalValue : 0,
+      items: currentItems,
+    };
+
+    setSalesReturns(prev => prev.map(r => (r.id === id ? updatedReturn : r)));
+    syncWithApi(
+      fetch(`/api/returns/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ returnDoc: updatedReturn, items: updatedReturn.items }),
+      })
+    );
+    logActivity({
+      action: 'update',
+      entity_type: 'sales_return',
+      entity_id: id,
+      entity_code: updatedReturn.code,
+      title: `Cập nhật phiếu trả hàng ${updatedReturn.code}`,
+      details: `Phiếu trả từ ${updatedReturn.customer_name}`,
+    });
+  };
+
+  const deleteSalesReturn = (id: string) => {
+    const sret = salesReturns.find(r => r.id === id);
+    setSalesReturns(prev => prev.filter(r => r.id !== id));
+    syncWithApi(fetch(`/api/returns/${id}`, { method: 'DELETE' }));
+    logActivity({
+      action: 'delete',
+      entity_type: 'sales_return',
+      entity_id: id,
+      entity_code: sret?.code || id,
+      title: `Xóa phiếu trả hàng ${sret?.code || id}`,
+      details: `Đã xóa phiếu trả hàng của ${sret?.customer_name || ''}`,
+    });
+  };
+
+  const deleteSalesReturnsBatch = (ids: string[]) => {
+    if (!ids || ids.length === 0) return;
+    setSalesReturns(prev => prev.filter(r => !ids.includes(r.id)));
+    ids.forEach(id => syncWithApi(fetch(`/api/returns/${id}`, { method: 'DELETE' })));
+    logActivity({
+      action: 'delete',
+      entity_type: 'sales_return',
+      entity_id: ids.join(','),
+      entity_code: 'BATCH',
+      title: `Xóa hàng loạt ${ids.length} phiếu trả hàng`,
+      details: `Đã xóa các phiếu trả hàng: ${ids.join(', ')}`,
+    });
   };
 
   // Purchase Order
@@ -1493,6 +1634,93 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
+  const updatePurchaseOrder = (id: string, poData: Partial<PurchaseOrder>, items?: DocumentLineItem[]) => {
+    const po = purchaseOrders.find(p => p.id === id);
+    if (!po) return;
+
+    const currentItems = items || po.items;
+    const subtotal = currentItems.reduce((sum, item) => sum + item.line_total, 0);
+    const discountType = poData.discount_type !== undefined ? poData.discount_type : po.discount_type;
+    const discountVal = poData.discount_value !== undefined ? poData.discount_value : po.discount_value;
+    const discountAmount =
+      discountType === 'amount' ? discountVal : Math.round((subtotal * discountVal) / 100);
+    const afterDiscount = Math.max(0, subtotal - discountAmount);
+    const vatRate = poData.vat_rate !== undefined ? poData.vat_rate : po.vat_rate;
+    const vatAmount = Math.round((afterDiscount * vatRate) / 100);
+    const shippingFee = poData.shipping_fee !== undefined ? poData.shipping_fee : po.shipping_fee;
+    const total = afterDiscount + vatAmount + shippingFee;
+    const paidAmount = poData.paid_amount !== undefined ? poData.paid_amount : po.paid_amount;
+    const debtAmount = Math.max(0, total - paidAmount - (po.returned_amount || 0));
+
+    let paymentStatus = poData.payment_status || po.payment_status;
+    if (paidAmount === 0) paymentStatus = 'unpaid';
+    else if (paidAmount < total) paymentStatus = 'partial';
+    else if (paidAmount === total) paymentStatus = 'paid';
+    else paymentStatus = 'overpaid';
+
+    const updatedPO: PurchaseOrder = {
+      ...po,
+      ...poData,
+      subtotal,
+      discount_type: discountType,
+      discount_value: discountVal,
+      discount_amount: discountAmount,
+      vat_rate: vatRate,
+      vat_amount: vatAmount,
+      shipping_fee: shippingFee,
+      total,
+      paid_amount: paidAmount,
+      debt_amount: debtAmount,
+      payment_status: paymentStatus,
+      items: currentItems.map((it, idx) => ({ ...it, id: it.id || `poli-${Date.now()}-${idx}` })),
+    };
+
+    setPurchaseOrders(prev => prev.map(p => (p.id === id ? updatedPO : p)));
+    syncWithApi(
+      fetch(`/api/purchases/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order: updatedPO, items: updatedPO.items }),
+      })
+    );
+    logActivity({
+      action: 'update',
+      entity_type: 'purchase_order',
+      entity_id: id,
+      entity_code: updatedPO.code,
+      title: `Cập nhật đơn mua hàng ${updatedPO.code}`,
+      details: `Đơn mua từ NCC ${updatedPO.supplier_name}`,
+    });
+  };
+
+  const deletePurchaseOrder = (id: string) => {
+    const po = purchaseOrders.find(p => p.id === id);
+    setPurchaseOrders(prev => prev.filter(p => p.id !== id));
+    syncWithApi(fetch(`/api/purchases/${id}`, { method: 'DELETE' }));
+    logActivity({
+      action: 'delete',
+      entity_type: 'purchase_order',
+      entity_id: id,
+      entity_code: po?.code || id,
+      title: `Xóa đơn mua hàng ${po?.code || id}`,
+      details: `Đã xóa đơn mua của ${po?.supplier_name || ''}`,
+    });
+  };
+
+  const deletePurchaseOrdersBatch = (ids: string[]) => {
+    if (!ids || ids.length === 0) return;
+    setPurchaseOrders(prev => prev.filter(p => !ids.includes(p.id)));
+    ids.forEach(id => syncWithApi(fetch(`/api/purchases/${id}`, { method: 'DELETE' })));
+    logActivity({
+      action: 'delete',
+      entity_type: 'purchase_order',
+      entity_id: ids.join(','),
+      entity_code: 'BATCH',
+      title: `Xóa hàng loạt ${ids.length} đơn mua hàng`,
+      details: `Đã xóa các đơn mua: ${ids.join(', ')}`,
+    });
+  };
+
   const createPurchaseReturn = (retData: Partial<PurchaseReturn>, items: DocumentLineItem[]): PurchaseReturn => {
     const nextNum = purchaseReturns.length + 2;
     const code = retData.code || `PR${String(nextNum).padStart(3, '0')}`;
@@ -1596,6 +1824,67 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     return newReturn;
+  };
+
+  const updatePurchaseReturn = (id: string, retData: Partial<PurchaseReturn>, items?: DocumentLineItem[]) => {
+    const pret = purchaseReturns.find(r => r.id === id);
+    if (!pret) return;
+    const currentItems = items || pret.items;
+    const totalValue = currentItems.reduce((sum, item) => sum + item.line_total, 0);
+
+    const updatedReturn: PurchaseReturn = {
+      ...pret,
+      ...retData,
+      total_value: totalValue,
+      offset_amount: (retData.handling || pret.handling) === 'debt_offset' ? totalValue : 0,
+      refund_due: (retData.handling || pret.handling) === 'refund' ? totalValue : 0,
+      items: currentItems,
+    };
+
+    setPurchaseReturns(prev => prev.map(r => (r.id === id ? updatedReturn : r)));
+    syncWithApi(
+      fetch(`/api/returns/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ returnDoc: updatedReturn, items: updatedReturn.items }),
+      })
+    );
+    logActivity({
+      action: 'update',
+      entity_type: 'purchase_return',
+      entity_id: id,
+      entity_code: updatedReturn.code,
+      title: `Cập nhật phiếu trả hàng NCC ${updatedReturn.code}`,
+      details: `Phiếu trả NCC ${updatedReturn.supplier_name}`,
+    });
+  };
+
+  const deletePurchaseReturn = (id: string) => {
+    const pret = purchaseReturns.find(r => r.id === id);
+    setPurchaseReturns(prev => prev.filter(r => r.id !== id));
+    syncWithApi(fetch(`/api/returns/${id}`, { method: 'DELETE' }));
+    logActivity({
+      action: 'delete',
+      entity_type: 'purchase_return',
+      entity_id: id,
+      entity_code: pret?.code || id,
+      title: `Xóa phiếu trả hàng NCC ${pret?.code || id}`,
+      details: `Đã xóa phiếu trả của ${pret?.supplier_name || ''}`,
+    });
+  };
+
+  const deletePurchaseReturnsBatch = (ids: string[]) => {
+    if (!ids || ids.length === 0) return;
+    setPurchaseReturns(prev => prev.filter(r => !ids.includes(r.id)));
+    ids.forEach(id => syncWithApi(fetch(`/api/returns/${id}`, { method: 'DELETE' })));
+    logActivity({
+      action: 'delete',
+      entity_type: 'purchase_return',
+      entity_id: ids.join(','),
+      entity_code: 'BATCH',
+      title: `Xóa hàng loạt ${ids.length} phiếu trả hàng NCC`,
+      details: `Đã xóa các phiếu: ${ids.join(', ')}`,
+    });
   };
 
   const updateReturnStatus = (id: string, status: any) => {
@@ -1848,6 +2137,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
+  const updatePayment = (id: string, paymentData: Partial<Payment>) => {
+    const targetPay = payments.find(p => p.id === id);
+    if (!targetPay) return;
+    const updated = { ...targetPay, ...paymentData };
+    setPayments(prev => prev.map(p => (p.id === id ? updated : p)));
+    syncWithApi(
+      fetch(`/api/payments/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      })
+    );
+    logActivity({
+      action: 'update',
+      entity_type: 'payment',
+      entity_id: id,
+      entity_code: updated.code,
+      title: `Cập nhật phiếu ${updated.direction === 'in' ? 'thu' : 'chi'} ${updated.code}`,
+      details: `Cập nhật thông tin phiếu thanh toán`,
+    });
+  };
+
+  const deletePaymentsBatch = (ids: string[]) => {
+    if (!ids || ids.length === 0) return;
+    setPayments(prev => prev.filter(p => !ids.includes(p.id)));
+    ids.forEach(id => syncWithApi(fetch(`/api/payments/${id}`, { method: 'DELETE' })));
+    logActivity({
+      action: 'delete',
+      entity_type: 'payment',
+      entity_id: ids.join(','),
+      entity_code: 'BATCH',
+      title: `Xóa hàng loạt ${ids.length} phiếu thanh toán`,
+      details: `Đã xóa các phiếu: ${ids.join(', ')}`,
+    });
+  };
+
   // Product CRUD
   const createProduct = (prodData: Partial<Product>): Product => {
     const nextNum = products.length + 10;
@@ -2042,6 +2367,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     syncWithApi(fetch(`/api/customers/${id}`, { method: 'DELETE' }));
   };
 
+  const deleteCustomersBatch = (ids: string[]) => {
+    if (!ids || ids.length === 0) return;
+    setCustomers(prev => prev.filter(c => !ids.includes(c.id)));
+    ids.forEach(id => syncWithApi(fetch(`/api/customers/${id}`, { method: 'DELETE' })));
+    logActivity({
+      action: 'delete',
+      entity_type: 'customer',
+      entity_id: ids.join(','),
+      entity_code: 'BATCH',
+      title: `Xóa hàng loạt ${ids.length} khách hàng`,
+      details: `Đã xóa các khách hàng: ${ids.join(', ')}`,
+    });
+  };
+
   // Supplier CRUD
   const createSupplier = (supData: Partial<Supplier>): Supplier => {
     const nextNum = suppliers.length + 18;
@@ -2133,6 +2472,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     syncWithApi(fetch(`/api/vendors/${id}`, { method: 'DELETE' }));
   };
 
+  const deleteSuppliersBatch = (ids: string[]) => {
+    if (!ids || ids.length === 0) return;
+    setSuppliers(prev => prev.filter(s => !ids.includes(s.id)));
+    ids.forEach(id => syncWithApi(fetch(`/api/vendors/${id}`, { method: 'DELETE' })));
+    logActivity({
+      action: 'delete',
+      entity_type: 'supplier',
+      entity_id: ids.join(','),
+      entity_code: 'BATCH',
+      title: `Xóa hàng loạt ${ids.length} nhà cung cấp`,
+      details: `Đã xóa các NCC: ${ids.join(', ')}`,
+    });
+  };
+
   // Warehouse CRUD
   const createWarehouse = (whData: Partial<Warehouse>): Warehouse => {
     const code = whData.code || `K${String(warehouses.length + 1).padStart(2, '0')}`;
@@ -2150,6 +2503,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateWarehouse = (id: string, whData: Partial<Warehouse>) => {
     setWarehouses(prev => prev.map(w => (w.id === id ? { ...w, ...whData } : w)));
+  };
+
+  const deleteWarehouse = (id: string) => {
+    const w = warehouses.find(wh => wh.id === id);
+    if (!w) return;
+    if (w.is_default) {
+      alert('Không thể xóa kho mặc định của hệ thống!');
+      return;
+    }
+    setWarehouses(prev => prev.filter(wh => wh.id !== id));
+    logActivity({
+      action: 'delete',
+      entity_type: 'settings',
+      entity_id: id,
+      entity_code: w.code,
+      title: `Xóa kho hàng ${w.code} - ${w.name}`,
+      details: `Đã xóa kho khỏi cấu hình chi nhánh`,
+    });
   };
 
   // Batch Import Excel handlers
@@ -2462,29 +2833,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         cancelInvoice,
         deleteInvoice,
         createQuotation,
+        updateQuotation,
         convertQuotationToInvoice,
         updateQuotationStatus,
         deleteQuotation,
+        deleteQuotationsBatch,
         createSalesReturn,
+        updateSalesReturn,
+        deleteSalesReturn,
+        deleteSalesReturnsBatch,
         createPurchaseOrder,
+        updatePurchaseOrder,
         updatePurchaseOrderStatus,
+        deletePurchaseOrder,
+        deletePurchaseOrdersBatch,
         createPurchaseReturn,
+        updatePurchaseReturn,
+        deletePurchaseReturn,
+        deletePurchaseReturnsBatch,
         updateReturnStatus,
         createStockVoucher,
         createStocktake,
         createPayment,
+        updatePayment,
         cancelPayment,
+        deletePaymentsBatch,
         createProduct,
         updateProduct,
         deleteProduct,
         createCustomer,
         updateCustomer,
         deleteCustomer,
+        deleteCustomersBatch,
         createSupplier,
         updateSupplier,
         deleteSupplier,
+        deleteSuppliersBatch,
         createWarehouse,
         updateWarehouse,
+        deleteWarehouse,
         importProductsBatch,
         importCustomersBatch,
         importSuppliersBatch,

@@ -21,7 +21,9 @@ interface SalesViewProps {
   onTabChange: (tab: string) => void;
   onOpenCreateInvoice: () => void;
   onOpenCreateQuotation: () => void;
+  onOpenEditQuotation?: (quotation: Quotation) => void;
   onOpenCreateReturn: () => void;
+  onOpenEditReturn?: (salesReturn: SalesReturn) => void;
   onOpenCreateCustomer: () => void;
   onOpenEditCustomer?: (customer: Customer) => void;
   onOpenImportCustomerDialog?: () => void;
@@ -34,7 +36,9 @@ export const SalesView: React.FC<SalesViewProps> = ({
   onTabChange,
   onOpenCreateInvoice,
   onOpenCreateQuotation,
+  onOpenEditQuotation,
   onOpenCreateReturn,
+  onOpenEditReturn,
   onOpenCreateCustomer,
   onOpenEditCustomer,
   onOpenImportCustomerDialog,
@@ -51,7 +55,12 @@ export const SalesView: React.FC<SalesViewProps> = ({
     convertQuotationToInvoice,
     deleteInvoice,
     deleteCustomer,
+    deleteCustomersBatch,
     deleteQuotation,
+    deleteQuotationsBatch,
+    deleteSalesReturn,
+    deleteSalesReturnsBatch,
+    updateReturnStatus,
     updateInlineNote,
   } = useApp();
 
@@ -60,6 +69,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterGroup, setFilterGroup] = useState('all');
   const [filterType, setFilterType] = useState('all');
+  const [filterCustomer, setFilterCustomer] = useState('all');
   const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null });
   const [sortKey, setSortKey] = useState<string>('date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -74,6 +84,13 @@ export const SalesView: React.FC<SalesViewProps> = ({
   const [selectedQuotationDetail, setSelectedQuotationDetail] = useState<Quotation | null>(null);
   const [isQuotationDetailOpen, setIsQuotationDetailOpen] = useState(false);
 
+  // Customer options for filter dropdowns
+  const customerFilterItems = useMemo(() => [
+    { value: 'all', label: 'Khách hàng: Tất cả' },
+    ...customers.map(c => ({ value: c.id, label: `${c.code} - ${c.name}` })),
+  ], [customers]);
+
+  // Tabs
   const tabs: TabItem[] = [
     { id: 'tong-quan', label: 'Tổng quan bán hàng' },
     { id: 'khach-hang', label: 'Khách hàng' },
@@ -102,9 +119,13 @@ export const SalesView: React.FC<SalesViewProps> = ({
         inv.customer_name.toLowerCase().includes(search.toLowerCase());
       const matchPayment = filterPayment === 'all' || inv.payment_status === filterPayment;
       const matchStatus = filterStatus === 'all' || inv.status === filterStatus;
-      return matchSearch && matchPayment && matchStatus;
+      const matchCustomer = filterCustomer === 'all' || inv.customer_id === filterCustomer;
+      let matchDate = true;
+      if (dateRange.from && inv.invoice_date < dateRange.from) matchDate = false;
+      if (dateRange.to && inv.invoice_date > dateRange.to) matchDate = false;
+      return matchSearch && matchPayment && matchStatus && matchCustomer && matchDate;
     });
-  }, [invoices, search, filterPayment, filterStatus]);
+  }, [invoices, search, filterPayment, filterStatus, filterCustomer, dateRange]);
 
   // Tab 2: Filtered Customers
   const filteredCustomers = useMemo(() => {
@@ -115,9 +136,12 @@ export const SalesView: React.FC<SalesViewProps> = ({
         cust.phone.includes(search);
       const matchGroup = filterGroup === 'all' || cust.group_name === filterGroup;
       const matchStatus = filterStatus === 'all' || cust.status === filterStatus;
-      return matchSearch && matchGroup && matchStatus;
+      let matchDate = true;
+      if (dateRange.from && cust.created_at && cust.created_at.slice(0, 10) < dateRange.from) matchDate = false;
+      if (dateRange.to && cust.created_at && cust.created_at.slice(0, 10) > dateRange.to) matchDate = false;
+      return matchSearch && matchGroup && matchStatus && matchDate;
     });
-  }, [customers, search, filterGroup, filterStatus]);
+  }, [customers, search, filterGroup, filterStatus, dateRange]);
 
   // Tab 3: Filtered Quotations
   const filteredQuotations = useMemo(() => {
@@ -126,21 +150,40 @@ export const SalesView: React.FC<SalesViewProps> = ({
         quo.code.toLowerCase().includes(search.toLowerCase()) ||
         quo.customer_name.toLowerCase().includes(search.toLowerCase());
       const matchStatus = filterStatus === 'all' || quo.status === filterStatus;
-      return matchSearch && matchStatus;
+      const matchCustomer = filterCustomer === 'all' || quo.customer_id === filterCustomer;
+      let matchDate = true;
+      if (dateRange.from && quo.quote_date < dateRange.from) matchDate = false;
+      if (dateRange.to && quo.quote_date > dateRange.to) matchDate = false;
+      return matchSearch && matchStatus && matchCustomer && matchDate;
+    }).sort((a, b) => {
+      if (sortKey === 'total') {
+        return sortDir === 'asc' ? a.total - b.total : b.total - a.total;
+      }
+      if (sortKey === 'expires') {
+        const ea = a.expires_at || '';
+        const eb = b.expires_at || '';
+        return sortDir === 'asc' ? ea.localeCompare(eb) : eb.localeCompare(ea);
+      }
+      return sortDir === 'asc' ? a.quote_date.localeCompare(b.quote_date) : b.quote_date.localeCompare(a.quote_date);
     });
-  }, [quotations, search, filterStatus]);
+  }, [quotations, search, filterStatus, filterCustomer, dateRange, sortKey, sortDir]);
 
   // Tab 4: Filtered Sales Returns
   const filteredReturns = useMemo(() => {
     return salesReturns.filter(ret => {
       const matchSearch =
         ret.code.toLowerCase().includes(search.toLowerCase()) ||
-        ret.customer_name.toLowerCase().includes(search.toLowerCase());
+        ret.customer_name.toLowerCase().includes(search.toLowerCase()) ||
+        (ret.invoice_code && ret.invoice_code.toLowerCase().includes(search.toLowerCase()));
       const matchType = filterType === 'all' || ret.handling === filterType;
       const matchStatus = filterStatus === 'all' || ret.status === filterStatus;
-      return matchSearch && matchType && matchStatus;
+      const matchCustomer = filterCustomer === 'all' || ret.customer_id === filterCustomer;
+      let matchDate = true;
+      if (dateRange.from && ret.return_date < dateRange.from) matchDate = false;
+      if (dateRange.to && ret.return_date > dateRange.to) matchDate = false;
+      return matchSearch && matchType && matchStatus && matchCustomer && matchDate;
     });
-  }, [salesReturns, search, filterType, filterStatus]);
+  }, [salesReturns, search, filterType, filterStatus, filterCustomer, dateRange]);
 
   // Tab 5: Filtered Customer Debt
   const filteredCustomerDebts = useMemo(() => {
@@ -156,9 +199,13 @@ export const SalesView: React.FC<SalesViewProps> = ({
         if (filterStatus === 'overdue') matchState = !!isOverdue;
         else if (filterStatus === 'unpaid') matchState = inv.payment_status === 'unpaid';
         else if (filterStatus === 'partial') matchState = inv.payment_status === 'partial';
-        return matchSearch && matchState;
+        const matchCustomer = filterCustomer === 'all' || inv.customer_id === filterCustomer;
+        let matchDate = true;
+        if (dateRange.from && inv.invoice_date < dateRange.from) matchDate = false;
+        if (dateRange.to && inv.invoice_date > dateRange.to) matchDate = false;
+        return matchSearch && matchState && matchCustomer && matchDate;
       });
-  }, [invoices, search, filterStatus]);
+  }, [invoices, search, filterStatus, filterCustomer, dateRange]);
 
   // Invoice Columns
   const invoiceColumns: Column<SalesInvoice>[] = [
@@ -390,6 +437,16 @@ export const SalesView: React.FC<SalesViewProps> = ({
           >
             <Icon name="visibility" size={18} />
           </button>
+          {onOpenEditCustomer && (
+            <button
+              type="button"
+              title="Sửa thông tin khách hàng"
+              onClick={() => onOpenEditCustomer(row)}
+              className="p-1.5 hover:text-[#6D3EEB] text-[#6B7280] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+            >
+              <Icon name="edit" size={18} />
+            </button>
+          )}
           <button
             type="button"
             title="Thu nợ khách hàng này"
@@ -520,6 +577,16 @@ export const SalesView: React.FC<SalesViewProps> = ({
           >
             <Icon name="visibility" size={18} />
           </button>
+          {onOpenEditQuotation && (
+            <button
+              type="button"
+              title="Sửa báo giá"
+              onClick={() => onOpenEditQuotation(row)}
+              className="p-1.5 hover:text-[#6D3EEB] text-[#6B7280] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+            >
+              <Icon name="edit" size={18} />
+            </button>
+          )}
           <button
             type="button"
             title="In báo giá"
@@ -612,10 +679,70 @@ export const SalesView: React.FC<SalesViewProps> = ({
       ),
     },
     {
+      key: 'note',
+      header: 'GHI CHÚ',
+      render: row => (
+        <NoteCell
+          note={row.note}
+          onSave={newNote => updateInlineNote('return', row.id, newNote)}
+        />
+      ),
+    },
+    {
       key: 'status',
       header: 'TRẠNG THÁI',
       align: 'center',
-      render: row => <StatusBadge status={row.status} />,
+      render: row => (
+        <InlineStatusSelect
+          currentStatus={row.status}
+          options={[
+            { value: 'draft', label: 'Bản nháp' },
+            { value: 'received', label: 'Đã nhận hàng' },
+            { value: 'completed', label: 'Hoàn tất' },
+            { value: 'cancelled', label: 'Đã hủy' },
+          ]}
+          onSelect={newStatus => updateReturnStatus(row.id, newStatus)}
+        />
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      render: row => (
+        <div className="flex items-center justify-end gap-2 text-[#6B7280]">
+          <button
+            type="button"
+            title="In phiếu trả hàng"
+            onClick={() => onPrintDocument('PHIẾU TRẢ HÀNG', row.code, row)}
+            className="p-1.5 hover:text-[#6D3EEB] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+          >
+            <Icon name="print" size={18} />
+          </button>
+          {onOpenEditReturn && (
+            <button
+              type="button"
+              title="Sửa phiếu trả hàng"
+              onClick={() => onOpenEditReturn(row)}
+              className="p-1.5 hover:text-[#6D3EEB] text-[#6B7280] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+            >
+              <Icon name="edit" size={18} />
+            </button>
+          )}
+          <button
+            type="button"
+            title="Xóa phiếu trả hàng"
+            onClick={() => {
+              if (confirm(`Xóa phiếu trả hàng ${row.code}?`)) {
+                deleteSalesReturn(row.id);
+              }
+            }}
+            className="p-1.5 hover:text-[#E11D48] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+          >
+            <Icon name="delete" size={18} />
+          </button>
+        </div>
+      ),
     },
   ];
 
@@ -753,6 +880,13 @@ export const SalesView: React.FC<SalesViewProps> = ({
             onSearchChange={setSearch}
             filters={[
               {
+                label: 'Khách hàng',
+                key: 'customer',
+                value: filterCustomer,
+                items: customerFilterItems,
+                onChange: setFilterCustomer,
+              },
+              {
                 label: 'Thanh toán',
                 key: 'payment',
                 value: filterPayment,
@@ -796,6 +930,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
               setSearch('');
               setFilterPayment('all');
               setFilterStatus('all');
+              setFilterCustomer('all');
               setDateRange({ from: null, to: null });
             }}
             onExportExcel={() => setIsExportOpen(true)}
@@ -860,9 +995,12 @@ export const SalesView: React.FC<SalesViewProps> = ({
                 onChange: setFilterGroup,
               },
             ]}
+            dateRange={dateRange}
+            onDateRangeChange={setDateRange}
             onClearFilters={() => {
               setSearch('');
               setFilterGroup('all');
+              setDateRange({ from: null, to: null });
             }}
             onExportExcel={() => setIsExportOpen(true)}
             secondaryAction={
@@ -886,6 +1024,12 @@ export const SalesView: React.FC<SalesViewProps> = ({
             keyExtractor={row => row.id}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
+            onDeleteSelected={ids => {
+              if (confirm(`Xóa ${ids.length} khách hàng đã chọn?`)) {
+                deleteCustomersBatch(ids);
+                setSelectedIds([]);
+              }
+            }}
             emptyMessage="Không tìm thấy khách hàng nào"
             emptyActionText="+ Thêm khách hàng"
             onEmptyAction={onOpenCreateCustomer}
@@ -902,6 +1046,13 @@ export const SalesView: React.FC<SalesViewProps> = ({
             onSearchChange={setSearch}
             filters={[
               {
+                label: 'Khách hàng',
+                key: 'customer',
+                value: filterCustomer,
+                items: customerFilterItems,
+                onChange: setFilterCustomer,
+              },
+              {
                 label: 'Trạng thái',
                 key: 'status',
                 value: filterStatus,
@@ -915,9 +1066,24 @@ export const SalesView: React.FC<SalesViewProps> = ({
                 onChange: setFilterStatus,
               },
             ]}
+            dateRange={dateRange}
+            onDateRangeChange={setDateRange}
+            sortOptions={[
+              { key: 'date', label: 'Sắp xếp: Ngày' },
+              { key: 'total', label: 'Sắp xếp: Tổng tiền' },
+              { key: 'expires', label: 'Sắp xếp: Hạn báo giá' },
+            ]}
+            currentSortKey={sortKey}
+            sortDirection={sortDir}
+            onSortChange={(k, d) => {
+              setSortKey(k);
+              setSortDir(d);
+            }}
             onClearFilters={() => {
               setSearch('');
               setFilterStatus('all');
+              setFilterCustomer('all');
+              setDateRange({ from: null, to: null });
             }}
             onExportExcel={() => setIsExportOpen(true)}
             primaryAction={{
@@ -930,6 +1096,14 @@ export const SalesView: React.FC<SalesViewProps> = ({
             columns={quotationColumns}
             data={filteredQuotations}
             keyExtractor={row => row.id}
+            selectedIds={selectedIds}
+            onSelectionChange={setSelectedIds}
+            onDeleteSelected={ids => {
+              if (confirm(`Xóa ${ids.length} báo giá đã chọn?`)) {
+                deleteQuotationsBatch(ids);
+                setSelectedIds([]);
+              }
+            }}
             emptyMessage="Chưa có báo giá nào"
             emptyActionText="+ Tạo báo giá"
             onEmptyAction={onOpenCreateQuotation}
@@ -946,6 +1120,26 @@ export const SalesView: React.FC<SalesViewProps> = ({
             onSearchChange={setSearch}
             filters={[
               {
+                label: 'Khách hàng',
+                key: 'customer',
+                value: filterCustomer,
+                items: customerFilterItems,
+                onChange: setFilterCustomer,
+              },
+              {
+                label: 'Trạng thái',
+                key: 'status',
+                value: filterStatus,
+                items: [
+                  { value: 'all', label: 'Trạng thái: Tất cả' },
+                  { value: 'draft', label: 'Bản nháp' },
+                  { value: 'received', label: 'Đã nhận hàng' },
+                  { value: 'completed', label: 'Hoàn tất' },
+                  { value: 'cancelled', label: 'Đã hủy' },
+                ],
+                onChange: setFilterStatus,
+              },
+              {
                 label: 'Kiểu',
                 key: 'handling',
                 value: filterType,
@@ -957,9 +1151,14 @@ export const SalesView: React.FC<SalesViewProps> = ({
                 onChange: setFilterType,
               },
             ]}
+            dateRange={dateRange}
+            onDateRangeChange={setDateRange}
             onClearFilters={() => {
               setSearch('');
               setFilterType('all');
+              setFilterStatus('all');
+              setFilterCustomer('all');
+              setDateRange({ from: null, to: null });
             }}
             onExportExcel={() => setIsExportOpen(true)}
             primaryAction={{
@@ -973,6 +1172,14 @@ export const SalesView: React.FC<SalesViewProps> = ({
             columns={returnColumns}
             data={filteredReturns}
             keyExtractor={row => row.id}
+            selectedIds={selectedIds}
+            onSelectionChange={setSelectedIds}
+            onDeleteSelected={ids => {
+              if (confirm(`Xóa ${ids.length} phiếu trả hàng đã chọn?`)) {
+                deleteSalesReturnsBatch(ids);
+                setSelectedIds([]);
+              }
+            }}
             emptyMessage="Chưa có phiếu trả hàng khách hàng nào"
             emptyActionText="Tạo phiếu trả hàng"
             onEmptyAction={onOpenCreateReturn}
@@ -989,6 +1196,13 @@ export const SalesView: React.FC<SalesViewProps> = ({
             onSearchChange={setSearch}
             filters={[
               {
+                label: 'Khách hàng',
+                key: 'customer',
+                value: filterCustomer,
+                items: customerFilterItems,
+                onChange: setFilterCustomer,
+              },
+              {
                 label: 'Tình trạng',
                 key: 'status',
                 value: filterStatus,
@@ -1001,9 +1215,13 @@ export const SalesView: React.FC<SalesViewProps> = ({
                 onChange: setFilterStatus,
               },
             ]}
+            dateRange={dateRange}
+            onDateRangeChange={setDateRange}
             onClearFilters={() => {
               setSearch('');
               setFilterStatus('all');
+              setFilterCustomer('all');
+              setDateRange({ from: null, to: null });
             }}
             onExportExcel={() => setIsExportOpen(true)}
             primaryAction={{
@@ -1017,6 +1235,8 @@ export const SalesView: React.FC<SalesViewProps> = ({
             columns={debtColumns}
             data={filteredCustomerDebts}
             keyExtractor={row => row.id}
+            selectedIds={selectedIds}
+            onSelectionChange={setSelectedIds}
             emptyMessage="Không có công nợ phải thu"
           />
         </div>
@@ -1066,7 +1286,11 @@ export const SalesView: React.FC<SalesViewProps> = ({
         }}
         onEdit={() => {
           setIsQuotationDetailOpen(false);
-          onOpenCreateQuotation();
+          if (selectedQuotationDetail && onOpenEditQuotation) {
+            onOpenEditQuotation(selectedQuotationDetail);
+          } else {
+            onOpenCreateQuotation();
+          }
         }}
       />
     </div>

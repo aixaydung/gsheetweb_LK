@@ -1,22 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Modal } from '../ui/Modal';
 import { EntityCombobox, ComboboxItem } from '../ui/EntityCombobox';
 import { LineItemsEditor } from '../ui/LineItemsEditor';
-import { DocumentLineItem, ReturnHandling, MoneyMethod } from '../../types';
+import { DocumentLineItem, ReturnHandling, MoneyMethod, PurchaseReturn } from '../../types';
 import { formatCurrency } from '../../lib/format';
 import { Icon } from '../ui/Icon';
 
 interface PurchaseReturnFormModalProps {
   isOpen: boolean;
   onClose: () => void;
+  returnToEdit?: PurchaseReturn | null;
 }
 
 export const PurchaseReturnFormModal: React.FC<PurchaseReturnFormModalProps> = ({
   isOpen,
   onClose,
+  returnToEdit,
 }) => {
-  const { suppliers, purchaseOrders, products, warehouses, createPurchaseReturn } = useApp();
+  const { suppliers, purchaseOrders, products, warehouses, createPurchaseReturn, updatePurchaseReturn } = useApp();
 
   const [selectedPoId, setSelectedPoId] = useState<string>('po-01');
   const [supplierId, setSupplierId] = useState<string>('sup-01');
@@ -42,6 +44,34 @@ export const PurchaseReturnFormModal: React.FC<PurchaseReturnFormModalProps> = (
       line_total: 120000,
     },
   ]);
+
+  useEffect(() => {
+    if (returnToEdit && isOpen) {
+      setSelectedPoId(returnToEdit.po_id || '');
+      setSupplierId(returnToEdit.supplier_id);
+      setSupplierName(returnToEdit.supplier_name);
+      setReturnDate(new Date(returnToEdit.return_date).toISOString().slice(0, 16));
+      setWarehouseId(returnToEdit.warehouse_id);
+      setHandling(returnToEdit.handling);
+      setMoneyMethod(returnToEdit.money_method || 'offset');
+      setReason(returnToEdit.reason || '');
+      setNote(returnToEdit.note || '');
+      if (returnToEdit.items && returnToEdit.items.length > 0) {
+        setItems(returnToEdit.items);
+      }
+    } else if (!returnToEdit && isOpen) {
+      setSelectedPoId('');
+      setSupplierId('');
+      setSupplierName('');
+      setReturnDate(new Date().toISOString().slice(0, 16));
+      setWarehouseId(warehouses[0]?.id || 'wh-01');
+      setHandling('debt_offset');
+      setMoneyMethod('offset');
+      setReason('');
+      setNote('');
+      setItems([]);
+    }
+  }, [returnToEdit, isOpen, warehouses]);
 
   const totalValue = items.reduce((sum, item) => sum + item.line_total, 0);
 
@@ -90,21 +120,40 @@ export const PurchaseReturnFormModal: React.FC<PurchaseReturnFormModalProps> = (
 
     const linkedPo = purchaseOrders.find(p => p.id === selectedPoId);
 
-    createPurchaseReturn(
-      {
-        supplier_id: supplierId,
-        supplier_name: supplierName,
-        po_id: selectedPoId || undefined,
-        po_code: linkedPo?.code,
-        warehouse_id: warehouseId,
-        return_date: new Date(returnDate).toISOString(),
-        handling,
-        money_method: moneyMethod,
-        reason,
-        note,
-      },
-      items
-    );
+    if (returnToEdit) {
+      updatePurchaseReturn(
+        returnToEdit.id,
+        {
+          supplier_id: supplierId,
+          supplier_name: supplierName,
+          po_id: selectedPoId || undefined,
+          po_code: linkedPo?.code || returnToEdit.po_code,
+          warehouse_id: warehouseId,
+          return_date: new Date(returnDate).toISOString(),
+          handling,
+          money_method: moneyMethod,
+          reason,
+          note,
+        },
+        items
+      );
+    } else {
+      createPurchaseReturn(
+        {
+          supplier_id: supplierId,
+          supplier_name: supplierName,
+          po_id: selectedPoId || undefined,
+          po_code: linkedPo?.code,
+          warehouse_id: warehouseId,
+          return_date: new Date(returnDate).toISOString(),
+          handling,
+          money_method: moneyMethod,
+          reason,
+          note,
+        },
+        items
+      );
+    }
 
     onClose();
   };
@@ -113,7 +162,7 @@ export const PurchaseReturnFormModal: React.FC<PurchaseReturnFormModalProps> = (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Tạo phiếu trả hàng nhà cung cấp"
+      title={returnToEdit ? `Sửa phiếu trả hàng NCC ${returnToEdit.code}` : 'Tạo phiếu trả hàng nhà cung cấp'}
       subtitle="Xuất kho trả lại nhà cung cấp, giảm công nợ hoặc nhận hoàn tiền"
       icon="assignment_return"
       width="lg"

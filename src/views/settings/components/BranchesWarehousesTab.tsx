@@ -1,13 +1,19 @@
 import React, { useState } from 'react';
 import { useApp } from '../../../context/AppContext';
 import { Icon } from '../../../components/ui/Icon';
+import { Warehouse } from '../../../types';
 
 export const BranchesWarehousesTab: React.FC = () => {
-  const { warehouses, createWarehouse, updateWarehouse } = useApp();
+  const { warehouses, createWarehouse, updateWarehouse, deleteWarehouse } = useApp();
   const [isAdding, setIsAdding] = useState(false);
+  const [editingWarehouse, setEditingWarehouse] = useState<Warehouse | null>(null);
   const [newCode, setNewCode] = useState('');
   const [newName, setNewName] = useState('');
   const [newAddress, setNewAddress] = useState('');
+
+  const [editCode, setEditCode] = useState('');
+  const [editName, setEditName] = useState('');
+  const [editAddress, setEditAddress] = useState('');
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,10 +33,41 @@ export const BranchesWarehousesTab: React.FC = () => {
     setIsAdding(false);
   };
 
+  const startEdit = (w: Warehouse) => {
+    setEditingWarehouse(w);
+    setEditCode(w.code);
+    setEditName(w.name);
+    setEditAddress(w.address || '');
+    setIsAdding(false);
+  };
+
+  const handleUpdate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingWarehouse || !editName.trim()) return;
+
+    updateWarehouse(editingWarehouse.id, {
+      code: editCode.trim() || editingWarehouse.code,
+      name: editName.trim(),
+      address: editAddress.trim(),
+    });
+
+    setEditingWarehouse(null);
+  };
+
   const handleSetDefault = (id: string) => {
     warehouses.forEach(w => {
       updateWarehouse(w.id, { is_default: w.id === id });
     });
+  };
+
+  const handleDelete = (w: Warehouse) => {
+    if (w.is_default) {
+      alert('Không thể xóa kho mặc định của hệ thống! Vui lòng đặt kho khác làm mặc định trước.');
+      return;
+    }
+    if (confirm(`Bạn có chắc chắn muốn xóa kho ${w.code} - ${w.name}?`)) {
+      deleteWarehouse(w.id);
+    }
   };
 
   return (
@@ -44,7 +81,10 @@ export const BranchesWarehousesTab: React.FC = () => {
         </div>
         <button
           type="button"
-          onClick={() => setIsAdding(true)}
+          onClick={() => {
+            setIsAdding(true);
+            setEditingWarehouse(null);
+          }}
           className="w-full sm:w-auto h-10 px-5 bg-[#6D3EEB] hover:bg-[#5B2BD6] text-white text-[14px] sm:text-[14.5px] font-semibold rounded-[12px] shadow-sm flex items-center justify-center gap-2 transition-all shrink-0 cursor-pointer"
         >
           <Icon name="add" size={18} />
@@ -52,6 +92,7 @@ export const BranchesWarehousesTab: React.FC = () => {
         </button>
       </div>
 
+      {/* Form Tạo kho mới */}
       {isAdding && (
         <form
           onSubmit={handleCreate}
@@ -64,7 +105,7 @@ export const BranchesWarehousesTab: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsAdding(false)}
-              className="text-gray-500 hover:text-gray-700"
+              className="text-gray-500 hover:text-gray-700 cursor-pointer"
             >
               <Icon name="close" size={20} />
             </button>
@@ -108,15 +149,83 @@ export const BranchesWarehousesTab: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsAdding(false)}
-              className="px-4 py-2 border border-gray-300 rounded-[10px] text-[14px] font-medium text-gray-700 bg-white"
+              className="px-4 py-2 border border-gray-300 rounded-[10px] text-[14px] font-medium text-gray-700 bg-white cursor-pointer hover:bg-gray-50"
             >
               Hủy
             </button>
             <button
               type="submit"
-              className="px-5 py-2 bg-[#6D3EEB] text-white rounded-[10px] text-[14px] font-semibold"
+              className="px-5 py-2 bg-[#6D3EEB] text-white rounded-[10px] text-[14px] font-semibold cursor-pointer hover:bg-[#5B2BD6]"
             >
               Lưu kho
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Form Sửa kho */}
+      {editingWarehouse && (
+        <form
+          onSubmit={handleUpdate}
+          className="bg-transparent border border-blue-300 dark:border-blue-800/60 rounded-[16px] p-5 space-y-4 animate-in fade-in duration-200"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[15px] font-bold text-[#2563EB] flex items-center gap-2">
+              <Icon name="edit" size={20} /> Cập nhật thông tin kho hàng: {editingWarehouse.name}
+            </span>
+            <button
+              type="button"
+              onClick={() => setEditingWarehouse(null)}
+              className="text-gray-500 hover:text-gray-700 cursor-pointer"
+            >
+              <Icon name="close" size={20} />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-[14px] font-medium text-[#374151] mb-1">Mã kho</label>
+              <input
+                type="text"
+                value={editCode}
+                onChange={e => setEditCode(e.target.value)}
+                className="w-full h-10 px-3 border border-gray-300 rounded-[10px] text-[14px] uppercase bg-white focus:outline-none focus:border-[#2563EB]"
+              />
+            </div>
+            <div>
+              <label className="block text-[14px] font-medium text-[#374151] mb-1">Tên kho *</label>
+              <input
+                type="text"
+                required
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+                className="w-full h-10 px-3 border border-gray-300 rounded-[10px] text-[14px] bg-white focus:outline-none focus:border-[#2563EB]"
+              />
+            </div>
+            <div>
+              <label className="block text-[14px] font-medium text-[#374151] mb-1">Địa chỉ kho</label>
+              <input
+                type="text"
+                value={editAddress}
+                onChange={e => setEditAddress(e.target.value)}
+                className="w-full h-10 px-3 border border-gray-300 rounded-[10px] text-[14px] bg-white focus:outline-none focus:border-[#2563EB]"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2.5 pt-1">
+            <button
+              type="button"
+              onClick={() => setEditingWarehouse(null)}
+              className="px-4 py-2 border border-gray-300 rounded-[10px] text-[14px] font-medium text-gray-700 bg-white cursor-pointer hover:bg-gray-50"
+            >
+              Hủy
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 bg-[#2563EB] text-white rounded-[10px] text-[14px] font-semibold cursor-pointer hover:bg-[#1D4ED8]"
+            >
+              Cập nhật
             </button>
           </div>
         </form>
@@ -157,15 +266,35 @@ export const BranchesWarehousesTab: React.FC = () => {
                 </div>
               </div>
 
-              {!w.is_default && (
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => handleSetDefault(w.id)}
-                  className="text-[13.5px] font-semibold text-[#6D3EEB] hover:underline"
+                  title="Sửa thông tin kho"
+                  onClick={() => startEdit(w)}
+                  className="p-1.5 hover:text-[#6D3EEB] text-[#6B7280] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
                 >
-                  Đặt làm mặc định
+                  <Icon name="edit" size={18} />
                 </button>
-              )}
+                {!w.is_default && (
+                  <button
+                    type="button"
+                    title="Xóa kho"
+                    onClick={() => handleDelete(w)}
+                    className="p-1.5 hover:text-[#E11D48] text-[#6B7280] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+                  >
+                    <Icon name="delete" size={18} />
+                  </button>
+                )}
+                {!w.is_default && (
+                  <button
+                    type="button"
+                    onClick={() => handleSetDefault(w.id)}
+                    className="text-[13px] font-semibold text-[#6D3EEB] hover:underline cursor-pointer ml-1"
+                  >
+                    Đặt mặc định
+                  </button>
+                )}
+              </div>
             </div>
 
             <p className="text-[14px] text-[#4B5563] mt-3 flex items-start gap-2">

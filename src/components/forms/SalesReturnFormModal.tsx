@@ -3,20 +3,22 @@ import { useApp } from '../../context/AppContext';
 import { Modal } from '../ui/Modal';
 import { EntityCombobox, ComboboxItem } from '../ui/EntityCombobox';
 import { LineItemsEditor } from '../ui/LineItemsEditor';
-import { DocumentLineItem, ReturnHandling, MoneyMethod } from '../../types';
+import { DocumentLineItem, ReturnHandling, MoneyMethod, SalesReturn } from '../../types';
 import { formatCurrency } from '../../lib/format';
 import { Icon } from '../ui/Icon';
 
 interface SalesReturnFormModalProps {
   isOpen: boolean;
   onClose: () => void;
+  returnToEdit?: SalesReturn | null;
 }
 
 export const SalesReturnFormModal: React.FC<SalesReturnFormModalProps> = ({
   isOpen,
   onClose,
+  returnToEdit,
 }) => {
-  const { customers, invoices, products, warehouses, createSalesReturn } = useApp();
+  const { customers, invoices, products, warehouses, createSalesReturn, updateSalesReturn } = useApp();
 
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string>('');
   const [customerId, setCustomerId] = useState<string>('');
@@ -28,6 +30,38 @@ export const SalesReturnFormModal: React.FC<SalesReturnFormModalProps> = ({
   const [reason, setReason] = useState<string>('');
   const [note, setNote] = useState<string>('');
   const [items, setItems] = useState<DocumentLineItem[]>([]);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      if (returnToEdit) {
+        setSelectedInvoiceId(returnToEdit.invoice_id || '');
+        setCustomerId(returnToEdit.customer_id || '');
+        setCustomerName(returnToEdit.customer_name || '');
+        setReturnDate(
+          returnToEdit.return_date
+            ? new Date(returnToEdit.return_date).toISOString().slice(0, 16)
+            : new Date().toISOString().slice(0, 16)
+        );
+        setWarehouseId(returnToEdit.warehouse_id || warehouses[0]?.id || 'wh-01');
+        setHandling(returnToEdit.handling || 'debt_offset');
+        setMoneyMethod(returnToEdit.money_method || 'offset');
+        setReason(returnToEdit.reason || '');
+        setNote(returnToEdit.note || '');
+        setItems(returnToEdit.items || []);
+      } else {
+        setSelectedInvoiceId('');
+        setCustomerId('');
+        setCustomerName('');
+        setReturnDate(new Date().toISOString().slice(0, 16));
+        setWarehouseId(warehouses[0]?.id || 'wh-01');
+        setHandling('debt_offset');
+        setMoneyMethod('offset');
+        setReason('');
+        setNote('');
+        setItems([]);
+      }
+    }
+  }, [isOpen, returnToEdit]);
 
   const totalValue = items.reduce((sum, item) => sum + item.line_total, 0);
 
@@ -94,21 +128,40 @@ export const SalesReturnFormModal: React.FC<SalesReturnFormModalProps> = ({
 
     const linkedInv = invoices.find(i => i.id === selectedInvoiceId);
 
-    createSalesReturn(
-      {
-        customer_id: customerId || undefined,
-        customer_name: customerName,
-        invoice_id: selectedInvoiceId || undefined,
-        invoice_code: linkedInv?.code,
-        warehouse_id: warehouseId,
-        return_date: new Date(returnDate).toISOString(),
-        handling,
-        money_method: moneyMethod,
-        reason,
-        note,
-      },
-      items
-    );
+    if (returnToEdit) {
+      updateSalesReturn(
+        returnToEdit.id,
+        {
+          customer_id: customerId || undefined,
+          customer_name: customerName,
+          invoice_id: selectedInvoiceId || undefined,
+          invoice_code: linkedInv?.code || returnToEdit.invoice_code,
+          warehouse_id: warehouseId,
+          return_date: new Date(returnDate).toISOString(),
+          handling,
+          money_method: moneyMethod,
+          reason,
+          note,
+        },
+        items
+      );
+    } else {
+      createSalesReturn(
+        {
+          customer_id: customerId || undefined,
+          customer_name: customerName,
+          invoice_id: selectedInvoiceId || undefined,
+          invoice_code: linkedInv?.code,
+          warehouse_id: warehouseId,
+          return_date: new Date(returnDate).toISOString(),
+          handling,
+          money_method: moneyMethod,
+          reason,
+          note,
+        },
+        items
+      );
+    }
 
     onClose();
   };
@@ -117,8 +170,12 @@ export const SalesReturnFormModal: React.FC<SalesReturnFormModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Tạo phiếu trả hàng khách hàng"
-      subtitle="Nhập lại hàng vào kho, giảm công nợ hoặc hoàn tiền cho khách"
+      title={returnToEdit ? `Chỉnh sửa phiếu trả hàng ${returnToEdit.code}` : 'Tạo phiếu trả hàng khách hàng'}
+      subtitle={
+        returnToEdit
+          ? 'Cập nhật lại số lượng trả, kho nhận và cách xử lý tiền'
+          : 'Nhập lại hàng vào kho, giảm công nợ hoặc hoàn tiền cho khách'
+      }
       icon="assignment_return"
       width="lg"
       footer={

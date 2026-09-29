@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { Modal } from '../ui/Modal';
 import { EntityCombobox, ComboboxItem } from '../ui/EntityCombobox';
 import { LineItemsEditor } from '../ui/LineItemsEditor';
-import { DocumentLineItem, DiscountType } from '../../types';
+import { DocumentLineItem, DiscountType, Quotation } from '../../types';
 import { formatCurrency } from '../../lib/format';
 import { Icon } from '../ui/Icon';
 
@@ -11,14 +11,16 @@ interface QuotationFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSaveAndPrint?: (code: string) => void;
+  quotationToEdit?: Quotation | null;
 }
 
 export const QuotationFormModal: React.FC<QuotationFormModalProps> = ({
   isOpen,
   onClose,
   onSaveAndPrint,
+  quotationToEdit,
 }) => {
-  const { customers, products, createQuotation } = useApp();
+  const { customers, products, createQuotation, updateQuotation } = useApp();
 
   const [customerId, setCustomerId] = useState<string>('');
   const [customerName, setCustomerName] = useState<string>('Khách hàng');
@@ -36,6 +38,40 @@ export const QuotationFormModal: React.FC<QuotationFormModalProps> = ({
   const [shippingFee, setShippingFee] = useState<number>(0);
   const [note, setNote] = useState<string>('');
   const [showAdjustmentsMobile, setShowAdjustmentsMobile] = useState<boolean>(false);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      if (quotationToEdit) {
+        setCustomerId(quotationToEdit.customer_id || '');
+        setCustomerName(quotationToEdit.customer_name || 'Khách hàng');
+        setCustomerPhone(quotationToEdit.customer_phone || '');
+        setQuoteDate(
+          quotationToEdit.quote_date
+            ? new Date(quotationToEdit.quote_date).toISOString().slice(0, 16)
+            : new Date().toISOString().slice(0, 16)
+        );
+        setExpiresAt(quotationToEdit.expires_at || defaultExpire.toISOString().split('T')[0]);
+        setItems(quotationToEdit.items || []);
+        setDiscountType(quotationToEdit.discount_type || 'amount');
+        setDiscountValue(quotationToEdit.discount_value || 0);
+        setVatRate(quotationToEdit.vat_rate || 0);
+        setShippingFee(quotationToEdit.shipping_fee || 0);
+        setNote(quotationToEdit.note || '');
+      } else {
+        setCustomerId('');
+        setCustomerName('Khách hàng');
+        setCustomerPhone('');
+        setQuoteDate(new Date().toISOString().slice(0, 16));
+        setExpiresAt(defaultExpire.toISOString().split('T')[0]);
+        setItems([]);
+        setDiscountType('amount');
+        setDiscountValue(0);
+        setVatRate(0);
+        setShippingFee(0);
+        setNote('');
+      }
+    }
+  }, [isOpen, quotationToEdit]);
 
   const subtotal = items.reduce((sum, item) => sum + item.line_total, 0);
   const discountAmount =
@@ -108,25 +144,48 @@ export const QuotationFormModal: React.FC<QuotationFormModalProps> = ({
       return;
     }
 
-    const created = createQuotation(
-      {
-        customer_id: customerId || undefined,
-        customer_name: customerName,
-        customer_phone: customerPhone,
-        quote_date: new Date(quoteDate).toISOString(),
-        expires_at: expiresAt || undefined,
-        discount_type: discountType,
-        discount_value: discountValue,
-        vat_rate: vatRate,
-        shipping_fee: shippingFee,
-        note,
-      },
-      items
-    );
+    if (quotationToEdit) {
+      updateQuotation(
+        quotationToEdit.id,
+        {
+          customer_id: customerId || undefined,
+          customer_name: customerName,
+          customer_phone: customerPhone,
+          quote_date: new Date(quoteDate).toISOString(),
+          expires_at: expiresAt || undefined,
+          discount_type: discountType,
+          discount_value: discountValue,
+          vat_rate: vatRate,
+          shipping_fee: shippingFee,
+          note,
+        },
+        items
+      );
+      onClose();
+      if (shouldPrint && onSaveAndPrint) {
+        onSaveAndPrint(quotationToEdit.code);
+      }
+    } else {
+      const created = createQuotation(
+        {
+          customer_id: customerId || undefined,
+          customer_name: customerName,
+          customer_phone: customerPhone,
+          quote_date: new Date(quoteDate).toISOString(),
+          expires_at: expiresAt || undefined,
+          discount_type: discountType,
+          discount_value: discountValue,
+          vat_rate: vatRate,
+          shipping_fee: shippingFee,
+          note,
+        },
+        items
+      );
 
-    onClose();
-    if (shouldPrint && onSaveAndPrint) {
-      onSaveAndPrint(created.code);
+      onClose();
+      if (shouldPrint && onSaveAndPrint) {
+        onSaveAndPrint(created.code);
+      }
     }
   };
 
@@ -134,8 +193,12 @@ export const QuotationFormModal: React.FC<QuotationFormModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Tạo báo giá khách hàng"
-      subtitle="Báo giá mặt hàng, hạn hiệu lực và điều khoản giá bán"
+      title={quotationToEdit ? `Chỉnh sửa báo giá ${quotationToEdit.code}` : 'Tạo báo giá khách hàng'}
+      subtitle={
+        quotationToEdit
+          ? 'Cập nhật lại thông tin, số lượng sản phẩm và chính sách giá'
+          : 'Báo giá mặt hàng, hạn hiệu lực và điều khoản giá bán'
+      }
       icon="request_quote"
       width="lg"
       footer={

@@ -4,7 +4,7 @@ import { Modal } from '../ui/Modal';
 import { EntityCombobox, ComboboxItem } from '../ui/EntityCombobox';
 import { LineItemsEditor } from '../ui/LineItemsEditor';
 import { TotalsPanel } from '../ui/TotalsPanel';
-import { DocumentLineItem, DiscountType, PurchaseStatus } from '../../types';
+import { DocumentLineItem, DiscountType, PurchaseStatus, PurchaseOrder } from '../../types';
 import { formatCurrency } from '../../lib/format';
 import { Icon } from '../ui/Icon';
 
@@ -12,14 +12,16 @@ interface PurchaseOrderFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSaveAndPrint?: (code: string) => void;
+  purchaseOrderToEdit?: PurchaseOrder | null;
 }
 
 export const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
   isOpen,
   onClose,
   onSaveAndPrint,
+  purchaseOrderToEdit,
 }) => {
-  const { suppliers, products, warehouses, createPurchaseOrder, createSupplier } = useApp();
+  const { suppliers, products, warehouses, createPurchaseOrder, updatePurchaseOrder, createSupplier } = useApp();
 
   const [supplierId, setSupplierId] = useState<string>('');
   const [supplierName, setSupplierName] = useState<string>('');
@@ -36,6 +38,46 @@ export const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
   const [shippingFee, setShippingFee] = useState<number>(0);
   const [paidAmount, setPaidAmount] = useState<number>(0);
   const [note, setNote] = useState<string>('');
+
+  React.useEffect(() => {
+    if (isOpen) {
+      if (purchaseOrderToEdit) {
+        setSupplierId(purchaseOrderToEdit.supplier_id || '');
+        setSupplierName(purchaseOrderToEdit.supplier_name || '');
+        setOrderDate(
+          purchaseOrderToEdit.order_date
+            ? new Date(purchaseOrderToEdit.order_date).toISOString().slice(0, 16)
+            : new Date().toISOString().slice(0, 16)
+        );
+        setExpectedDate(purchaseOrderToEdit.expected_date || '');
+        setDueDate(purchaseOrderToEdit.due_date || '');
+        setWarehouseId(purchaseOrderToEdit.warehouse_id || warehouses[0]?.id || 'wh-01');
+        setStatus(purchaseOrderToEdit.status || 'received');
+        setItems(purchaseOrderToEdit.items || []);
+        setDiscountType(purchaseOrderToEdit.discount_type || 'amount');
+        setDiscountValue(purchaseOrderToEdit.discount_value || 0);
+        setVatRate(purchaseOrderToEdit.vat_rate || 0);
+        setShippingFee(purchaseOrderToEdit.shipping_fee || 0);
+        setPaidAmount(purchaseOrderToEdit.paid_amount || 0);
+        setNote(purchaseOrderToEdit.note || '');
+      } else {
+        setSupplierId('');
+        setSupplierName('');
+        setOrderDate(new Date().toISOString().slice(0, 16));
+        setExpectedDate('');
+        setDueDate('');
+        setWarehouseId(warehouses[0]?.id || 'wh-01');
+        setStatus('received');
+        setItems([]);
+        setDiscountType('amount');
+        setDiscountValue(0);
+        setVatRate(0);
+        setShippingFee(0);
+        setPaidAmount(0);
+        setNote('');
+      }
+    }
+  }, [isOpen, purchaseOrderToEdit]);
 
   // Calculations
   const subtotal = items.reduce((sum, item) => sum + item.line_total, 0);
@@ -117,28 +159,54 @@ export const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
       return;
     }
 
-    const created = createPurchaseOrder(
-      {
-        supplier_id: supplierId || 'sup-01',
-        supplier_name: supplierName || 'Nhà cung cấp',
-        warehouse_id: warehouseId,
-        order_date: new Date(orderDate).toISOString(),
-        expected_date: expectedDate || undefined,
-        due_date: dueDate || undefined,
-        status,
-        discount_type: discountType,
-        discount_value: discountValue,
-        vat_rate: vatRate,
-        shipping_fee: shippingFee,
-        paid_amount: paidAmount,
-        note,
-      },
-      items
-    );
+    if (purchaseOrderToEdit) {
+      updatePurchaseOrder(
+        purchaseOrderToEdit.id,
+        {
+          supplier_id: supplierId || 'sup-01',
+          supplier_name: supplierName || 'Nhà cung cấp',
+          warehouse_id: warehouseId,
+          order_date: new Date(orderDate).toISOString(),
+          expected_date: expectedDate || undefined,
+          due_date: dueDate || undefined,
+          status,
+          discount_type: discountType,
+          discount_value: discountValue,
+          vat_rate: vatRate,
+          shipping_fee: shippingFee,
+          paid_amount: paidAmount,
+          note,
+        },
+        items
+      );
+      onClose();
+      if (shouldPrint && onSaveAndPrint) {
+        onSaveAndPrint(purchaseOrderToEdit.code);
+      }
+    } else {
+      const created = createPurchaseOrder(
+        {
+          supplier_id: supplierId || 'sup-01',
+          supplier_name: supplierName || 'Nhà cung cấp',
+          warehouse_id: warehouseId,
+          order_date: new Date(orderDate).toISOString(),
+          expected_date: expectedDate || undefined,
+          due_date: dueDate || undefined,
+          status,
+          discount_type: discountType,
+          discount_value: discountValue,
+          vat_rate: vatRate,
+          shipping_fee: shippingFee,
+          paid_amount: paidAmount,
+          note,
+        },
+        items
+      );
 
-    onClose();
-    if (shouldPrint && onSaveAndPrint) {
-      onSaveAndPrint(created.code);
+      onClose();
+      if (shouldPrint && onSaveAndPrint) {
+        onSaveAndPrint(created.code);
+      }
     }
   };
 
@@ -146,8 +214,12 @@ export const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Tạo phiếu mua hàng"
-      subtitle="Chọn NCC, sản phẩm, chiết khấu và công nợ phải trả rõ ràng"
+      title={purchaseOrderToEdit ? `Chỉnh sửa phiếu mua hàng ${purchaseOrderToEdit.code}` : 'Tạo phiếu mua hàng'}
+      subtitle={
+        purchaseOrderToEdit
+          ? 'Cập nhật lại NCC, số lượng mặt hàng, chiết khấu và công nợ'
+          : 'Chọn NCC, sản phẩm, chiết khấu và công nợ phải trả rõ ràng'
+      }
       icon="shopping_cart"
       width="lg"
       footer={

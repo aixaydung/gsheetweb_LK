@@ -17,8 +17,11 @@ interface PurchaseViewProps {
   currentTab: string;
   onTabChange: (tab: string) => void;
   onOpenCreatePO: () => void;
+  onOpenEditPO?: (po: PurchaseOrder) => void;
   onOpenCreateReturn: () => void;
+  onOpenEditReturn?: (purchaseReturn: PurchaseReturn) => void;
   onOpenCreateSupplier: () => void;
+  onOpenEditSupplier?: (supplier: Supplier) => void;
   onOpenImportSupplierDialog?: () => void;
   onOpenPaymentAllocation: (supplierId?: string, poId?: string) => void;
   onPrintDocument: (type: string, code: string, doc: any) => void;
@@ -28,8 +31,11 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
   currentTab,
   onTabChange,
   onOpenCreatePO,
+  onOpenEditPO,
   onOpenCreateReturn,
+  onOpenEditReturn,
   onOpenCreateSupplier,
+  onOpenEditSupplier,
   onOpenImportSupplierDialog,
   onOpenPaymentAllocation,
   onPrintDocument,
@@ -39,7 +45,13 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
     suppliers,
     purchaseReturns,
     updatePurchaseOrderStatus,
+    deletePurchaseOrder,
+    deletePurchaseOrdersBatch,
     deleteSupplier,
+    deleteSuppliersBatch,
+    deletePurchaseReturn,
+    deletePurchaseReturnsBatch,
+    updateReturnStatus,
     updateInlineNote,
   } = useApp();
 
@@ -48,7 +60,10 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterGroup, setFilterGroup] = useState('all');
   const [filterType, setFilterType] = useState('all');
+  const [filterSupplier, setFilterSupplier] = useState('all');
   const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null });
+  const [sortKey, setSortKey] = useState<string>('date');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const tabs: TabItem[] = [
@@ -59,6 +74,12 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
     { id: 'cong-no-ncc', label: 'Công nợ NCC' },
   ];
 
+  // Supplier filter options
+  const supplierFilterItems = useMemo(() => [
+    { value: 'all', label: 'Nhà cung cấp: Tất cả' },
+    ...suppliers.map(s => ({ value: s.id, label: `${s.code} - ${s.name}` })),
+  ], [suppliers]);
+
   // Tab 1 KPIs
   const poKpis = useMemo(() => {
     const valid = purchaseOrders.filter(p => p.status !== 'cancelled');
@@ -68,6 +89,16 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
     const supplierCount = suppliers.length;
     return { totalPurchases, count, debt, supplierCount };
   }, [purchaseOrders, suppliers]);
+
+  // Tab 1 Reconciliation: Mua vào - Trả lại NCC = Mua thuần
+  const summaryReconciliation = useMemo(() => {
+    const validPOs = purchaseOrders.filter(p => p.status !== 'cancelled');
+    const grossPurchase = validPOs.reduce((sum, p) => sum + p.total, 0);
+    const validReturns = purchaseReturns.filter(r => r.status !== 'cancelled');
+    const purchaseReturnTotal = validReturns.reduce((sum, r) => sum + r.total_value, 0);
+    const netPurchase = grossPurchase - purchaseReturnTotal;
+    return { grossPurchase, purchaseReturnTotal, netPurchase };
+  }, [purchaseOrders, purchaseReturns]);
 
   // Tab 2: Orders waiting delivery KPIs
   const pendingKpis = useMemo(() => {
@@ -87,18 +118,31 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
         po.supplier_name.toLowerCase().includes(search.toLowerCase());
       const matchPayment = filterPayment === 'all' || po.payment_status === filterPayment;
       const matchStatus = filterStatus === 'all' || po.status === filterStatus;
-      return matchSearch && matchPayment && matchStatus;
+      const matchSupplier = filterSupplier === 'all' || po.supplier_id === filterSupplier;
+      let matchDate = true;
+      if (dateRange.from && po.order_date < dateRange.from) matchDate = false;
+      if (dateRange.to && po.order_date > dateRange.to) matchDate = false;
+      return matchSearch && matchPayment && matchStatus && matchSupplier && matchDate;
+    }).sort((a, b) => {
+      if (sortKey === 'total') return sortDir === 'asc' ? a.total - b.total : b.total - a.total;
+      if (sortKey === 'debt') return sortDir === 'asc' ? a.debt_amount - b.debt_amount : b.debt_amount - a.debt_amount;
+      return sortDir === 'asc' ? a.order_date.localeCompare(b.order_date) : b.order_date.localeCompare(a.order_date);
     });
-  }, [purchaseOrders, search, filterPayment, filterStatus]);
+  }, [purchaseOrders, search, filterPayment, filterStatus, filterSupplier, dateRange, sortKey, sortDir]);
 
   const filteredPendingPOs = useMemo(() => {
-    return purchaseOrders.filter(
-      p =>
-        p.status === 'ordered' &&
-        (p.code.toLowerCase().includes(search.toLowerCase()) ||
-          p.supplier_name.toLowerCase().includes(search.toLowerCase()))
-    );
-  }, [purchaseOrders, search]);
+    return purchaseOrders.filter(p => {
+      const matchStatus = p.status === 'ordered';
+      const matchSearch =
+        p.code.toLowerCase().includes(search.toLowerCase()) ||
+        p.supplier_name.toLowerCase().includes(search.toLowerCase());
+      const matchSupplier = filterSupplier === 'all' || p.supplier_id === filterSupplier;
+      let matchDate = true;
+      if (dateRange.from && p.order_date < dateRange.from) matchDate = false;
+      if (dateRange.to && p.order_date > dateRange.to) matchDate = false;
+      return matchStatus && matchSearch && matchSupplier && matchDate;
+    });
+  }, [purchaseOrders, search, filterSupplier, dateRange]);
 
   const filteredSuppliers = useMemo(() => {
     return suppliers.filter(s => {
@@ -107,29 +151,47 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
         s.code.toLowerCase().includes(search.toLowerCase()) ||
         s.phone.includes(search);
       const matchGroup = filterGroup === 'all' || s.group_name === filterGroup;
-      return matchSearch && matchGroup;
+      let matchDate = true;
+      if (dateRange.from && s.created_at && s.created_at.slice(0, 10) < dateRange.from) matchDate = false;
+      if (dateRange.to && s.created_at && s.created_at.slice(0, 10) > dateRange.to) matchDate = false;
+      return matchSearch && matchGroup && matchDate;
+    }).sort((a, b) => {
+      if (sortKey === 'total') return sortDir === 'asc' ? a.total_purchase - b.total_purchase : b.total_purchase - a.total_purchase;
+      if (sortKey === 'debt') return sortDir === 'asc' ? a.debt_amount - b.debt_amount : b.debt_amount - a.debt_amount;
+      return sortDir === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
     });
-  }, [suppliers, search, filterGroup]);
+  }, [suppliers, search, filterGroup, dateRange, sortKey, sortDir]);
 
   const filteredReturns = useMemo(() => {
     return purchaseReturns.filter(ret => {
       const matchSearch =
         ret.code.toLowerCase().includes(search.toLowerCase()) ||
-        ret.supplier_name.toLowerCase().includes(search.toLowerCase());
+        ret.supplier_name.toLowerCase().includes(search.toLowerCase()) ||
+        (ret.po_code && ret.po_code.toLowerCase().includes(search.toLowerCase()));
       const matchType = filterType === 'all' || ret.handling === filterType;
-      return matchSearch && matchType;
+      const matchStatus = filterStatus === 'all' || ret.status === filterStatus;
+      const matchSupplier = filterSupplier === 'all' || ret.supplier_id === filterSupplier;
+      let matchDate = true;
+      if (dateRange.from && ret.return_date < dateRange.from) matchDate = false;
+      if (dateRange.to && ret.return_date > dateRange.to) matchDate = false;
+      return matchSearch && matchType && matchStatus && matchSupplier && matchDate;
     });
-  }, [purchaseReturns, search, filterType]);
+  }, [purchaseReturns, search, filterType, filterStatus, filterSupplier, dateRange]);
 
   const filteredSupplierDebts = useMemo(() => {
     return purchaseOrders
       .filter(p => p.debt_amount > 0 && p.status !== 'cancelled')
-      .filter(
-        po =>
+      .filter(po => {
+        const matchSearch =
           po.code.toLowerCase().includes(search.toLowerCase()) ||
-          po.supplier_name.toLowerCase().includes(search.toLowerCase())
-      );
-  }, [purchaseOrders, search]);
+          po.supplier_name.toLowerCase().includes(search.toLowerCase());
+        const matchSupplier = filterSupplier === 'all' || po.supplier_id === filterSupplier;
+        let matchDate = true;
+        if (dateRange.from && po.order_date < dateRange.from) matchDate = false;
+        if (dateRange.to && po.order_date > dateRange.to) matchDate = false;
+        return matchSearch && matchSupplier && matchDate;
+      });
+  }, [purchaseOrders, search, filterSupplier, dateRange]);
 
   // Tab 1 PO Columns
   const poColumns: Column<PurchaseOrder>[] = [
@@ -212,10 +274,20 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
             type="button"
             title="In phiếu mua"
             onClick={() => onPrintDocument('PHIẾU MUA HÀNG', row.code, row)}
-            className="p-1.5 hover:text-[#6D3EEB] rounded-full hover:bg-gray-100 transition-colors"
+            className="p-1.5 hover:text-[#6D3EEB] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
           >
             <Icon name="print" size={18} />
           </button>
+          {onOpenEditPO && (
+            <button
+              type="button"
+              title="Sửa phiếu mua"
+              onClick={() => onOpenEditPO(row)}
+              className="p-1.5 hover:text-[#6D3EEB] text-[#6B7280] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+            >
+              <Icon name="edit" size={18} />
+            </button>
+          )}
           <button
             type="button"
             title="Thanh toán nợ cho phiếu mua này"
@@ -226,6 +298,16 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
             }`}
           >
             <Icon name="payments" size={18} />
+          </button>
+          <button
+            type="button"
+            title="Xóa phiếu mua"
+            onClick={() => {
+              if (confirm(`Xóa phiếu mua ${row.code}?`)) deletePurchaseOrder(row.id);
+            }}
+            className="p-1.5 hover:text-[#E11D48] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+          >
+            <Icon name="delete" size={18} />
           </button>
         </div>
       ),
@@ -287,18 +369,40 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
       header: '',
       align: 'right',
       render: row => (
-        <button
-          type="button"
-          onClick={() => {
-            if (confirm(`Xác nhận nhập kho cho đơn đặt hàng ${row.code}?`)) {
-              updatePurchaseOrderStatus(row.id, 'received');
-              onTabChange('tong-quan');
-            }
-          }}
-          className="px-3 py-1 bg-[#6D3EEB] hover:bg-[#5B2BD6] text-white text-[12px] font-semibold rounded-[8px] transition-colors"
-        >
-          Nhận hàng
-        </button>
+        <div className="flex items-center justify-end gap-2 text-[#6B7280]">
+          {onOpenEditPO && (
+            <button
+              type="button"
+              title="Sửa đơn đặt hàng"
+              onClick={() => onOpenEditPO(row)}
+              className="p-1.5 hover:text-[#6D3EEB] text-[#6B7280] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+            >
+              <Icon name="edit" size={18} />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              if (confirm(`Xác nhận nhập kho cho đơn đặt hàng ${row.code}?`)) {
+                updatePurchaseOrderStatus(row.id, 'received');
+                onTabChange('tong-quan');
+              }
+            }}
+            className="px-3 py-1 bg-[#6D3EEB] hover:bg-[#5B2BD6] text-white text-[12px] font-semibold rounded-[8px] transition-colors cursor-pointer"
+          >
+            Nhận hàng
+          </button>
+          <button
+            type="button"
+            title="Xóa đơn đặt hàng"
+            onClick={() => {
+              if (confirm(`Xóa đơn đặt hàng ${row.code}?`)) deletePurchaseOrder(row.id);
+            }}
+            className="p-1.5 hover:text-[#E11D48] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+          >
+            <Icon name="delete" size={18} />
+          </button>
+        </div>
       ),
     },
   ];
@@ -371,6 +475,16 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
       align: 'right',
       render: row => (
         <div className="flex items-center justify-end gap-2 text-[#6B7280]">
+          {onOpenEditSupplier && (
+            <button
+              type="button"
+              title="Sửa thông tin NCC"
+              onClick={() => onOpenEditSupplier(row)}
+              className="p-1.5 hover:text-[#6D3EEB] text-[#6B7280] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+            >
+              <Icon name="edit" size={18} />
+            </button>
+          )}
           <button
             type="button"
             title="Thanh toán công nợ"
@@ -384,11 +498,11 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
           </button>
           <button
             type="button"
-            title="Xoá"
+            title="Xoá NCC"
             onClick={() => {
               if (confirm(`Xoá nhà cung cấp ${row.name}?`)) deleteSupplier(row.id);
             }}
-            className="p-1.5 hover:text-[#E11D48] rounded-full hover:bg-gray-100 transition-colors"
+            className="p-1.5 hover:text-[#E11D48] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
           >
             <Icon name="delete" size={18} />
           </button>
@@ -457,7 +571,55 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
       key: 'status',
       header: 'TRẠNG THÁI',
       align: 'center',
-      render: row => <StatusBadge status={row.status} />,
+      render: row => (
+        <InlineStatusSelect
+          currentStatus={row.status}
+          options={[
+            { value: 'draft', label: 'Bản nháp' },
+            { value: 'received', label: 'Đã nhận hàng' },
+            { value: 'completed', label: 'Hoàn tất' },
+            { value: 'cancelled', label: 'Đã hủy' },
+          ]}
+          onSelect={newStatus => updateReturnStatus(row.id, newStatus)}
+        />
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      render: row => (
+        <div className="flex items-center justify-end gap-2 text-[#6B7280]">
+          <button
+            type="button"
+            title="In phiếu trả NCC"
+            onClick={() => onPrintDocument('PHIẾU TRẢ HÀNG NCC', row.code, row)}
+            className="p-1.5 hover:text-[#6D3EEB] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+          >
+            <Icon name="print" size={18} />
+          </button>
+          {onOpenEditReturn && (
+            <button
+              type="button"
+              title="Sửa phiếu trả NCC"
+              onClick={() => onOpenEditReturn(row)}
+              className="p-1.5 hover:text-[#6D3EEB] text-[#6B7280] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+            >
+              <Icon name="edit" size={18} />
+            </button>
+          )}
+          <button
+            type="button"
+            title="Xóa phiếu trả NCC"
+            onClick={() => {
+              if (confirm(`Xóa phiếu trả NCC ${row.code}?`)) deletePurchaseReturn(row.id);
+            }}
+            className="p-1.5 hover:text-[#E11D48] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+          >
+            <Icon name="delete" size={18} />
+          </button>
+        </div>
+      ),
     },
   ];
 
@@ -562,6 +724,23 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
             />
           </div>
 
+          {/* Banner Đối soát Mua vào - Trả lại NCC = Mua thuần (Ảnh 3) */}
+          <div className="bg-[#FFF1F2] border border-[#FECDD3] rounded-[12px] p-3 px-4 flex flex-wrap items-center justify-between gap-3 text-[#E11D48] text-[14px]">
+            <div className="flex items-center gap-2 font-bold">
+              <Icon name="receipt_long" size={20} className="text-[#E11D48]" />
+              <span>Đối soát mua hàng:</span>
+            </div>
+            <div className="flex items-center gap-3 sm:gap-4 flex-wrap font-medium">
+              <span>Mua vào: <strong className="text-[#111827]">{formatCurrency(summaryReconciliation.grossPurchase)}</strong></span>
+              <span className="text-[#9CA3AF] font-bold">-</span>
+              <span>Trả lại NCC: <strong className="text-[#E11D48]">{formatCurrency(summaryReconciliation.purchaseReturnTotal)}</strong></span>
+              <span className="text-[#9CA3AF] font-bold">=</span>
+              <span className="bg-[#FFE4E6] px-2.5 py-1 rounded-[8px] text-[#BE123C] font-bold border border-[#FDA4AF]">
+                Mua thuần: {formatCurrency(summaryReconciliation.netPurchase)}
+              </span>
+            </div>
+          </div>
+
           <div className="flex items-center justify-between">
             <h3 className="text-[16px] font-bold text-[#111827]">
               Danh sách phiếu mua
@@ -574,6 +753,13 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
             onSearchChange={setSearch}
             filters={[
               {
+                label: 'Nhà cung cấp',
+                key: 'supplier',
+                value: filterSupplier,
+                items: supplierFilterItems,
+                onChange: setFilterSupplier,
+              },
+              {
                 label: 'Thanh toán',
                 key: 'payment',
                 value: filterPayment,
@@ -585,10 +771,39 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
                 ],
                 onChange: setFilterPayment,
               },
+              {
+                label: 'Trạng thái',
+                key: 'status',
+                value: filterStatus,
+                items: [
+                  { value: 'all', label: 'Trạng thái: Tất cả' },
+                  { value: 'ordered', label: 'Đã đặt hàng' },
+                  { value: 'received', label: 'Đã nhập kho' },
+                  { value: 'completed', label: 'Hoàn tất' },
+                  { value: 'cancelled', label: 'Đã hủy' },
+                ],
+                onChange: setFilterStatus,
+              },
             ]}
+            dateRange={dateRange}
+            onDateRangeChange={setDateRange}
+            sortOptions={[
+              { key: 'date', label: 'Sắp xếp: Ngày mua' },
+              { key: 'total', label: 'Sắp xếp: Tổng tiền' },
+              { key: 'debt', label: 'Sắp xếp: Còn nợ' },
+            ]}
+            currentSortKey={sortKey}
+            sortDirection={sortDir}
+            onSortChange={(k, d) => {
+              setSortKey(k);
+              setSortDir(d);
+            }}
             onClearFilters={() => {
               setSearch('');
               setFilterPayment('all');
+              setFilterStatus('all');
+              setFilterSupplier('all');
+              setDateRange({ from: null, to: null });
             }}
             primaryAction={{
               label: '+ Tạo phiếu mua',
@@ -602,6 +817,12 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
             keyExtractor={row => row.id}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
+            onDeleteSelected={ids => {
+              if (confirm(`Xóa ${ids.length} phiếu mua đã chọn?`)) {
+                deletePurchaseOrdersBatch(ids);
+                setSelectedIds([]);
+              }
+            }}
             emptyMessage="Chưa có dữ liệu"
             emptyActionText="+ Tạo phiếu mua"
             onEmptyAction={onOpenCreatePO}
@@ -640,13 +861,36 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
             searchPlaceholder="Tìm mã đơn, nhà cung cấp..."
             searchValue={search}
             onSearchChange={setSearch}
-            onClearFilters={() => setSearch('')}
+            filters={[
+              {
+                label: 'Nhà cung cấp',
+                key: 'supplier',
+                value: filterSupplier,
+                items: supplierFilterItems,
+                onChange: setFilterSupplier,
+              },
+            ]}
+            dateRange={dateRange}
+            onDateRangeChange={setDateRange}
+            onClearFilters={() => {
+              setSearch('');
+              setFilterSupplier('all');
+              setDateRange({ from: null, to: null });
+            }}
           />
 
           <DataTable
             columns={pendingColumns}
             data={filteredPendingPOs}
             keyExtractor={row => row.id}
+            selectedIds={selectedIds}
+            onSelectionChange={setSelectedIds}
+            onDeleteSelected={ids => {
+              if (confirm(`Xóa ${ids.length} đơn đặt hàng đã chọn?`)) {
+                deletePurchaseOrdersBatch(ids);
+                setSelectedIds([]);
+              }
+            }}
             emptyMessage="Không có đơn nào đang chờ hàng về"
           />
         </div>
@@ -673,9 +917,23 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
                 onChange: setFilterGroup,
               },
             ]}
+            dateRange={dateRange}
+            onDateRangeChange={setDateRange}
+            sortOptions={[
+              { key: 'name', label: 'Sắp xếp: Tên NCC' },
+              { key: 'total', label: 'Sắp xếp: Tổng mua' },
+              { key: 'debt', label: 'Sắp xếp: Còn nợ' },
+            ]}
+            currentSortKey={sortKey}
+            sortDirection={sortDir}
+            onSortChange={(k, d) => {
+              setSortKey(k);
+              setSortDir(d);
+            }}
             onClearFilters={() => {
               setSearch('');
               setFilterGroup('all');
+              setDateRange({ from: null, to: null });
             }}
             secondaryAction={
               onOpenImportSupplierDialog
@@ -696,6 +954,14 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
             columns={supplierColumns}
             data={filteredSuppliers}
             keyExtractor={row => row.id}
+            selectedIds={selectedIds}
+            onSelectionChange={setSelectedIds}
+            onDeleteSelected={ids => {
+              if (confirm(`Xóa ${ids.length} nhà cung cấp đã chọn?`)) {
+                deleteSuppliersBatch(ids);
+                setSelectedIds([]);
+              }
+            }}
             emptyMessage="Không tìm thấy nhà cung cấp nào"
             emptyActionText="+ Thêm NCC"
             onEmptyAction={onOpenCreateSupplier}
@@ -712,6 +978,13 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
             onSearchChange={setSearch}
             filters={[
               {
+                label: 'Nhà cung cấp',
+                key: 'supplier',
+                value: filterSupplier,
+                items: supplierFilterItems,
+                onChange: setFilterSupplier,
+              },
+              {
                 label: 'Kiểu xử lý',
                 key: 'handling',
                 value: filterType,
@@ -723,9 +996,13 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
                 onChange: setFilterType,
               },
             ]}
+            dateRange={dateRange}
+            onDateRangeChange={setDateRange}
             onClearFilters={() => {
               setSearch('');
               setFilterType('all');
+              setFilterSupplier('all');
+              setDateRange({ from: null, to: null });
             }}
             primaryAction={{
               label: 'Tạo phiếu trả NCC',
@@ -738,6 +1015,14 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
             columns={returnColumns}
             data={filteredReturns}
             keyExtractor={row => row.id}
+            selectedIds={selectedIds}
+            onSelectionChange={setSelectedIds}
+            onDeleteSelected={ids => {
+              if (confirm(`Xóa ${ids.length} phiếu trả NCC đã chọn?`)) {
+                deletePurchaseReturnsBatch(ids);
+                setSelectedIds([]);
+              }
+            }}
             emptyMessage="Chưa có phiếu trả hàng nhà cung cấp"
             emptyActionText="Tạo phiếu trả NCC"
             onEmptyAction={onOpenCreateReturn}
@@ -752,7 +1037,22 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
             searchPlaceholder="Tìm phiếu mua, NCC..."
             searchValue={search}
             onSearchChange={setSearch}
-            onClearFilters={() => setSearch('')}
+            filters={[
+              {
+                label: 'Nhà cung cấp',
+                key: 'supplier',
+                value: filterSupplier,
+                items: supplierFilterItems,
+                onChange: setFilterSupplier,
+              },
+            ]}
+            dateRange={dateRange}
+            onDateRangeChange={setDateRange}
+            onClearFilters={() => {
+              setSearch('');
+              setFilterSupplier('all');
+              setDateRange({ from: null, to: null });
+            }}
             primaryAction={{
               label: 'Trả tiền (phân bổ nhiều phiếu)',
               icon: 'payments',
@@ -764,6 +1064,8 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
             columns={debtColumns}
             data={filteredSupplierDebts}
             keyExtractor={row => row.id}
+            selectedIds={selectedIds}
+            onSelectionChange={setSelectedIds}
             emptyMessage="Không có công nợ phải trả"
           />
         </div>

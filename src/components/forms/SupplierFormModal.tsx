@@ -29,6 +29,36 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
   const [bankAccountNo, setBankAccountNo] = useState(supplierToEdit?.bank_account_no || '');
   const [note, setNote] = useState(supplierToEdit?.note || '');
 
+  React.useEffect(() => {
+    if (isOpen) {
+      if (supplierToEdit) {
+        setCode(supplierToEdit.code || '');
+        setName(supplierToEdit.name || '');
+        setContactName(supplierToEdit.contact_name || '');
+        setPhone(supplierToEdit.phone || '');
+        setEmail(supplierToEdit.email || '');
+        setAddress(supplierToEdit.address || '');
+        setTaxCode(supplierToEdit.tax_code || '');
+        setGroupId(supplierToEdit.group_id || supplierGroups[0]?.id || '');
+        setBankName(supplierToEdit.bank_name || '');
+        setBankAccountNo(supplierToEdit.bank_account_no || '');
+        setNote(supplierToEdit.note || '');
+      } else {
+        setCode('');
+        setName('');
+        setContactName('');
+        setPhone('');
+        setEmail('');
+        setAddress('');
+        setTaxCode('');
+        setGroupId(supplierGroups[0]?.id || '');
+        setBankName('');
+        setBankAccountNo('');
+        setNote('');
+      }
+    }
+  }, [isOpen, supplierToEdit, supplierGroups]);
+
   const handleSave = () => {
     if (!name.trim()) {
       alert('Vui lòng nhập tên nhà cung cấp');

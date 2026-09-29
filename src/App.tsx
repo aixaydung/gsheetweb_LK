@@ -69,15 +69,20 @@ function AppContent() {
 
   // Form Modal States
   const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
-  const [isCreatePOOpen, setIsCreatePOOpen] = useState(false);
   const [isCreateQuoteOpen, setIsCreateQuoteOpen] = useState(false);
+  const [quotationToEdit, setQuotationToEdit] = useState<Quotation | null>(null);
+  const [isCreatePOOpen, setIsCreatePOOpen] = useState(false);
+  const [purchaseOrderToEdit, setPurchaseOrderToEdit] = useState<PurchaseOrder | null>(null);
   const [isCreateSalesReturnOpen, setIsCreateSalesReturnOpen] = useState(false);
+  const [salesReturnToEdit, setSalesReturnToEdit] = useState<SalesReturn | null>(null);
   const [isCreatePurchaseReturnOpen, setIsCreatePurchaseReturnOpen] = useState(false);
+  const [purchaseReturnToEdit, setPurchaseReturnToEdit] = useState<PurchaseReturn | null>(null);
   const [isCreateProductOpen, setIsCreateProductOpen] = useState(false);
   const [productToEdit, setProductToEdit] = useState<Product | null>(null);
   const [isCreateCustomerOpen, setIsCreateCustomerOpen] = useState(false);
   const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null);
   const [isCreateSupplierOpen, setIsCreateSupplierOpen] = useState(false);
+  const [supplierToEdit, setSupplierToEdit] = useState<Supplier | null>(null);
   const [isStocktakeOpen, setIsStocktakeOpen] = useState(false);
 
   // Payment allocation modal
@@ -297,8 +302,22 @@ function AppContent() {
               currentTab={currentTab}
               onTabChange={handleTabChange}
               onOpenCreateInvoice={() => setIsCreateInvoiceOpen(true)}
-              onOpenCreateQuotation={() => setIsCreateQuoteOpen(true)}
-              onOpenCreateReturn={() => setIsCreateSalesReturnOpen(true)}
+              onOpenCreateQuotation={() => {
+                setQuotationToEdit(null);
+                setIsCreateQuoteOpen(true);
+              }}
+              onOpenEditQuotation={quo => {
+                setQuotationToEdit(quo);
+                setIsCreateQuoteOpen(true);
+              }}
+              onOpenCreateReturn={() => {
+                setSalesReturnToEdit(null);
+                setIsCreateSalesReturnOpen(true);
+              }}
+              onOpenEditReturn={ret => {
+                setSalesReturnToEdit(ret);
+                setIsCreateSalesReturnOpen(true);
+              }}
               onOpenCreateCustomer={() => {
                 setCustomerToEdit(null);
                 setIsCreateCustomerOpen(true);
@@ -322,9 +341,30 @@ function AppContent() {
             <PurchaseView
               currentTab={currentTab}
               onTabChange={handleTabChange}
-              onOpenCreatePO={() => setIsCreatePOOpen(true)}
-              onOpenCreateReturn={() => setIsCreatePurchaseReturnOpen(true)}
-              onOpenCreateSupplier={() => setIsCreateSupplierOpen(true)}
+              onOpenCreatePO={() => {
+                setPurchaseOrderToEdit(null);
+                setIsCreatePOOpen(true);
+              }}
+              onOpenEditPO={po => {
+                setPurchaseOrderToEdit(po);
+                setIsCreatePOOpen(true);
+              }}
+              onOpenCreateReturn={() => {
+                setPurchaseReturnToEdit(null);
+                setIsCreatePurchaseReturnOpen(true);
+              }}
+              onOpenEditReturn={pret => {
+                setPurchaseReturnToEdit(pret);
+                setIsCreatePurchaseReturnOpen(true);
+              }}
+              onOpenCreateSupplier={() => {
+                setSupplierToEdit(null);
+                setIsCreateSupplierOpen(true);
+              }}
+              onOpenEditSupplier={sup => {
+                setSupplierToEdit(sup);
+                setIsCreateSupplierOpen(true);
+              }}
               onOpenImportSupplierDialog={() => {
                 setImportType('suppliers');
                 setIsImportOpen(true);
@@ -452,24 +492,40 @@ function AppContent() {
 
       <PurchaseOrderFormModal
         isOpen={isCreatePOOpen}
-        onClose={() => setIsCreatePOOpen(false)}
+        purchaseOrderToEdit={purchaseOrderToEdit}
+        onClose={() => {
+          setIsCreatePOOpen(false);
+          setPurchaseOrderToEdit(null);
+        }}
         onSaveAndPrint={code => alert(`Đã tạo và sẵn sàng in phiếu mua ${code}!`)}
       />
 
       <QuotationFormModal
         isOpen={isCreateQuoteOpen}
-        onClose={() => setIsCreateQuoteOpen(false)}
+        quotationToEdit={quotationToEdit}
+        onClose={() => {
+          setIsCreateQuoteOpen(false);
+          setQuotationToEdit(null);
+        }}
         onSaveAndPrint={code => alert(`Đã tạo và sẵn sàng in báo giá ${code}!`)}
       />
 
       <SalesReturnFormModal
         isOpen={isCreateSalesReturnOpen}
-        onClose={() => setIsCreateSalesReturnOpen(false)}
+        returnToEdit={salesReturnToEdit}
+        onClose={() => {
+          setIsCreateSalesReturnOpen(false);
+          setSalesReturnToEdit(null);
+        }}
       />
 
       <PurchaseReturnFormModal
         isOpen={isCreatePurchaseReturnOpen}
-        onClose={() => setIsCreatePurchaseReturnOpen(false)}
+        returnToEdit={purchaseReturnToEdit}
+        onClose={() => {
+          setIsCreatePurchaseReturnOpen(false);
+          setPurchaseReturnToEdit(null);
+        }}
       />
 
       <PaymentAllocationModal
@@ -500,7 +556,11 @@ function AppContent() {
 
       <SupplierFormModal
         isOpen={isCreateSupplierOpen}
-        onClose={() => setIsCreateSupplierOpen(false)}
+        supplierToEdit={supplierToEdit}
+        onClose={() => {
+          setIsCreateSupplierOpen(false);
+          setSupplierToEdit(null);
+        }}
       />
 
       <StocktakeFormModal

@@ -8,6 +8,7 @@ import { StatusBadge } from '../components/ui/StatusBadge';
 import { Icon } from '../components/ui/Icon';
 import { formatCurrency, formatDateTime } from '../lib/format';
 import { exportToExcelFile, ExportColumn } from '../lib/excelExport';
+import { DateRange } from '../components/ui/DateRangePicker';
 import { Payment } from '../types';
 
 interface CashbookViewProps {
@@ -21,12 +22,14 @@ export const CashbookView: React.FC<CashbookViewProps> = ({
   onOpenCreatePayment,
   onPrintDocument,
 }) => {
-  const { payments, cancelPayment } = useApp();
+  const { payments, cancelPayment, deletePaymentsBatch } = useApp();
 
   const [activeTab, setActiveTab] = useState<'all' | 'in' | 'out'>('all');
   const [search, setSearch] = useState('');
   const [methodFilter, setMethodFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null });
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // Filtered payments list
   const filteredPayments = useMemo(() => {
@@ -41,6 +44,10 @@ export const CashbookView: React.FC<CashbookViewProps> = ({
       // Status filter
       if (statusFilter !== 'all' && p.status !== statusFilter) return false;
 
+      // Date range filter
+      if (dateRange.from && p.payment_date && p.payment_date.slice(0, 10) < dateRange.from) return false;
+      if (dateRange.to && p.payment_date && p.payment_date.slice(0, 10) > dateRange.to) return false;
+
       // Search filter
       if (search.trim()) {
         const q = search.toLowerCase();
@@ -53,7 +60,7 @@ export const CashbookView: React.FC<CashbookViewProps> = ({
 
       return true;
     });
-  }, [payments, activeTab, methodFilter, statusFilter, search]);
+  }, [payments, activeTab, methodFilter, statusFilter, search, dateRange]);
 
   // Aggregate stats
   const activePayments = useMemo(() => payments.filter(p => p.status !== 'cancelled'), [payments]);
@@ -418,6 +425,14 @@ export const CashbookView: React.FC<CashbookViewProps> = ({
         searchValue={search}
         onSearchChange={setSearch}
         filters={filterOptions}
+        dateRange={dateRange}
+        onDateRangeChange={setDateRange}
+        onClearFilters={() => {
+          setSearch('');
+          setMethodFilter('all');
+          setStatusFilter('all');
+          setDateRange({ from: null, to: null });
+        }}
       />
 
       {/* Main Data Table */}
@@ -426,6 +441,14 @@ export const CashbookView: React.FC<CashbookViewProps> = ({
           columns={columns}
           data={filteredPayments}
           keyExtractor={p => p.id}
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
+          onDeleteSelected={ids => {
+            if (confirm(`Xóa ${ids.length} phiếu thu/chi đã chọn?`)) {
+              deletePaymentsBatch(ids);
+              setSelectedIds([]);
+            }
+          }}
           emptyMessage="Chưa có phiếu thu/chi nào phù hợp với bộ lọc."
         />
       </div>
