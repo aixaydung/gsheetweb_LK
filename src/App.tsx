@@ -513,27 +513,65 @@ function AppContent() {
           onClose={() => setPrintDocState(prev => ({ ...prev, isOpen: false }))}
           documentType={printDocState.type}
           code={printDocState.code}
-          date={printDocState.doc?.payment_date || printDocState.doc?.invoice_date || printDocState.doc?.order_date || new Date().toISOString()}
-          partnerName={printDocState.doc?.partner_name || printDocState.doc?.customer_name || printDocState.doc?.supplier_name}
-          partnerPhone={printDocState.doc?.customer_phone || printDocState.doc?.phone}
-          items={
-            printDocState.doc?.items || [
-              {
-                sku: printDocState.type.includes('THU') ? 'PT' : printDocState.type.includes('CHI') ? 'PC' : 'SP',
-                product_name: printDocState.doc?.note || 'Thanh toán tiền hàng / công nợ',
-                unit: 'lần',
-                quantity: 1,
-                unit_price: printDocState.doc?.amount || printDocState.doc?.total || 0,
-                line_total: printDocState.doc?.amount || printDocState.doc?.total || 0,
-              },
-            ]
+          date={
+            printDocState.doc?.quote_date ||
+            printDocState.doc?.return_date ||
+            printDocState.doc?.stocktake_date ||
+            printDocState.doc?.payment_date ||
+            printDocState.doc?.invoice_date ||
+            printDocState.doc?.order_date ||
+            new Date().toISOString()
           }
-          subtotal={printDocState.doc?.subtotal || printDocState.doc?.amount || 0}
+          partnerName={
+            printDocState.doc?.partner_name ||
+            printDocState.doc?.customer_name ||
+            printDocState.doc?.supplier_name ||
+            printDocState.doc?.vendor_name
+          }
+          partnerPhone={
+            printDocState.doc?.customer_phone ||
+            printDocState.doc?.supplier_phone ||
+            printDocState.doc?.partner_phone ||
+            printDocState.doc?.phone
+          }
+          partnerAddress={
+            printDocState.doc?.customer_address ||
+            printDocState.doc?.supplier_address ||
+            printDocState.doc?.partner_address ||
+            printDocState.doc?.address
+          }
+          items={
+            Array.isArray(printDocState.doc?.items) && printDocState.doc.items.length > 0
+              ? printDocState.doc.items.map((it: any) => ({
+                  sku: it.sku || it.product_sku || '',
+                  product_name: it.product_name || it.name || 'Sản phẩm',
+                  unit: it.unit || 'Cái',
+                  quantity: Number(it.quantity) || 1,
+                  unit_price: Number(it.unit_price || it.price || 0),
+                  line_discount: Number(it.line_discount || it.discount_amount || 0),
+                  line_total: Number(it.line_total || it.total || ((it.quantity || 1) * (it.unit_price || 0))),
+                }))
+              : [
+                  {
+                    sku: printDocState.type.includes('THU') ? 'PT' : printDocState.type.includes('CHI') ? 'PC' : 'SP',
+                    product_name: printDocState.doc?.note || 'Thanh toán tiền hàng / công nợ',
+                    unit: 'lần',
+                    quantity: 1,
+                    unit_price: printDocState.doc?.amount || printDocState.doc?.total || 0,
+                    line_total: printDocState.doc?.amount || printDocState.doc?.total || 0,
+                  },
+                ]
+          }
+          subtotal={printDocState.doc?.subtotal || printDocState.doc?.amount || printDocState.doc?.total || 0}
           discountAmount={printDocState.doc?.discount_amount || 0}
           vatAmount={printDocState.doc?.vat_amount || 0}
           shippingFee={printDocState.doc?.shipping_fee || 0}
           total={printDocState.doc?.total || printDocState.doc?.amount || 0}
-          paidAmount={printDocState.doc?.paid_amount || printDocState.doc?.amount || 0}
+          paidAmount={
+            printDocState.doc?.paid_amount ??
+            (printDocState.type.includes('THU') || printDocState.type.includes('CHI') ? printDocState.doc?.amount : 0) ??
+            0
+          }
           debtAmount={printDocState.doc?.debt_amount || 0}
           note={printDocState.doc?.note}
         />

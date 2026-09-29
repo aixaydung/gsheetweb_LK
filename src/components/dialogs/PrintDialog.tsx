@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Modal } from '../ui/Modal';
 import { Icon } from '../ui/Icon';
 import { useApp } from '../../context/AppContext';
 import { formatCurrency, formatDateTime } from '../../lib/format';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 interface PrintDialogProps {
   isOpen: boolean;
@@ -55,6 +57,9 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
   const [paperSize, setPaperSize] = useState<'A4' | 'A5' | 'K80'>('A4');
   const [docTitle, setDocTitle] = useState(documentType);
   const [recipientEmail, setRecipientEmail] = useState('');
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+
+  const printPaperRef = useRef<HTMLDivElement>(null);
 
   // 10 print checkboxes
   const [options, setOptions] = useState({
@@ -74,8 +79,196 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
     setOptions(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
+  // Isolated Iframe Print: Prints ONLY the paper document, avoiding any website or modal content
   const handlePrint = () => {
-    window.print();
+    if (!printPaperRef.current) {
+      window.print();
+      return;
+    }
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) {
+      window.print();
+      return;
+    }
+
+    const paperWidth = paperSize === 'K80' ? '76mm' : paperSize === 'A5' ? '140mm' : '190mm';
+    const paperSizeCss =
+      paperSize === 'K80' ? '80mm auto' : paperSize === 'A5' ? 'A5 portrait' : 'A4 portrait';
+
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>${docTitle} - ${code}</title>
+        <style>
+          @page {
+            size: ${paperSizeCss};
+            margin: ${paperSize === 'K80' ? '2mm' : '8mm 10mm'};
+          }
+          * {
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            color: #111827;
+            background: #ffffff;
+            font-size: ${paperSize === 'K80' ? '11px' : paperSize === 'A5' ? '12px' : '13px'};
+            line-height: 1.4;
+          }
+          .print-wrapper {
+            width: 100%;
+            max-width: ${paperWidth};
+            margin: 0 auto;
+            background: #ffffff;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          th, td {
+            padding: ${paperSize === 'K80' ? '4px 3px' : '6px 8px'};
+          }
+          .tabular-nums {
+            font-variant-numeric: tabular-nums;
+          }
+          .text-center { text-align: center; }
+          .text-right { text-align: right; }
+          .text-left { text-align: left; }
+          .font-bold { font-weight: 700; }
+          .font-semibold { font-weight: 600; }
+          .font-medium { font-weight: 500; }
+          .uppercase { text-transform: uppercase; }
+          .italic { font-style: italic; }
+          .border { border: 1px solid #d1d5db; }
+          .border-b { border-bottom: 1px solid #d1d5db; }
+          .border-t { border-top: 1px solid #d1d5db; }
+          .border-gray-200 { border-color: #e5e7eb; }
+          .border-gray-300 { border-color: #d1d5db; }
+          .bg-gray-50 { background-color: #f9fafb; }
+          .bg-gray-100 { background-color: #f3f4f6; }
+          .text-purple-700 { color: #6d3eeb; }
+          .text-red-600 { color: #dc2626; }
+          .text-gray-500 { color: #6b7280; }
+          .text-gray-600 { color: #4b5563; }
+          .text-gray-700 { color: #374151; }
+          .text-gray-800 { color: #1f2937; }
+          .text-gray-900 { color: #111827; }
+          .rounded { border-radius: 4px; }
+          .flex { display: flex; }
+          .items-center { align-items: center; }
+          .items-start { align-items: flex-start; }
+          .justify-between { justify-content: space-between; }
+          .justify-center { justify-content: center; }
+          .grid { display: grid; }
+          .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .w-1\\/2 { width: 50%; }
+          .w-full { width: 100%; }
+          .p-2 { padding: 8px; }
+          .p-2\\.5 { padding: 10px; }
+          .pt-1 { padding-top: 4px; }
+          .pt-2 { padding-top: 8px; }
+          .pt-4 { padding-top: 16px; }
+          .pb-1\\.5 { padding-bottom: 6px; }
+          .pb-3 { padding-bottom: 12px; }
+          .pl-4 { padding-left: 16px; }
+          .pr-4 { padding-right: 16px; }
+          .my-4 { margin-top: 14px; margin-bottom: 14px; }
+          .mb-4 { margin-bottom: 14px; }
+          .mt-12 { margin-top: 32px; }
+          img { max-width: 100%; height: auto; }
+        </style>
+      </head>
+      <body>
+        <div class="print-wrapper">
+          ${printPaperRef.current.innerHTML}
+        </div>
+      </body>
+      </html>
+    `);
+    doc.close();
+
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch (err) {
+        console.error('Print iframe error:', err);
+      } finally {
+        setTimeout(() => {
+          document.body.removeChild(iframe);
+        }, 1500);
+      }
+    }, 250);
+  };
+
+  // Real PDF generator & downloader using html2canvas & jsPDF
+  const handleDownloadPdf = async () => {
+    if (!printPaperRef.current) return;
+    setIsExportingPdf(true);
+    try {
+      const element = printPaperRef.current;
+
+      const canvas = await html2canvas(element, {
+        scale: 2.5,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+      });
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.98);
+
+      let pdfWidth = 210;
+      let pdfHeight = 297;
+      let format: any = 'a4';
+
+      if (paperSize === 'A5') {
+        pdfWidth = 148;
+        pdfHeight = 210;
+        format = 'a5';
+      } else if (paperSize === 'K80') {
+        pdfWidth = 80;
+        const calculatedHeight = (canvas.height * 80) / canvas.width;
+        pdfHeight = Math.max(120, calculatedHeight);
+        format = [80, pdfHeight];
+      }
+
+      const pdf = new jsPDF({
+        orientation: 'p',
+        unit: 'mm',
+        format: format,
+      });
+
+      const margin = paperSize === 'K80' ? 2 : 8;
+      const contentWidth = pdfWidth - margin * 2;
+      const contentHeight = (canvas.height * contentWidth) / canvas.width;
+
+      pdf.addImage(imgData, 'JPEG', margin, margin, contentWidth, contentHeight);
+
+      const safeDocName = (docTitle || 'CHUNG_TU').replace(/[\/\\?%*:|"<>]/g, '_');
+      const safeCode = (code || 'LK').replace(/[\/\\?%*:|"<>]/g, '_');
+      pdf.save(`${safeDocName}_${safeCode}.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Không thể tạo file PDF. Vui lòng thử lại hoặc chọn nút In rồi Lưu dưới dạng PDF.');
+    } finally {
+      setIsExportingPdf(false);
+    }
   };
 
   const isPurchase =
@@ -98,18 +291,28 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
             <button
               type="button"
               onClick={handlePrint}
-              className="px-4 py-2 bg-white border border-[#E5E7EB] hover:bg-gray-50 text-[#1F2937] text-[13.5px] font-semibold rounded-[12px] flex items-center gap-1.5 transition-colors shadow-xs"
+              className="px-4 py-2 bg-white border border-[#E5E7EB] hover:bg-gray-50 text-[#1F2937] text-[13.5px] font-semibold rounded-[12px] flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer active:scale-95"
             >
               <Icon name="print" size={18} className="text-[#6D3EEB]" />
               <span>🖨 In</span>
             </button>
             <button
               type="button"
-              onClick={() => alert(`Đã chuẩn bị tải PDF ${code}.pdf`)}
-              className="px-4 py-2 bg-white border border-[#E5E7EB] hover:bg-gray-50 text-[#1F2937] text-[13.5px] font-semibold rounded-[12px] flex items-center gap-1.5 transition-colors shadow-xs"
+              disabled={isExportingPdf}
+              onClick={handleDownloadPdf}
+              className="px-4 py-2 bg-white border border-[#E5E7EB] hover:bg-gray-50 text-[#1F2937] text-[13.5px] font-semibold rounded-[12px] flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer disabled:opacity-60 active:scale-95"
             >
-              <Icon name="download" size={18} />
-              <span>⤓ Tải PDF</span>
+              {isExportingPdf ? (
+                <>
+                  <Icon name="sync" size={18} className="animate-spin text-[#6D3EEB]" />
+                  <span>Đang tạo PDF...</span>
+                </>
+              ) : (
+                <>
+                  <Icon name="download" size={18} className="text-[#059669]" />
+                  <span>⤓ Tải PDF</span>
+                </>
+              )}
             </button>
             <button
               type="button"
@@ -117,7 +320,7 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
                 alert(`Đã gửi email chứng từ ${code} thành công!`);
                 onClose();
               }}
-              className="px-5 py-2 bg-[#6D3EEB] hover:bg-[#5B2BD6] text-white text-[13.5px] font-semibold rounded-[12px] shadow-[0_8px_20px_-6px_rgba(109,62,235,0.55)] flex items-center gap-1.5 transition-all"
+              className="px-5 py-2 bg-[#6D3EEB] hover:bg-[#5B2BD6] text-white text-[13.5px] font-semibold rounded-[12px] shadow-[0_8px_20px_-6px_rgba(109,62,235,0.55)] flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
             >
               <Icon name="send" size={18} />
               <span>➤ Gửi email</span>
@@ -280,8 +483,10 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
         </div>
 
         {/* Right Preview Frame (Paper layout based on section 10) */}
-        <div className="lg:col-span-8 bg-[#F3F4F6] p-4 sm:p-6 rounded-[20px] overflow-x-auto flex justify-center">
+        <div className="lg:col-span-8 bg-[#F3F4F6] dark:bg-gray-900/40 p-4 sm:p-6 rounded-[20px] overflow-x-auto flex justify-center">
           <div
+            ref={printPaperRef}
+            id="printable-paper"
             className={`bg-white shadow-md p-6 sm:p-8 rounded-sm text-[#111827] font-sans ${
               paperSize === 'K80'
                 ? 'w-[320px] text-[11px]'
@@ -289,23 +494,37 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
                 ? 'w-[480px] text-[12px]'
                 : 'w-[640px] text-[13px]'
             }`}
-            style={{ minHeight: '620px' }}
+            style={{ minHeight: '620px', backgroundColor: '#ffffff' }}
           >
             {/* Header info */}
             {options.logo && (
               <div className="flex items-start justify-between border-b border-gray-300 pb-3 mb-4">
                 <div>
                   <h3 className="font-bold text-[14px] uppercase text-gray-900 leading-tight">
-                    {companySettings.company_name}
+                    {companySettings.company_name || 'CÔNG TY LK ERP'}
                   </h3>
                   <p className="text-[12px] text-gray-600 mt-0.5">{companySettings.address}</p>
                   <p className="text-[12px] text-gray-600">
                     SĐT: {companySettings.phone} · MST: {companySettings.tax_code}
                   </p>
                 </div>
-                <div className="w-10 h-10 rounded-lg bg-purple-100 text-purple-700 font-bold flex items-center justify-center text-[15px] shrink-0">
-                  N1
-                </div>
+                {companySettings.logo_url ? (
+                  <img
+                    src={companySettings.logo_url}
+                    alt="Logo"
+                    className="max-h-12 max-w-[130px] object-contain shrink-0 rounded"
+                  />
+                ) : (
+                  <div className="flex items-center gap-2 shrink-0 px-2.5 py-1.5 rounded-lg border border-purple-200 bg-purple-50/60">
+                    <div className="w-8 h-8 rounded-md bg-gradient-to-tr from-[#6D3EEB] to-[#9333EA] text-white flex items-center justify-center shadow-xs">
+                      <Icon name="layers" size={18} />
+                    </div>
+                    <div className="text-left">
+                      <div className="font-black text-[#6D3EEB] text-[13px] tracking-wide leading-none">LK ERP</div>
+                      <div className="text-[9.5px] text-gray-500 leading-tight mt-0.5">Enterprise</div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

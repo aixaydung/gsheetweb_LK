@@ -347,11 +347,39 @@ body {
 
 /* Print Styles */
 @media print {
+  @page {
+    margin: 8mm 10mm;
+  }
   body {
     background: #FFFFFF !important;
     color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
-  .no-print {
+  /* When printable-paper is present, isolate it and hide everything else */
+  body:has(#printable-paper) * {
+    visibility: hidden !important;
+  }
+  body:has(#printable-paper) #printable-paper,
+  body:has(#printable-paper) #printable-paper * {
+    visibility: visible !important;
+  }
+  body:has(#printable-paper) #printable-paper {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: #FFFFFF !important;
+  }
+  .no-print,
+  aside,
+  header,
+  nav {
     display: none !important;
   }
   .print-only {

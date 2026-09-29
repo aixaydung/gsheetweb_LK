@@ -11,6 +11,7 @@ export const CompanyGeneralTab: React.FC = () => {
   const [email, setEmail] = useState(companySettings.email);
   const [taxCode, setTaxCode] = useState(companySettings.tax_code);
   const [website, setWebsite] = useState(companySettings.website || 'https://lkerp.sheetapp.store');
+  const [logoUrl, setLogoUrl] = useState(companySettings.logo_url || '');
   const [saved, setSaved] = useState(false);
 
   const handleSave = () => {
@@ -21,6 +22,7 @@ export const CompanyGeneralTab: React.FC = () => {
       email,
       tax_code: taxCode,
       website,
+      logo_url: logoUrl,
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
@@ -130,14 +132,63 @@ export const CompanyGeneralTab: React.FC = () => {
               className="w-full h-10 px-3.5 bg-white dark:bg-[#0F172A] border border-[#E5E7EB] dark:border-[#334155] rounded-[10px] text-[14.5px] text-[#111827] dark:text-[#F8FAFC] focus:outline-none focus:border-[#6D3EEB]"
             />
           </div>
+
+          <div className="sm:col-span-2">
+            <label className="block text-[14.5px] font-medium text-[#374151] dark:text-[#CBD5E1] mb-1.5">
+              Logo công ty (Hiển thị trên bản in chứng từ, hóa đơn & báo giá)
+            </label>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <input
+                type="text"
+                value={logoUrl}
+                onChange={e => setLogoUrl(e.target.value)}
+                placeholder="Nhập đường dẫn ảnh logo hoặc tải file từ máy tính..."
+                className="flex-1 h-10 px-3.5 bg-white dark:bg-[#0F172A] border border-[#E5E7EB] dark:border-[#334155] rounded-[10px] text-[14.5px] text-[#111827] dark:text-[#F8FAFC] focus:outline-none focus:border-[#6D3EEB]"
+              />
+              <label className="h-10 px-4 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-[#374151] dark:text-gray-200 text-[13.5px] font-medium rounded-[10px] border border-gray-300 dark:border-gray-600 flex items-center justify-center gap-2 cursor-pointer transition-colors shrink-0">
+                <Icon name="upload" size={17} />
+                <span>Tải ảnh logo</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={e => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = ev => {
+                        if (typeof ev.target?.result === 'string') {
+                          setLogoUrl(ev.target.result);
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+              </label>
+              {logoUrl && (
+                <button
+                  type="button"
+                  onClick={() => setLogoUrl('')}
+                  className="h-10 px-3 text-[#E11D48] hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-[10px] text-[13px] font-medium transition-colors"
+                >
+                  Xóa logo
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Identity Card Preview (No background / Trong suốt) */}
       <div className="bg-transparent rounded-[16px] p-5 border border-[#E5E7EB] dark:border-[#334155] flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
-          <div className="w-14 h-14 rounded-[12px] bg-transparent border border-[#E5E7EB] dark:border-[#334155] p-2 flex items-center justify-center shadow-xs">
-            <Icon name="storefront" size={28} className="text-[#6D3EEB] dark:text-[#C084FC]" />
+          <div className="w-16 h-16 rounded-[12px] bg-transparent border border-[#E5E7EB] dark:border-[#334155] p-2 flex items-center justify-center shadow-xs overflow-hidden shrink-0">
+            {logoUrl ? (
+              <img src={logoUrl} alt="Logo" className="max-w-full max-h-full object-contain" />
+            ) : (
+              <Icon name="storefront" size={28} className="text-[#6D3EEB] dark:text-[#C084FC]" />
+            )}
           </div>
           <div>
             <span className="text-[12px] font-bold uppercase tracking-wider text-[#6D3EEB] dark:text-[#C084FC]">
