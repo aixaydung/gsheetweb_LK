@@ -157,12 +157,26 @@ export const createQuotation = async (quoteData: Partial<QuotationRecord>, items
   return { ...quoteData, id, code, items, created_at: now };
 };
 
-export const updateQuotationStatus = async (id: string, status: string, convertedInvoiceId?: string) => {
+export const updateQuotationStatus = async (
+  id: string,
+  status?: string,
+  convertedInvoiceId?: string,
+  note?: string
+) => {
   const quotes = await getAllQuotations();
   const target = quotes.find(q => q.id === id);
   if (!target || !target.rowIndex) throw new Error('Quotation not found');
 
-  const range = `${QUOTATIONS_SHEET}!P${target.rowIndex}:Q${target.rowIndex}`;
-  await updateSheetData(SPREADSHEET_ID, range, [[status, convertedInvoiceId || target.converted_invoice_id || '']]);
-  return { id, status, converted_invoice_id: convertedInvoiceId };
+  const newStatus = status !== undefined ? status : (target.status || 'new');
+  const newConvertedId = convertedInvoiceId !== undefined ? convertedInvoiceId : (target.converted_invoice_id || '');
+  const newNote = note !== undefined ? note : (target.note || '');
+
+  // P: status, Q: converted_invoice_id, R: note
+  const range = `${QUOTATIONS_SHEET}!P${target.rowIndex}:R${target.rowIndex}`;
+  await updateSheetData(SPREADSHEET_ID, range, [[newStatus, newConvertedId, newNote]]);
+  return { id, status: newStatus, converted_invoice_id: newConvertedId, note: newNote };
+};
+
+export const deleteQuotation = async (id: string) => {
+  return await updateQuotationStatus(id, 'cancelled');
 };

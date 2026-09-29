@@ -14,6 +14,7 @@ import { formatCurrency, formatDate } from '../lib/format';
 import { SalesInvoice, Customer, Quotation, SalesReturn } from '../types';
 import { ExportDialog } from '../components/dialogs/ExportDialog';
 import { CustomerDetailModal } from '../components/dialogs/CustomerDetailModal';
+import { QuotationDetailModal } from '../components/dialogs/QuotationDetailModal';
 
 interface SalesViewProps {
   currentTab: string;
@@ -50,6 +51,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
     convertQuotationToInvoice,
     deleteInvoice,
     deleteCustomer,
+    deleteQuotation,
     updateInlineNote,
   } = useApp();
 
@@ -67,6 +69,10 @@ export const SalesView: React.FC<SalesViewProps> = ({
   // Customer Detail Modal State
   const [selectedCustomerDetail, setSelectedCustomerDetail] = useState<Customer | null>(null);
   const [isCustomerDetailOpen, setIsCustomerDetailOpen] = useState(false);
+
+  // Quotation Detail Modal State
+  const [selectedQuotationDetail, setSelectedQuotationDetail] = useState<Quotation | null>(null);
+  const [isQuotationDetailOpen, setIsQuotationDetailOpen] = useState(false);
 
   const tabs: TabItem[] = [
     { id: 'tong-quan', label: 'Tổng quan bán hàng' },
@@ -415,7 +421,18 @@ export const SalesView: React.FC<SalesViewProps> = ({
     {
       key: 'code',
       header: 'MÃ BG',
-      render: row => <span className="font-semibold text-[#111827]">{row.code}</span>,
+      render: row => (
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedQuotationDetail(row);
+            setIsQuotationDetailOpen(true);
+          }}
+          className="font-bold text-[#6D3EEB] hover:underline cursor-pointer text-left"
+        >
+          {row.code}
+        </button>
+      ),
     },
     {
       key: 'date',
@@ -425,7 +442,18 @@ export const SalesView: React.FC<SalesViewProps> = ({
     {
       key: 'customer',
       header: 'KHÁCH HÀNG',
-      render: row => <span className="font-semibold text-[#111827]">{row.customer_name}</span>,
+      render: row => (
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedQuotationDetail(row);
+            setIsQuotationDetailOpen(true);
+          }}
+          className="font-semibold text-[#111827] hover:text-[#6D3EEB] transition-colors cursor-pointer text-left"
+        >
+          {row.customer_name}
+        </button>
+      ),
     },
     {
       key: 'total',
@@ -483,9 +511,20 @@ export const SalesView: React.FC<SalesViewProps> = ({
         <div className="flex items-center justify-end gap-2 text-[#6B7280]">
           <button
             type="button"
+            title="Xem chi tiết báo giá"
+            onClick={() => {
+              setSelectedQuotationDetail(row);
+              setIsQuotationDetailOpen(true);
+            }}
+            className="p-1.5 hover:text-[#6D3EEB] text-[#6D3EEB] rounded-full hover:bg-purple-50 transition-colors cursor-pointer"
+          >
+            <Icon name="visibility" size={18} />
+          </button>
+          <button
+            type="button"
             title="In báo giá"
             onClick={() => onPrintDocument('BÁO GIÁ', row.code, row)}
-            className="p-1.5 hover:text-[#6D3EEB] rounded-full hover:bg-gray-100 transition-colors"
+            className="p-1.5 hover:text-[#6D3EEB] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
           >
             <Icon name="print" size={18} />
           </button>
@@ -499,11 +538,23 @@ export const SalesView: React.FC<SalesViewProps> = ({
                   onTabChange('tong-quan');
                 }
               }}
-              className="px-2.5 py-1 bg-[#F3EBFE] hover:bg-[#E9D5FF] text-[#6317D6] text-[12px] font-semibold rounded-[8px] transition-colors"
+              className="px-2.5 py-1 bg-[#F3EBFE] hover:bg-[#E9D5FF] text-[#6317D6] text-[12px] font-semibold rounded-[8px] transition-colors cursor-pointer"
             >
               Chuyển HĐ
             </button>
           )}
+          <button
+            type="button"
+            title="Xoá báo giá"
+            onClick={() => {
+              if (confirm(`Xoá báo giá ${row.code}?`)) {
+                deleteQuotation(row.id);
+              }
+            }}
+            className="p-1.5 hover:text-[#E11D48] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+          >
+            <Icon name="delete" size={18} />
+          </button>
         </div>
       ),
     },
@@ -983,6 +1034,39 @@ export const SalesView: React.FC<SalesViewProps> = ({
           setIsCustomerDetailOpen(false);
           setSelectedCustomerDetail(null);
           onOpenEditCustomer?.(cust);
+        }}
+      />
+
+      {/* Quotation Full Detail Modal */}
+      <QuotationDetailModal
+        isOpen={isQuotationDetailOpen}
+        quotation={selectedQuotationDetail}
+        allQuotations={filteredQuotations}
+        onSelectQuotation={quo => setSelectedQuotationDetail(quo)}
+        onClose={() => {
+          setIsQuotationDetailOpen(false);
+          setSelectedQuotationDetail(null);
+        }}
+        onPrint={quo => {
+          onPrintDocument('BÁO GIÁ', quo.code, quo);
+        }}
+        onConvertToInvoice={quo => {
+          if (confirm(`Chuyển báo giá ${quo.code} thành hóa đơn bán hàng?`)) {
+            convertQuotationToInvoice(quo.id);
+            setIsQuotationDetailOpen(false);
+            onTabChange('tong-quan');
+          }
+        }}
+        onDelete={quo => {
+          if (confirm(`Xoá báo giá ${quo.code}?`)) {
+            deleteQuotation(quo.id);
+            setIsQuotationDetailOpen(false);
+            setSelectedQuotationDetail(null);
+          }
+        }}
+        onEdit={() => {
+          setIsQuotationDetailOpen(false);
+          onOpenCreateQuotation();
         }}
       />
     </div>

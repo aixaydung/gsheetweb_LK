@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getAllQuotations, createQuotation, updateQuotationStatus } from '../repositories/quotations.js';
+import { getAllQuotations, createQuotation, updateQuotationStatus, deleteQuotation } from '../repositories/quotations.js';
 
 export const quotationsRouter = Router();
 
@@ -30,14 +30,26 @@ quotationsRouter.post('/', async (req, res) => {
 quotationsRouter.patch('/:id/status', async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, converted_invoice_id } = req.body;
-    if (!status) {
-      return res.status(400).json({ error: 'Status is required' });
+    const { status, converted_invoice_id, note } = req.body;
+    if (!status && note === undefined) {
+      return res.status(400).json({ error: 'Status or note is required' });
     }
-    const result = await updateQuotationStatus(id, status, converted_invoice_id);
+    const result = await updateQuotationStatus(id, status, converted_invoice_id, note);
     res.json({ success: true, quotation: result });
   } catch (error: any) {
-    console.error('Error updating quotation status:', error);
-    res.status(500).json({ error: error.message || 'Failed to update quotation status' });
+    console.error('Error updating quotation status/note:', error);
+    res.status(500).json({ error: error.message || 'Failed to update quotation status/note' });
   }
 });
+
+quotationsRouter.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await deleteQuotation(id);
+    res.json({ success: true, message: 'Quotation deleted successfully' });
+  } catch (error: any) {
+    console.error('Error deleting quotation:', error);
+    res.status(500).json({ error: error.message || 'Failed to delete quotation' });
+  }
+});
+

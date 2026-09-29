@@ -155,7 +155,7 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
         accessor: r =>
           r.status === 'completed'
             ? 'Hoàn tất'
-            : r.status === 'pending'
+            : (r.status as string) === 'processing' || (r.status as string) === 'pending'
             ? 'Đang xử lý'
             : r.status === 'cancelled'
             ? 'Đã hủy'

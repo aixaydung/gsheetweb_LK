@@ -102,7 +102,7 @@ export const getAllReturns = async (filterType?: 'sales_return' | 'purchase_retu
   });
 
   if (filterType) {
-    return allRecords.filter(r => r.type === filterType);
+    return allRecords.filter((r: ReturnRecord) => r.type === filterType);
   }
   return allRecords;
 };

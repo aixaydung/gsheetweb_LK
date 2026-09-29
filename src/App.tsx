@@ -170,7 +170,6 @@ function AppContent() {
       'quy-trinh-chung-tu': 'Sơ đồ luân chuyển ERP',
       'he-thong-tai-khoan': 'Hệ thống tài khoản TT200',
       'tai-khoan-nhan-vien': 'Tài khoản & Phân quyền',
-      'nhat-ky-audit': 'Nhật ký hệ thống',
       'roadmap-modules': 'Lộ trình Nâng cấp',
     };
 

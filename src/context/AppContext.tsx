@@ -105,6 +105,7 @@ interface AppContextType {
   createQuotation: (quo: Partial<Quotation>, items: DocumentLineItem[]) => Quotation;
   convertQuotationToInvoice: (quotationId: string) => SalesInvoice;
   updateQuotationStatus: (id: string, status: any) => void;
+  deleteQuotation: (id: string) => void;
 
   createSalesReturn: (ret: Partial<SalesReturn>, items: DocumentLineItem[]) => SalesReturn;
   createPurchaseOrder: (po: Partial<PurchaseOrder>, items: DocumentLineItem[]) => PurchaseOrder;
@@ -503,7 +504,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               note: it.note || '',
             })),
           }));
-          setQuotations(mappedQuotations);
+          setQuotations(prev => {
+            return mappedQuotations.map((serverQ: any) => {
+              const localQ = prev.find((l: any) => l.id === serverQ.id);
+              if (localQ && localQ.note && !serverQ.note) {
+                return { ...serverQ, note: localQ.note };
+              }
+              return serverQ;
+            });
+          });
         }
       }
 
@@ -1166,6 +1175,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         body: JSON.stringify({ status }),
       })
     );
+  };
+
+  const deleteQuotation = (id: string) => {
+    const quote = quotations.find(q => q.id === id);
+    setQuotations(prev => prev.filter(q => q.id !== id));
+    syncWithApi(
+      fetch(`/api/quotations/${id}`, {
+        method: 'DELETE',
+      })
+    );
+    logActivity({
+      action: 'delete',
+      entity_type: 'quotation',
+      entity_id: id,
+      entity_code: quote?.code || id,
+      title: `Xoá báo giá ${quote?.code || id}`,
+      details: `Đã huỷ/xoá báo giá của khách hàng ${quote?.customer_name || ''}`,
+    });
   };
 
   // Sales Returns
@@ -2341,6 +2368,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         break;
       case 'quotation':
         setQuotations(prev => prev.map(q => (q.id === id ? { ...q, note } : q)));
+        syncWithApi(
+          fetch(`/api/quotations/${id}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ note }),
+          })
+        );
         break;
       case 'purchase_order':
         setPurchaseOrders(prev => prev.map(p => (p.id === id ? { ...p, note } : p)));
@@ -2430,6 +2464,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         createQuotation,
         convertQuotationToInvoice,
         updateQuotationStatus,
+        deleteQuotation,
         createSalesReturn,
         createPurchaseOrder,
         updatePurchaseOrderStatus,
