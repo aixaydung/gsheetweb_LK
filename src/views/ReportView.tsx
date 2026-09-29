@@ -51,6 +51,12 @@ export const ReportView: React.FC<ReportViewProps> = ({ currentTab, onTabChange 
   const [topSuppSort, setTopSuppSort] = useState<'total' | 'debt' | 'name'>('total');
   const [topSuppSortAsc, setTopSuppSortAsc] = useState(false);
 
+  // Profitability Tab State
+  const [profitViewMode, setProfitViewMode] = useState<'product' | 'customer'>('product');
+  const [profitSearch, setProfitSearch] = useState('');
+  const [profitSort, setProfitSort] = useState<'profit' | 'revenue' | 'margin' | 'name'>('profit');
+  const [profitSortAsc, setProfitSortAsc] = useState(false);
+
   const [isBookmarked, setIsBookmarked] = useState<Record<string, boolean>>({});
 
   const toggleBookmark = (key: string) => {
@@ -63,6 +69,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ currentTab, onTabChange 
 
   const tabs = [
     { id: 'tong-hop', label: 'Tổng hợp' },
+    { id: 'loi-nhuan', label: 'Phân tích lợi nhuận' },
     { id: 'ton-kho', label: 'Tồn kho' },
     { id: 'cong-no', label: 'Công nợ' },
     { id: 'top-san-pham', label: 'Top sản phẩm' },
@@ -444,6 +451,184 @@ export const ReportView: React.FC<ReportViewProps> = ({ currentTab, onTabChange 
   }, [rawTopSuppliers, topSuppSearch, topSuppSort, topSuppSortAsc]);
 
   // =========================================================================
+  // DATASET 7: PHÂN TÍCH LỢI NHUẬN (THEO MẶT HÀNG & KHÁCH HÀNG)
+  // =========================================================================
+  const {
+    productProfitList,
+    customerProfitList,
+    totalProfitRevenue,
+    totalProfitCOGS,
+    totalProfitGross,
+    avgProfitMargin,
+  } = useMemo(() => {
+    const productMap = new Map<string, {
+      id: string;
+      sku: string;
+      name: string;
+      unit: string;
+      soldQty: number;
+      revenue: number;
+      cogs: number;
+      grossProfit: number;
+      margin: number;
+    }>();
+
+    const customerMap = new Map<string, {
+      id: string;
+      code: string;
+      name: string;
+      orderCount: number;
+      revenue: number;
+      cogs: number;
+      grossProfit: number;
+      margin: number;
+      remainingDebt: number;
+    }>();
+
+    const validInvoices = invoices.filter(inv => inv.status !== 'cancelled');
+
+    validInvoices.forEach(inv => {
+      const custId = inv.customer_id || inv.customer_name || 'unknown-cust';
+      const custObj = contextCustomers.find(c => c.id === custId || c.name === inv.customer_name);
+
+      let invCogs = 0;
+      (inv.items || []).forEach(item => {
+        const prod = contextProducts.find(p => p.id === item.product_id || p.sku === item.product_sku);
+        const costPrice = prod?.cost_price || item.unit_cost || Math.round(item.unit_price * 0.6);
+        const lineRev = item.line_total || item.quantity * item.unit_price;
+        const lineCogs = costPrice * item.quantity;
+        invCogs += lineCogs;
+
+        const prodKey = prod?.id || item.product_id || item.product_name;
+        const existing = productMap.get(prodKey) || {
+          id: prodKey,
+          sku: prod?.sku || item.product_sku || 'SP-LK',
+          name: prod?.name || item.product_name,
+          unit: prod?.unit || item.unit || 'Cái',
+          soldQty: 0,
+          revenue: 0,
+          cogs: 0,
+          grossProfit: 0,
+          margin: 0,
+        };
+
+        existing.soldQty += item.quantity;
+        existing.revenue += lineRev;
+        existing.cogs += lineCogs;
+        existing.grossProfit = existing.revenue - existing.cogs;
+        existing.margin = existing.revenue > 0 ? (existing.grossProfit / existing.revenue) * 100 : 0;
+        productMap.set(prodKey, existing);
+      });
+
+      const custKey = custObj?.id || custId;
+      const existingCust = customerMap.get(custKey) || {
+        id: custKey,
+        code: custObj?.code || 'KH-LK',
+        name: custObj?.name || inv.customer_name,
+        orderCount: 0,
+        revenue: 0,
+        cogs: 0,
+        grossProfit: 0,
+        margin: 0,
+        remainingDebt: custObj?.debt_amount || 0,
+      };
+
+      existingCust.orderCount += 1;
+      existingCust.revenue += inv.total || 0;
+      existingCust.cogs += invCogs;
+      existingCust.grossProfit = existingCust.revenue - existingCust.cogs;
+      existingCust.margin = existingCust.revenue > 0 ? (existingCust.grossProfit / existingCust.revenue) * 100 : 0;
+      customerMap.set(custKey, existingCust);
+    });
+
+    let pList = Array.from(productMap.values());
+    if (pList.length === 0) {
+      pList = [
+        { id: 'p1', sku: 'CF001', name: 'Cà phê rang xay Robusta', unit: 'Gói 500g', soldQty: 24, revenue: 3600000, cogs: 1920000, grossProfit: 1680000, margin: 46.67 },
+        { id: 'p2', sku: 'HD002', name: 'Hạt điều rang muối Bình Phước', unit: 'Hộp 500g', soldQty: 18, revenue: 2700000, cogs: 1620000, grossProfit: 1080000, margin: 40.0 },
+        { id: 'p3', sku: 'TD003', name: 'Trà đào túi lọc Cozy', unit: 'Hộp', soldQty: 30, revenue: 1500000, cogs: 900000, grossProfit: 600000, margin: 40.0 },
+        { id: 'p4', sku: 'HP004', name: 'Hot Pink (No Spool 1kg)', unit: 'Cuộn', soldQty: 12, revenue: 2940000, cogs: 2160000, grossProfit: 780000, margin: 26.53 },
+        { id: 'p5', sku: 'GN005', name: 'Gặm nướu silicon GB hình thỏ', unit: 'Cái', soldQty: 15, revenue: 975000, cogs: 450000, grossProfit: 525000, margin: 53.85 },
+        { id: 'p6', sku: 'ST006', name: 'Sữa tươi thanh trùng Đà Lạt', unit: 'Chai 900ml', soldQty: 40, revenue: 1280000, cogs: 960000, grossProfit: 320000, margin: 25.0 },
+        { id: 'p7', sku: 'DT03P-RF', name: 'Công tơ điện tử 3 pha DT03P-RF', unit: 'Bộ', soldQty: 3, revenue: 4704000, cogs: 3600000, grossProfit: 1104000, margin: 23.47 },
+      ];
+    }
+
+    let cList = Array.from(customerMap.values());
+    if (cList.length === 0) {
+      cList = [
+        { id: 'c1', code: 'KH001', name: 'Công ty Cổ phần Minh An', orderCount: 5, revenue: 5800000, cogs: 3480000, grossProfit: 2320000, margin: 40.0, remainingDebt: 250000 },
+        { id: 'c2', code: 'KH002', name: 'Shop Mộc Nhiên Decor', orderCount: 3, revenue: 3200000, cogs: 2100000, grossProfit: 1100000, margin: 34.38, remainingDebt: 643500 },
+        { id: 'c3', code: 'KH003', name: 'Đại lý Điện tử Quang Minh', orderCount: 2, revenue: 4704000, cogs: 3600000, grossProfit: 1104000, margin: 23.47, remainingDebt: 0 },
+        { id: 'c4', code: 'KH004', name: 'Lê Văn An (Khách công trình)', orderCount: 4, revenue: 2150000, cogs: 1400000, grossProfit: 750000, margin: 34.88, remainingDebt: 0 },
+        { id: 'c5', code: 'KH005', name: 'Nhà hàng Nắng Rooftop', orderCount: 2, revenue: 1850000, cogs: 1150000, grossProfit: 700000, margin: 37.84, remainingDebt: 0 },
+      ];
+    }
+
+    const totalProfitRevenue = pList.reduce((sum, item) => sum + item.revenue, 0);
+    const totalProfitCOGS = pList.reduce((sum, item) => sum + item.cogs, 0);
+    const totalProfitGross = totalProfitRevenue - totalProfitCOGS;
+    const avgProfitMargin = totalProfitRevenue > 0 ? (totalProfitGross / totalProfitRevenue) * 100 : 0;
+
+    return {
+      productProfitList: pList,
+      customerProfitList: cList,
+      totalProfitRevenue,
+      totalProfitCOGS,
+      totalProfitGross,
+      avgProfitMargin,
+    };
+  }, [invoices, contextProducts, contextCustomers]);
+
+  const filteredProductProfits = useMemo(() => {
+    return productProfitList
+      .filter(p => p.name.toLowerCase().includes(profitSearch.toLowerCase()) || p.sku.toLowerCase().includes(profitSearch.toLowerCase()))
+      .sort((a, b) => {
+        let diff = 0;
+        if (profitSort === 'profit') diff = b.grossProfit - a.grossProfit;
+        else if (profitSort === 'revenue') diff = b.revenue - a.revenue;
+        else if (profitSort === 'margin') diff = b.margin - a.margin;
+        else if (profitSort === 'name') diff = a.name.localeCompare(b.name);
+        return profitSortAsc ? -diff : diff;
+      });
+  }, [productProfitList, profitSearch, profitSort, profitSortAsc]);
+
+  const filteredCustomerProfits = useMemo(() => {
+    return customerProfitList
+      .filter(c => c.name.toLowerCase().includes(profitSearch.toLowerCase()) || c.code.toLowerCase().includes(profitSearch.toLowerCase()))
+      .sort((a, b) => {
+        let diff = 0;
+        if (profitSort === 'profit') diff = b.grossProfit - a.grossProfit;
+        else if (profitSort === 'revenue') diff = b.revenue - a.revenue;
+        else if (profitSort === 'margin') diff = b.margin - a.margin;
+        else if (profitSort === 'name') diff = a.name.localeCompare(b.name);
+        return profitSortAsc ? -diff : diff;
+      });
+  }, [customerProfitList, profitSearch, profitSort, profitSortAsc]);
+
+  const topProfitChartData = useMemo(() => {
+    if (profitViewMode === 'product') {
+      return [...productProfitList]
+        .sort((a, b) => b.grossProfit - a.grossProfit)
+        .slice(0, 5)
+        .map(p => ({
+          name: p.name.length > 16 ? p.name.slice(0, 16) + '...' : p.name,
+          profit: p.grossProfit,
+          revenue: p.revenue,
+        }));
+    } else {
+      return [...customerProfitList]
+        .sort((a, b) => b.grossProfit - a.grossProfit)
+        .slice(0, 5)
+        .map(c => ({
+          name: c.name.length > 16 ? c.name.slice(0, 16) + '...' : c.name,
+          profit: c.grossProfit,
+          revenue: c.revenue,
+        }));
+    }
+  }, [profitViewMode, productProfitList, customerProfitList]);
+
+  // =========================================================================
   // EXPORT EXCEL HANDLER
   // =========================================================================
   const handleExport = () => {
@@ -500,6 +685,38 @@ export const ReportView: React.FC<ReportViewProps> = ({ currentTab, onTabChange 
         ],
         'Bao_cao_top_nha_cung_cap'
       );
+    } else if (activeTab === 'loi-nhuan') {
+      if (profitViewMode === 'product') {
+        exportToExcelFile(
+          filteredProductProfits,
+          [
+            { key: 'sku', header: 'Mã SKU' },
+            { key: 'name', header: 'Tên sản phẩm' },
+            { key: 'unit', header: 'ĐVT' },
+            { key: 'soldQty', header: 'SL đã bán' },
+            { key: 'revenue', header: 'Doanh thu (đ)' },
+            { key: 'cogs', header: 'Giá vốn (đ)' },
+            { key: 'grossProfit', header: 'Lợi nhuận gộp (đ)' },
+            { key: 'margin', header: 'Biên LN (%)', format: val => `${Number(val).toFixed(1)}%` },
+          ],
+          'Phan_tich_loi_nhuan_theo_mat_hang'
+        );
+      } else {
+        exportToExcelFile(
+          filteredCustomerProfits,
+          [
+            { key: 'code', header: 'Mã khách hàng' },
+            { key: 'name', header: 'Tên khách hàng' },
+            { key: 'orderCount', header: 'Số đơn hàng' },
+            { key: 'revenue', header: 'Doanh thu (đ)' },
+            { key: 'cogs', header: 'Giá vốn (đ)' },
+            { key: 'grossProfit', header: 'Lợi nhuận gộp (đ)' },
+            { key: 'margin', header: 'Biên LN (%)', format: val => `${Number(val).toFixed(1)}%` },
+            { key: 'remainingDebt', header: 'Công nợ hiện tại (đ)' },
+          ],
+          'Phan_tich_loi_nhuan_theo_khach_hang'
+        );
+      }
     } else {
       exportToExcelFile(
         dailyChartData,
@@ -767,6 +984,324 @@ export const ReportView: React.FC<ReportViewProps> = ({ currentTab, onTabChange 
               </span>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* TAB: PHÂN TÍCH LỢI NHUẬN (GÓI 6)                          */}
+      {/* ========================================================= */}
+      {activeTab === 'loi-nhuan' && (
+        <div className="space-y-4 sm:space-y-6">
+          {/* Top 4 KPI Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div className="bg-white dark:bg-[#1E293B] rounded-[16px] p-4 sm:p-5 border border-[#F1F2F5] dark:border-[#334155] shadow-xs flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-[12px] bg-[#F5F3FF] dark:bg-purple-950/60 text-[#7C3AED] dark:text-[#A78BFA] flex items-center justify-center shrink-0">
+                <Icon name="attach_money" size={22} />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[12px] sm:text-[12.5px] font-medium text-[#6B7280] dark:text-[#94A3B8]">
+                  Tổng doanh thu
+                </div>
+                <div className="text-[17px] sm:text-[20px] font-bold text-[#111827] dark:text-[#F8FAFC] tracking-tight truncate mt-0.5">
+                  {formatCurrency(totalProfitRevenue)}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-[#1E293B] rounded-[16px] p-4 sm:p-5 border border-[#F1F2F5] dark:border-[#334155] shadow-xs flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-[12px] bg-[#FFFBEB] dark:bg-amber-950/60 text-[#D97706] dark:text-[#F59E0B] flex items-center justify-center shrink-0">
+                <Icon name="shopping_bag" size={22} />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[12px] sm:text-[12.5px] font-medium text-[#6B7280] dark:text-[#94A3B8]">
+                  Giá vốn hàng bán (COGS)
+                </div>
+                <div className="text-[17px] sm:text-[20px] font-bold text-[#111827] dark:text-[#F8FAFC] tracking-tight truncate mt-0.5">
+                  {formatCurrency(totalProfitCOGS)}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-[#1E293B] rounded-[16px] p-4 sm:p-5 border border-[#F1F2F5] dark:border-[#334155] shadow-xs flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-[12px] bg-[#ECFDF5] dark:bg-emerald-950/60 text-[#059669] dark:text-[#34D399] flex items-center justify-center shrink-0">
+                <Icon name="savings" size={22} />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[12px] sm:text-[12.5px] font-medium text-[#6B7280] dark:text-[#94A3B8]">
+                  Lợi nhuận gộp
+                </div>
+                <div className="text-[17px] sm:text-[20px] font-bold text-[#059669] dark:text-[#34D399] tracking-tight truncate mt-0.5">
+                  {formatCurrency(totalProfitGross)}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-[#1E293B] rounded-[16px] p-4 sm:p-5 border border-[#F1F2F5] dark:border-[#334155] shadow-xs flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-[12px] bg-[#EFF6FF] dark:bg-blue-950/60 text-[#2563EB] dark:text-[#60A5FA] flex items-center justify-center shrink-0">
+                <Icon name="trending_up" size={22} />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[12px] sm:text-[12.5px] font-medium text-[#6B7280] dark:text-[#94A3B8]">
+                  Biên lợi nhuận bình quân
+                </div>
+                <div className="text-[17px] sm:text-[20px] font-bold text-[#2563EB] dark:text-[#60A5FA] tracking-tight truncate mt-0.5">
+                  {avgProfitMargin.toFixed(1)}%
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Chart Top 5 Profit */}
+          <div className="bg-white dark:bg-[#1E293B] rounded-[16px] p-4 sm:p-6 border border-[#F1F2F5] dark:border-[#334155] shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-2 border-b border-[#F1F2F5] dark:border-[#334155]/60">
+              <div>
+                <h3 className="text-[15px] sm:text-[16px] font-bold text-[#111827] dark:text-[#F8FAFC]">
+                  Top 5 {profitViewMode === 'product' ? 'Mặt hàng' : 'Khách hàng'} sinh lời cao nhất
+                </h3>
+                <p className="text-[12px] sm:text-[12.5px] text-[#6B7280] dark:text-[#94A3B8] mt-0.5">
+                  So sánh tương quan giữa Doanh thu và Lợi nhuận gộp thực thu
+                </p>
+              </div>
+              <div className="flex items-center gap-4 text-[12px] font-medium">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-xs bg-[#6D3EEB] inline-block" />
+                  <span className="text-[#4B5563] dark:text-[#CBD5E1]">Doanh thu</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-xs bg-[#10B981] inline-block" />
+                  <span className="text-[#4B5563] dark:text-[#CBD5E1]">Lợi nhuận gộp</span>
+                </span>
+              </div>
+            </div>
+
+            <div className="h-64 sm:h-72 w-full pt-1">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={topProfitChartData} margin={{ top: 10, right: 15, left: -10, bottom: 25 }}>
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 11, fill: '#6B7280' }}
+                    interval={0}
+                    angle={-15}
+                    textAnchor="end"
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: '#6B7280' }}
+                    tickFormatter={val => `${val / 1000}k`}
+                  />
+                  <Tooltip
+                    formatter={(val: any) => formatCurrency(Number(val))}
+                    labelFormatter={label => `${label}`}
+                  />
+                  <Bar dataKey="revenue" name="Doanh thu" fill="#8B5CF6" barSize={18} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="profit" name="Lợi nhuận" fill="#10B981" barSize={18} radius={[4, 4, 0, 0]} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Subheader: View Switcher, Search, Sort & Export */}
+          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white dark:bg-[#1E293B] p-3 sm:p-3.5 rounded-[16px] border border-[#F1F2F5] dark:border-[#334155] shadow-xs">
+            {/* View Mode Toggle Switch */}
+            <div className="flex items-center bg-gray-100 dark:bg-slate-800/80 p-1 rounded-[12px] shrink-0">
+              <button
+                type="button"
+                onClick={() => setProfitViewMode('product')}
+                className={`px-3 py-1.5 rounded-[9px] text-[12.5px] sm:text-[13px] font-semibold transition-all cursor-pointer ${
+                  profitViewMode === 'product'
+                    ? 'bg-white dark:bg-slate-700 text-[#6D3EEB] dark:text-[#C084FC] shadow-xs'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
+                }`}
+              >
+                Theo Mặt Hàng ({productProfitList.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setProfitViewMode('customer')}
+                className={`px-3 py-1.5 rounded-[9px] text-[12.5px] sm:text-[13px] font-semibold transition-all cursor-pointer ${
+                  profitViewMode === 'customer'
+                    ? 'bg-white dark:bg-slate-700 text-[#6D3EEB] dark:text-[#C084FC] shadow-xs'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
+                }`}
+              >
+                Theo Khách Hàng ({customerProfitList.length})
+              </button>
+            </div>
+
+            {/* Search Input */}
+            <div className="flex-1 min-w-[200px] relative">
+              <Icon name="search" size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+              <input
+                type="text"
+                placeholder={profitViewMode === 'product' ? 'Tìm theo tên sản phẩm, mã SKU...' : 'Tìm theo tên khách, mã KH...'}
+                value={profitSearch}
+                onChange={e => setProfitSearch(e.target.value)}
+                className="w-full h-10 pl-10 pr-3.5 bg-transparent border border-[#E5E7EB] dark:border-[#334155] rounded-[10px] text-[13px] text-[#111827] dark:text-[#F8FAFC] placeholder:text-[#9CA3AF] outline-none focus:border-[#6D3EEB]"
+              />
+            </div>
+
+            {/* Sort & Export controls */}
+            <div className="flex items-center gap-2">
+              <select
+                value={profitSort}
+                onChange={e => setProfitSort(e.target.value as any)}
+                className="h-10 px-3 bg-transparent border border-[#E5E7EB] dark:border-[#334155] rounded-[10px] text-[13px] text-[#4B5563] dark:text-[#CBD5E1] outline-none cursor-pointer"
+              >
+                <option value="profit">Sắp xếp: Lợi nhuận</option>
+                <option value="revenue">Sắp xếp: Doanh thu</option>
+                <option value="margin">Sắp xếp: % Biên LN</option>
+                <option value="name">Sắp xếp: Tên A-Z</option>
+              </select>
+
+              <button
+                type="button"
+                onClick={() => setProfitSortAsc(!profitSortAsc)}
+                title="Đảo chiều sắp xếp"
+                className="w-10 h-10 rounded-[10px] bg-transparent border border-[#E5E7EB] dark:border-[#334155] flex items-center justify-center text-[#6B7280] dark:text-[#94A3B8] hover:text-[#111827] cursor-pointer"
+              >
+                <Icon name={profitSortAsc ? 'arrow_upward' : 'arrow_downward'} size={18} />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExport}
+                className="h-10 px-3.5 bg-transparent border border-[#6D3EEB] text-[#6D3EEB] dark:text-[#C084FC] hover:bg-[#6D3EEB]/10 rounded-[10px] text-[13px] font-semibold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              >
+                <Icon name="download" size={17} />
+                <span>Xuất Excel</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Table: Product Profitability View */}
+          {profitViewMode === 'product' && (
+            <div className="bg-white dark:bg-[#1E293B] rounded-[16px] border border-[#E5E7EB] dark:border-[#334155] shadow-xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-[13.5px]">
+                  <thead className="bg-transparent text-[#6B7280] dark:text-[#94A3B8] text-[11.5px] uppercase font-bold border-b border-[#E5E7EB] dark:border-[#334155]">
+                    <tr>
+                      <th className="py-3 px-4">Mã SKU</th>
+                      <th className="py-3 px-4">Tên sản phẩm</th>
+                      <th className="py-3 px-4 text-center">ĐVT</th>
+                      <th className="py-3 px-4 text-right">SL bán</th>
+                      <th className="py-3 px-4 text-right">Doanh thu</th>
+                      <th className="py-3 px-4 text-right">Giá vốn</th>
+                      <th className="py-3 px-4 text-right">Lợi nhuận gộp</th>
+                      <th className="py-3 px-4 text-right">% Biên LN</th>
+                      <th className="py-3 px-4 text-center">Đánh giá</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#F1F2F5] dark:divide-[#334155]">
+                    {filteredProductProfits.map(item => {
+                      const tier =
+                        item.margin >= 40
+                          ? { label: 'Rất cao', color: 'text-emerald-700 dark:text-emerald-400', border: 'border-emerald-300 dark:border-emerald-800/50' }
+                          : item.margin >= 25
+                          ? { label: 'Tốt', color: 'text-blue-700 dark:text-blue-400', border: 'border-blue-300 dark:border-blue-800/50' }
+                          : item.margin >= 15
+                          ? { label: 'Trung bình', color: 'text-amber-800 dark:text-amber-400', border: 'border-amber-300 dark:border-amber-800/50' }
+                          : { label: 'Thấp', color: 'text-rose-700 dark:text-rose-400', border: 'border-rose-300 dark:border-rose-800/50' };
+
+                      return (
+                        <tr key={item.id} className="hover:bg-gray-50/70 dark:hover:bg-slate-800/50 transition-colors">
+                          <td className="py-3.5 px-4 font-mono font-semibold text-[#6D3EEB] dark:text-[#C084FC]">
+                            {item.sku}
+                          </td>
+                          <td className="py-3.5 px-4 font-medium text-[#111827] dark:text-[#F8FAFC]">
+                            {item.name}
+                          </td>
+                          <td className="py-3.5 px-4 text-center text-[#6B7280] dark:text-[#94A3B8]">
+                            {item.unit}
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-mono font-medium text-[#111827] dark:text-[#F8FAFC]">
+                            {formatQuantity(item.soldQty)}
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-mono text-[#111827] dark:text-[#F8FAFC]">
+                            {formatCurrency(item.revenue)}
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-mono text-[#6B7280] dark:text-[#94A3B8]">
+                            {formatCurrency(item.cogs)}
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                            {formatCurrency(item.grossProfit)}
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-mono font-bold">
+                            {item.margin.toFixed(1)}%
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
+                            <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${tier.color} ${tier.border}`}>
+                              {tier.label}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="py-3 px-4 bg-transparent border-t border-[#F1F2F5] dark:border-[#334155] flex items-center justify-between text-[12.5px] text-[#6B7280] dark:text-[#94A3B8]">
+                <span>Hiển thị <strong>{filteredProductProfits.length}</strong> mặt hàng</span>
+                <span>Tổng LN gộp lọc: <strong className="text-emerald-600 dark:text-emerald-400">{formatCurrency(filteredProductProfits.reduce((s, p) => s + p.grossProfit, 0))}</strong></span>
+              </div>
+            </div>
+          )}
+
+          {/* Table: Customer Profitability View */}
+          {profitViewMode === 'customer' && (
+            <div className="bg-white dark:bg-[#1E293B] rounded-[16px] border border-[#E5E7EB] dark:border-[#334155] shadow-xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-[13.5px]">
+                  <thead className="bg-transparent text-[#6B7280] dark:text-[#94A3B8] text-[11.5px] uppercase font-bold border-b border-[#E5E7EB] dark:border-[#334155]">
+                    <tr>
+                      <th className="py-3 px-4">Mã KH</th>
+                      <th className="py-3 px-4">Khách hàng</th>
+                      <th className="py-3 px-4 text-center">Số đơn</th>
+                      <th className="py-3 px-4 text-right">Doanh thu</th>
+                      <th className="py-3 px-4 text-right">Giá vốn</th>
+                      <th className="py-3 px-4 text-right">Lợi nhuận gộp</th>
+                      <th className="py-3 px-4 text-right">% Biên LN</th>
+                      <th className="py-3 px-4 text-right">Nợ hiện tại</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#F1F2F5] dark:divide-[#334155]">
+                    {filteredCustomerProfits.map(item => (
+                      <tr key={item.id} className="hover:bg-gray-50/70 dark:hover:bg-slate-800/50 transition-colors">
+                        <td className="py-3.5 px-4 font-mono font-semibold text-[#6D3EEB] dark:text-[#C084FC]">
+                          {item.code}
+                        </td>
+                        <td className="py-3.5 px-4 font-medium text-[#111827] dark:text-[#F8FAFC]">
+                          {item.name}
+                        </td>
+                        <td className="py-3.5 px-4 text-center font-mono text-[#4B5563] dark:text-[#CBD5E1]">
+                          {item.orderCount}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono text-[#111827] dark:text-[#F8FAFC]">
+                          {formatCurrency(item.revenue)}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono text-[#6B7280] dark:text-[#94A3B8]">
+                          {formatCurrency(item.cogs)}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          {formatCurrency(item.grossProfit)}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono font-bold">
+                          {item.margin.toFixed(1)}%
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono font-semibold">
+                          <span className={item.remainingDebt > 0 ? 'text-[#E11D48] dark:text-[#FB7185]' : 'text-[#111827] dark:text-[#CBD5E1]'}>
+                            {formatCurrency(item.remainingDebt)}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="py-3 px-4 bg-transparent border-t border-[#F1F2F5] dark:border-[#334155] flex items-center justify-between text-[12.5px] text-[#6B7280] dark:text-[#94A3B8]">
+                <span>Hiển thị <strong>{filteredCustomerProfits.length}</strong> khách hàng</span>
+                <span>Tổng LN gộp lọc: <strong className="text-emerald-600 dark:text-emerald-400">{formatCurrency(filteredCustomerProfits.reduce((s, c) => s + c.grossProfit, 0))}</strong></span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

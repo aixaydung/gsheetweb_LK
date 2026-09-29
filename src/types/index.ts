@@ -405,12 +405,16 @@ export interface Payment {
 export interface ActivityLog {
   id: string;
   occurred_at: string;
-  action: 'create' | 'update' | 'cancel' | 'delete' | 'pay' | 'status_change';
+  action: 'create' | 'update' | 'cancel' | 'delete' | 'pay' | 'status_change' | 'import';
   entity_type: string;
   entity_id: string;
   entity_code: string;
   title: string;
   amount?: number;
+  user_name?: string;
+  user_email?: string;
+  ip?: string;
+  details?: string;
 }
 
 export interface AppNotification {

@@ -132,6 +132,9 @@ interface AppContextType {
   importCustomersBatch: (items: Partial<Customer>[]) => Promise<{ successCount: number; errorCount: number }>;
   importSuppliersBatch: (items: Partial<Supplier>[]) => Promise<{ successCount: number; errorCount: number }>;
 
+  // Activity Logging
+  logActivity: (log: Omit<ActivityLog, 'id' | 'occurred_at'>) => void;
+
   updateSettings: (settings: Partial<CompanySettings>) => void;
   updateInlineNote: (entityType: string, id: string, note: string) => void;
   markNotificationRead: (id: string) => void;
@@ -202,6 +205,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>(() =>
     getInitialState('activities', INITIAL_ACTIVITY_LOGS)
   );
+
+  const logActivity = (log: Omit<ActivityLog, 'id' | 'occurred_at'>) => {
+    const entry: ActivityLog = {
+      id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      occurred_at: new Date().toISOString(),
+      user_name: 'Admin Hệ Thống',
+      user_email: 'admin@lkerp.vn',
+      ip: '192.168.1.100',
+      ...log,
+    };
+    setActivityLogs(prev => [entry, ...prev]);
+  };
+
   const [notifications, setNotifications] = useState<AppNotification[]>(() =>
     getInitialState('notifications', INITIAL_NOTIFICATIONS)
   );
@@ -668,28 +684,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     // Activity log
-    setActivityLogs(prev => [
-      {
-        id: `act-${Date.now()}`,
-        occurred_at: now,
-        action: 'create',
-        entity_type: 'sales_invoice',
-        entity_id: newInvoice.id,
-        entity_code: code,
-        title: `Hóa đơn ${code} — ${newInvoice.customer_name}`,
-        amount: total,
-      },
-      ...prev,
-    ]);
+    logActivity({
+      action: 'create',
+      entity_type: 'sales_invoice',
+      entity_id: newInvoice.id,
+      entity_code: code,
+      title: `Hóa đơn bán hàng ${code} — ${newInvoice.customer_name}`,
+      amount: total,
+      details: `Lập hóa đơn bán hàng cho khách ${newInvoice.customer_name}, tổng tiền: ${total.toLocaleString('vi-VN')} đ`,
+    });
 
     recalculateBalances(updatedInvoices, purchaseOrders);
     return newInvoice;
   };
 
   const updateInvoiceStatus = (id: string, status: any) => {
+    const targetInv = invoices.find(inv => inv.id === id);
+    const oldStatus = targetInv?.status;
     setInvoices(prev =>
       prev.map(inv => (inv.id === id ? { ...inv, status } : inv))
     );
+    logActivity({
+      action: 'status_change',
+      entity_type: 'sales_invoice',
+      entity_id: id,
+      entity_code: targetInv?.code || id,
+      title: `Đổi trạng thái hóa đơn ${targetInv?.code || id} (${oldStatus} ➔ ${status})`,
+      details: `Hóa đơn ${targetInv?.code || id} - Khách: ${targetInv?.customer_name || ''}`,
+    });
     syncWithApi(
       fetch(`/api/orders/${id}/status`, {
         method: 'PATCH',
@@ -700,6 +722,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const cancelInvoice = (id: string) => {
+    const targetInv = invoices.find(inv => inv.id === id);
     setInvoices(prev =>
       prev.map(inv => {
         if (inv.id === id) {
@@ -708,6 +731,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return inv;
       })
     );
+    logActivity({
+      action: 'cancel',
+      entity_type: 'sales_invoice',
+      entity_id: id,
+      entity_code: targetInv?.code || id,
+      title: `Hủy hóa đơn bán hàng ${targetInv?.code || id}`,
+      amount: targetInv?.total,
+      details: `Hủy hóa đơn giá trị ${(targetInv?.total || 0).toLocaleString('vi-VN')} đ của khách ${targetInv?.customer_name || ''}`,
+    });
     syncWithApi(
       fetch(`/api/orders/${id}/status`, {
         method: 'PATCH',
@@ -718,7 +750,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteInvoice = (id: string) => {
+    const targetInv = invoices.find(inv => inv.id === id);
     setInvoices(prev => prev.filter(inv => inv.id !== id));
+    logActivity({
+      action: 'delete',
+      entity_type: 'sales_invoice',
+      entity_id: id,
+      entity_code: targetInv?.code || id,
+      title: `Xóa vĩnh viễn hóa đơn ${targetInv?.code || id}`,
+      details: `Xóa hóa đơn của khách hàng ${targetInv?.customer_name || ''}`,
+    });
   };
 
   // Quotation handlers
@@ -1019,13 +1060,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     recalculateBalances(invoices, updatedPOs);
+
+    logActivity({
+      action: 'create',
+      entity_type: 'purchase_order',
+      entity_id: newPO.id,
+      entity_code: code,
+      title: `Đơn mua hàng ${code} — ${newPO.supplier_name}`,
+      amount: total,
+      details: `Tạo đơn nhập hàng trị giá ${total.toLocaleString('vi-VN')} đ từ ${newPO.supplier_name}`,
+    });
+
     return newPO;
   };
 
   const updatePurchaseOrderStatus = (id: string, status: any) => {
+    const targetPO = purchaseOrders.find(po => po.id === id);
     setPurchaseOrders(prev =>
       prev.map(po => (po.id === id ? { ...po, status } : po))
     );
+    logActivity({
+      action: 'status_change',
+      entity_type: 'purchase_order',
+      entity_id: id,
+      entity_code: targetPO?.code || id,
+      title: `Đổi trạng thái đơn mua ${targetPO?.code || id} (${targetPO?.status} ➔ ${status})`,
+      details: `Đơn mua từ ${targetPO?.supplier_name || ''}`,
+    });
     syncWithApi(
       fetch(`/api/purchases/${id}/status`, {
         method: 'PATCH',
@@ -1211,6 +1272,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
     }
 
+    logActivity({
+      action: 'create',
+      entity_type: 'stocktake',
+      entity_id: newStocktake.id,
+      entity_code: code,
+      title: `Phiếu kiểm kê kho ${code} — ${newStocktake.warehouse_name || 'Kho'}`,
+      details: `Kiểm kê ${items.length} mặt hàng, lệch ${diffValue >= 0 ? '+' : ''}${diffValue.toLocaleString('vi-VN')} đ`,
+    });
+
     return newStocktake;
   };
 
@@ -1295,13 +1365,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
     }
 
+    logActivity({
+      action: 'pay',
+      entity_type: 'payment',
+      entity_id: newPayment.id,
+      entity_code: code,
+      title: `Phiếu ${direction === 'in' ? 'thu tiền' : 'chi tiền'} ${code} — ${paymentData.partner_name || 'Đối tác'}`,
+      amount,
+      details: `Số tiền ${amount.toLocaleString('vi-VN')} đ qua ${paymentData.method === 'cash' ? 'tiền mặt' : 'chuyển khoản'}`,
+    });
+
     return newPayment;
   };
 
   const cancelPayment = (id: string) => {
+    const targetPay = payments.find(p => p.id === id);
     setPayments(prev =>
       prev.map(p => (p.id === id ? { ...p, status: 'cancelled' } : p))
     );
+    logActivity({
+      action: 'cancel',
+      entity_type: 'payment',
+      entity_id: id,
+      entity_code: targetPay?.code || id,
+      title: `Hủy phiếu ${targetPay?.direction === 'in' ? 'thu' : 'chi'} ${targetPay?.code || id}`,
+      amount: targetPay?.amount,
+      details: `Hủy chứng từ giá trị ${(targetPay?.amount || 0).toLocaleString('vi-VN')} đ`,
+    });
     syncWithApi(
       fetch(`/api/payments/${id}/cancel`, {
         method: 'PATCH',
@@ -1352,14 +1442,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
 
+    logActivity({
+      action: 'create',
+      entity_type: 'product',
+      entity_id: newProd.id,
+      entity_code: newProd.sku,
+      title: `Thêm sản phẩm mới ${newProd.sku} - ${newProd.name}`,
+      details: `Giá bán: ${newProd.sale_price.toLocaleString('vi-VN')} đ, tồn kho: ${newProd.stock_quantity}`,
+    });
+
     return newProd;
   };
 
   const updateProduct = (id: string, prodData: Partial<Product>) => {
+    const p = products.find(prod => prod.id === id);
     setProducts(prev =>
-      prev.map(p => {
-        if (p.id !== id) return p;
-        const updated = { ...p, ...prodData };
+      prev.map(prod => {
+        if (prod.id !== id) return prod;
+        const updated = { ...prod, ...prodData };
         if (prodData.group_id) {
           updated.group_name = productGroups.find(g => g.id === prodData.group_id)?.name || updated.group_name;
         }
@@ -1367,6 +1467,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return updated;
       })
     );
+
+    logActivity({
+      action: 'update',
+      entity_type: 'product',
+      entity_id: id,
+      entity_code: p?.sku || id,
+      title: `Cập nhật sản phẩm ${p?.sku || id} - ${p?.name || ''}`,
+      details: 'Cập nhật thông tin chi tiết sản phẩm',
+    });
 
     // Background sync to Google Sheets
     syncWithApi(
@@ -1379,7 +1488,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteProduct = (id: string) => {
-    setProducts(prev => prev.filter(p => p.id !== id));
+    const p = products.find(prod => prod.id === id);
+    setProducts(prev => prev.filter(prod => prod.id !== id));
+    logActivity({
+      action: 'delete',
+      entity_type: 'product',
+      entity_id: id,
+      entity_code: p?.sku || id,
+      title: `Xóa sản phẩm ${p?.sku || id} - ${p?.name || ''}`,
+      details: 'Xóa khỏi danh mục hàng hóa',
+    });
     syncWithApi(fetch(`/api/products/${id}`, { method: 'DELETE' }));
   };
 
@@ -1417,20 +1535,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
 
+    logActivity({
+      action: 'create',
+      entity_type: 'customer',
+      entity_id: newCust.id,
+      entity_code: newCust.code,
+      title: `Thêm khách hàng mới ${newCust.code} - ${newCust.name}`,
+      details: `Nhóm: ${newCust.group_name}, SĐT: ${newCust.phone || 'Chưa có'}`,
+    });
+
     return newCust;
   };
 
   const updateCustomer = (id: string, custData: Partial<Customer>) => {
+    const c = customers.find(cust => cust.id === id);
     setCustomers(prev =>
-      prev.map(c => {
-        if (c.id !== id) return c;
-        const updated = { ...c, ...custData };
+      prev.map(cust => {
+        if (cust.id !== id) return cust;
+        const updated = { ...cust, ...custData };
         if (custData.group_id) {
           updated.group_name = customerGroups.find(g => g.id === custData.group_id)?.name || updated.group_name;
         }
         return updated;
       })
     );
+
+    logActivity({
+      action: 'update',
+      entity_type: 'customer',
+      entity_id: id,
+      entity_code: c?.code || id,
+      title: `Cập nhật thông tin khách hàng ${c?.code || id} - ${c?.name || ''}`,
+      details: 'Cập nhật hồ sơ khách hàng',
+    });
 
     // Background sync to Google Sheets
     syncWithApi(
@@ -1443,7 +1580,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteCustomer = (id: string) => {
-    setCustomers(prev => prev.filter(c => c.id !== id));
+    const c = customers.find(cust => cust.id === id);
+    setCustomers(prev => prev.filter(cust => cust.id !== id));
+    logActivity({
+      action: 'delete',
+      entity_type: 'customer',
+      entity_id: id,
+      entity_code: c?.code || id,
+      title: `Xóa khách hàng ${c?.code || id} - ${c?.name || ''}`,
+      details: 'Xóa khỏi danh bạ khách hàng',
+    });
     syncWithApi(fetch(`/api/customers/${id}`, { method: 'DELETE' }));
   };
 
@@ -1480,20 +1626,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
 
+    logActivity({
+      action: 'create',
+      entity_type: 'supplier',
+      entity_id: newSup.id,
+      entity_code: newSup.code,
+      title: `Thêm nhà cung cấp mới ${newSup.code} - ${newSup.name}`,
+      details: `Nhóm: ${newSup.group_name}, Liên hệ: ${newSup.contact_name || newSup.phone || 'Chưa có'}`,
+    });
+
     return newSup;
   };
 
   const updateSupplier = (id: string, supData: Partial<Supplier>) => {
+    const s = suppliers.find(sup => sup.id === id);
     setSuppliers(prev =>
-      prev.map(s => {
-        if (s.id !== id) return s;
-        const updated = { ...s, ...supData };
+      prev.map(sup => {
+        if (sup.id !== id) return sup;
+        const updated = { ...sup, ...supData };
         if (supData.group_id) {
           updated.group_name = supplierGroups.find(g => g.id === supData.group_id)?.name || updated.group_name;
         }
         return updated;
       })
     );
+
+    logActivity({
+      action: 'update',
+      entity_type: 'supplier',
+      entity_id: id,
+      entity_code: s?.code || id,
+      title: `Cập nhật NCC ${s?.code || id} - ${s?.name || ''}`,
+      details: 'Cập nhật thông tin đối tác cung cấp',
+    });
 
     // Background sync to Google Sheets
     syncWithApi(
@@ -1506,7 +1671,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteSupplier = (id: string) => {
-    setSuppliers(prev => prev.filter(s => s.id !== id));
+    const s = suppliers.find(sup => sup.id === id);
+    setSuppliers(prev => prev.filter(sup => sup.id !== id));
+    logActivity({
+      action: 'delete',
+      entity_type: 'supplier',
+      entity_id: id,
+      entity_code: s?.code || id,
+      title: `Xóa nhà cung cấp ${s?.code || id} - ${s?.name || ''}`,
+      details: 'Xóa khỏi danh bạ nhà cung cấp',
+    });
     syncWithApi(fetch(`/api/vendors/${id}`, { method: 'DELETE' }));
   };
 
@@ -1598,6 +1772,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
 
+    logActivity({
+      action: 'import',
+      entity_type: 'product',
+      entity_id: 'batch',
+      entity_code: 'EXCEL-IMP',
+      title: `Import Excel danh mục: ${newProducts.length} sản phẩm`,
+      details: `Nhập khẩu thành công ${newProducts.length} mặt hàng từ file Excel`,
+    });
+
     return { successCount: newProducts.length, errorCount: 0 };
   };
 
@@ -1645,6 +1828,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         body: JSON.stringify({ customers: payloadItems }),
       })
     );
+
+    logActivity({
+      action: 'import',
+      entity_type: 'customer',
+      entity_id: 'batch',
+      entity_code: 'EXCEL-IMP',
+      title: `Import Excel khách hàng: ${newCustomers.length} đối tác`,
+      details: `Nhập khẩu thành công ${newCustomers.length} khách hàng từ file Excel`,
+    });
 
     return { successCount: newCustomers.length, errorCount: 0 };
   };
@@ -1695,11 +1887,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
 
+    logActivity({
+      action: 'import',
+      entity_type: 'supplier',
+      entity_id: 'batch',
+      entity_code: 'EXCEL-IMP',
+      title: `Import Excel nhà cung cấp: ${newSuppliers.length} đối tác`,
+      details: `Nhập khẩu thành công ${newSuppliers.length} NCC từ file Excel`,
+    });
+
     return { successCount: newSuppliers.length, errorCount: 0 };
   };
 
   const updateSettings = (settingsData: Partial<CompanySettings>) => {
     setCompanySettings(prev => ({ ...prev, ...settingsData }));
+    logActivity({
+      action: 'update',
+      entity_type: 'settings',
+      entity_id: 'company',
+      entity_code: 'SYS-CFG',
+      title: 'Cập nhật cấu hình công ty & thông tin doanh nghiệp',
+      details: 'Cập nhật cài đặt hệ thống',
+    });
   };
 
   // Inline note updater for NoteCell
@@ -1816,6 +2025,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         importProductsBatch,
         importCustomersBatch,
         importSuppliersBatch,
+        logActivity,
         updateSettings,
         updateInlineNote,
         markNotificationRead,

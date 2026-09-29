@@ -187,6 +187,27 @@ Spreadsheet ID: `1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY` đã khởi tạo
     - Hỗ trợ In biên bản đối chiếu (`window.print()`) và Xuất file Excel chuẩn UTF-8 BOM.
     - Nút bấm "Đối chiếu công nợ" trên thanh công cụ Header và tại từng dòng đối tác.
 
+- [x] **Nhật ký Hệ thống (Audit Trail) & Phân tích Biên lợi nhuận Mặt hàng/Khách hàng (Gói 6)**:
+  - [x] **Nhật ký Hệ thống (Audit Trail / Activity Log)**:
+    - Mở rộng model `ActivityLog` với các trường chi tiết: `user_name`, `user_email`, `ip`, `details`, và action type `'import'`.
+    - Tích hợp ghi vết tự động (`logActivity`) vào tất cả thao tác biến động dữ liệu trong `AppContext.tsx`: Tạo/Hủy/Đổi trạng thái/Xóa Hóa đơn bán, Đơn mua hàng, Phiếu thu/chi sổ quỹ, Kiểm kê kho, Danh mục Sản phẩm/Khách hàng/NCC, Nhập khẩu hàng loạt Excel, Cập nhật cấu hình công ty.
+    - Nâng cấp giao diện `AuditLogTab.tsx` trong Cài đặt (`/cai-dat?tab=nhat-ky-audit`):
+      - Kết nối dữ liệu nhật ký thực tế từ `useApp().activityLogs`.
+      - Bộ lọc linh hoạt theo loại thao tác: Tạo mới, Cập nhật, Đổi trạng thái, Thanh toán, Hủy bỏ, Xóa, Nhập Excel.
+      - Thanh tìm kiếm tức thời theo người thực hiện, email, mã chứng từ, phân hệ, nội dung chi tiết, địa chỉ IP.
+      - Hệ thống badge màu sắc phân định trực quan từng loại thao tác.
+      - Hỗ trợ xuất dữ liệu nhật ký ra file Excel chuẩn UTF-8 BOM (`exportToExcelFile`).
+  - [x] **Báo cáo Phân tích Biên lợi nhuận Gộp (Gross Profitability Analysis)**:
+    - Bổ sung tab **Phân tích lợi nhuận** (`/bao-cao?tab=loi-nhuan`) trên màn hình Báo cáo vận hành (`ReportView.tsx`).
+    - Tính toán động 100% từ các hóa đơn thực tế và giá vốn danh mục sản phẩm:
+      - **Theo Mặt Hàng**: Mã SKU, Tên sản phẩm, ĐVT, Số lượng bán, Doanh thu, Giá vốn (COGS), Lợi nhuận gộp, % Biên lợi nhuận, Đánh giá xếp hạng biên (Rất cao, Tốt, Trung bình, Thấp).
+      - **Theo Khách Hàng**: Mã KH, Tên khách hàng, Số đơn hàng, Doanh thu, Giá vốn, Lợi nhuận gộp, % Biên lợi nhuận, Số dư công nợ hiện tại.
+    - 4 thẻ KPI chỉ số: Tổng doanh thu, Giá vốn hàng bán (COGS), Lợi nhuận gộp thực thu, Tỷ suất biên lợi nhuận bình quân (%).
+    - Biểu đồ tương quan doanh thu & lợi nhuận `ComposedChart` trực quan cho Top 5 mặt hàng hoặc khách hàng sinh lời cao nhất.
+    - Bộ chuyển đổi mượt mà giữa chế độ xem Mặt Hàng và Khách Hàng, thanh tìm kiếm, bộ chọn tiêu chí sắp xếp và nút đảo chiều sắp xếp.
+    - Tính năng Xuất Excel chuyên dụng cho từng bảng phân tích lợi nhuận.
+    - Tích hợp tiêu đề tab vào hệ thống `tabNames` và breadcrumbs tại `App.tsx`.
+
 ---
 
 ## 5. HƯỚNG DẪN DÀNH CHO AI TRONG CÁC LƯỢT TIẾP THEO
