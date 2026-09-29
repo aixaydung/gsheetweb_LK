@@ -86,7 +86,16 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
   // Supplier filter options
   const supplierFilterItems = useMemo(() => [
     { value: 'all', label: 'Nhà cung cấp: Tất cả' },
-    ...suppliers.map(s => ({ value: s.id, label: `${s.code} - ${s.name}` })),
+    ...suppliers.map(s => {
+      // Determine if name is duplicate of code or needs cleanup
+      const cleanName = s.name && s.name !== s.code ? s.name : `Nhà cung cấp ${s.code}`;
+      return {
+        value: s.id,
+        label: `Nhà cung cấp: ${s.code} - ${cleanName}`,
+        code: s.code,
+        name: cleanName,
+      };
+    }),
   ], [suppliers]);
 
   // Tab 1 KPIs

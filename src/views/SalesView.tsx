@@ -93,7 +93,15 @@ export const SalesView: React.FC<SalesViewProps> = ({
   // Customer options for filter dropdowns
   const customerFilterItems = useMemo(() => [
     { value: 'all', label: 'Khách hàng: Tất cả' },
-    ...customers.map(c => ({ value: c.id, label: `${c.code} - ${c.name}` })),
+    ...customers.map(c => {
+      const cleanName = c.name && c.name !== c.code ? c.name : `Khách hàng ${c.code}`;
+      return {
+        value: c.id,
+        label: `Khách hàng: ${c.code} - ${cleanName}`,
+        code: c.code,
+        name: cleanName,
+      };
+    }),
   ], [customers]);
 
   // Tabs

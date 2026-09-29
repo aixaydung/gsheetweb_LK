@@ -23,7 +23,19 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date(2026, 8, 1)); // September 2026
   const [draftFrom, setDraftFrom] = useState<string | null>(value.from);
   const [draftTo, setDraftTo] = useState<string | null>(value.to);
+  const [alignRight, setAlignRight] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Detect edge proximity when opening on desktop to auto-align left or right
+  useEffect(() => {
+    if (isOpen && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const popoverWidth = 560; // desktop width of popover
+      const spaceRight = window.innerWidth - rect.left;
+      // If remaining space on the right is less than popover width + padding, align to right edge
+      setAlignRight(spaceRight < popoverWidth + 24);
+    }
+  }, [isOpen]);
 
   // Sync draft states when value changes or when opened
   useEffect(() => {
@@ -227,12 +239,18 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
         <>
           {/* Mobile Backdrop for clean focus */}
           <div
-            className="fixed inset-0 bg-black/40 z-40 sm:hidden backdrop-blur-xs"
+            className="fixed inset-0 bg-black/50 z-50 sm:hidden backdrop-blur-xs transition-opacity"
             onClick={() => setIsOpen(false)}
           />
 
-          {/* Modal / Dropdown Content */}
-          <div className="fixed inset-x-3 top-16 max-h-[85vh] overflow-y-auto sm:overflow-visible sm:max-h-none sm:absolute sm:inset-x-auto sm:left-0 sm:right-auto sm:top-full mt-2 bg-white dark:bg-[#1E293B] rounded-[20px] shadow-[0_16px_36px_rgba(16,24,40,0.2)] border border-[#E5E7EB] dark:border-[#334155] z-50 p-4 w-auto sm:w-[560px]">
+          {/* Modal / Dropdown Content: Bottom Sheet on Mobile, Popover on Desktop */}
+          <div
+            className={`fixed inset-x-0 bottom-0 sm:bottom-auto max-h-[92vh] overflow-y-auto sm:overflow-visible sm:max-h-none sm:absolute ${
+              alignRight ? 'sm:right-0 sm:left-auto' : 'sm:left-0 sm:right-auto'
+            } sm:top-full mt-2 bg-white dark:bg-[#1E293B] rounded-t-[24px] sm:rounded-[20px] shadow-[0_20px_50px_rgba(16,24,40,0.25)] border border-[#E5E7EB] dark:border-[#334155] z-50 p-4 sm:p-5 w-full sm:w-[560px] animate-in sm:zoom-in-95 duration-200`}
+          >
+            {/* Mobile Sheet Handle */}
+            <div className="w-12 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full mx-auto mb-3 sm:hidden" />
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
               {/* Presets Column: 3-column grid on mobile, vertical list on desktop */}
               <div className="sm:col-span-4 border-b sm:border-b-0 sm:border-r border-[#F1F2F5] dark:border-[#334155] pb-3 sm:pb-0 sm:pr-3">

@@ -2,18 +2,218 @@ import React, { useState } from 'react';
 import { Icon } from './Icon';
 import { DateRangePicker, DateRange } from './DateRangePicker';
 
+export interface FilterItem {
+  value: string;
+  label: string;
+  code?: string;
+  name?: string;
+}
+
 export interface FilterOption {
   label: string; // e.g. "Thanh toán: Tất cả"
   key: string;
   value: string;
-  items: { value: string; label: string }[];
+  items: FilterItem[];
   onChange: (val: string) => void;
+  searchable?: boolean;
 }
 
 export interface SortOption {
   key: string;
   label: string;
 }
+
+// Clean prefixes like "Nhà cung cấp: ", "Khách hàng: "
+const cleanFilterLabel = (fullLabel: string) => {
+  return fullLabel.replace(/^[^:]+:\s*/i, '').trim();
+};
+
+const FilterDropdown: React.FC<{
+  filter: FilterOption;
+  heightClass?: string;
+  compact?: boolean;
+}> = ({ filter, heightClass = 'h-[42px]', compact = false }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [alignRight, setAlignRight] = useState(false);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      // Auto-focus search input if searchable
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 50);
+      // Check space right
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        setAlignRight(window.innerWidth - rect.left < 320);
+      }
+    } else {
+      setSearchTerm('');
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
+
+  const activeItem = filter.items.find(it => it.value === filter.value) || filter.items[0];
+  const activeLabel = activeItem ? cleanFilterLabel(activeItem.label) : '';
+
+  // Get Prefix title (e.g. "Nhà cung cấp", "Khách hàng", "Thanh toán")
+  const prefixMatch = filter.label.match(/^([^:]+):/);
+  const filterTitle = prefixMatch ? prefixMatch[1] : '';
+
+  // Filter items if searching
+  const filteredItems = React.useMemo(() => {
+    if (!searchTerm.trim()) return filter.items;
+    const q = searchTerm.toLowerCase().trim();
+    return filter.items.filter(it => {
+      if (it.value === 'all') return true;
+      const labelMatch = it.label.toLowerCase().includes(q);
+      const codeMatch = it.code ? it.code.toLowerCase().includes(q) : false;
+      const nameMatch = it.name ? it.name.toLowerCase().includes(q) : false;
+      return labelMatch || codeMatch || nameMatch;
+    });
+  }, [filter.items, searchTerm]);
+
+  const isSearchable = filter.searchable !== false && filter.items.length > 5;
+
+  return (
+    <div ref={containerRef} className="relative shrink-0">
+      {/* Trigger Button */}
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className={`flex items-center gap-1.5 px-3 sm:px-3.5 ${heightClass} bg-white dark:bg-[#1E293B] border ${
+          isOpen ? 'border-[#6D3EEB] ring-2 ring-[#6D3EEB]/20' : 'border-[#E5E7EB] dark:border-[#334155]'
+        } hover:border-[#6D3EEB] rounded-[12px] text-[13px] sm:text-[13.5px] font-medium text-[#1F2937] dark:text-[#F8FAFC] transition-all shadow-xs cursor-pointer whitespace-nowrap`}
+      >
+        <span className="truncate max-w-[140px] sm:max-w-[200px]">
+          {filterTitle ? (
+            <>
+              <span className="text-[#6B7280] dark:text-[#94A3B8] font-normal">{filterTitle}: </span>
+              <strong className="font-semibold text-[#111827] dark:text-white">
+                {activeItem?.code ? `${activeItem.code} - ${activeItem.name || activeLabel}` : activeLabel}
+              </strong>
+            </>
+          ) : (
+            activeLabel
+          )}
+        </span>
+        <Icon
+          name="expand_more"
+          size={16}
+          className={`text-[#6B7280] transition-transform duration-200 shrink-0 ml-0.5 ${
+            isOpen ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
+
+      {/* Popover Dropdown */}
+      {isOpen && (
+        <div
+          className={`absolute ${
+            alignRight ? 'right-0' : 'left-0'
+          } top-full mt-1.5 z-50 w-[280px] sm:w-[320px] bg-white dark:bg-[#1E293B] border border-[#E5E7EB] dark:border-[#334155] rounded-[16px] shadow-[0_16px_36px_rgba(16,24,40,0.18)] p-2 animate-in fade-in-0 zoom-in-95 duration-150`}
+        >
+          {/* Search Input when searchable */}
+          {isSearchable && (
+            <div className="relative mb-2 px-1">
+              <Icon
+                name="search"
+                size={16}
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]"
+              />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                placeholder={`Tìm ${filterTitle.toLowerCase() || 'theo mã, tên'}...`}
+                className="w-full h-[36px] pl-8 pr-7 bg-[#F9FAFB] dark:bg-slate-800/80 border border-[#E5E7EB] dark:border-[#334155] focus:border-[#6D3EEB] rounded-[10px] text-[12.5px] text-[#1F2937] dark:text-[#F8FAFC] placeholder-[#9CA3AF] outline-none transition-all"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] hover:text-[#4B5563]"
+                >
+                  <Icon name="close" size={14} />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Items List */}
+          <div className="max-h-[260px] overflow-y-auto space-y-0.5 pr-0.5 custom-scrollbar">
+            {filteredItems.length === 0 ? (
+              <div className="py-6 text-center text-[12.5px] text-[#9CA3AF]">
+                Không tìm thấy kết quả phù hợp
+              </div>
+            ) : (
+              filteredItems.map(it => {
+                const isSelected = it.value === filter.value;
+                const cleanText = cleanFilterLabel(it.label);
+                const displayCode = it.code || (it.value !== 'all' && it.label.includes(' - ') ? it.label.split(' - ')[0].trim() : null);
+                const displayName = it.name || (it.value !== 'all' && it.label.includes(' - ') ? it.label.split(' - ').slice(1).join(' - ').trim() : cleanText);
+
+                return (
+                  <button
+                    key={it.value}
+                    type="button"
+                    onClick={() => {
+                      filter.onChange(it.value);
+                      setIsOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] text-[13px] transition-colors cursor-pointer text-left ${
+                      isSelected
+                        ? 'bg-[#F9F5FF] dark:bg-purple-950/40 text-[#6D3EEB] dark:text-[#C084FC] font-semibold'
+                        : 'text-[#374151] dark:text-[#E2E8F0] hover:bg-gray-100 dark:hover:bg-slate-800/70 font-medium'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0 pr-2">
+                      {it.value !== 'all' && displayCode ? (
+                        <>
+                          <span
+                            className={`shrink-0 px-1.5 py-0.5 rounded-[6px] text-[11px] font-mono font-bold ${
+                              isSelected
+                                ? 'bg-[#6D3EEB]/15 text-[#6D3EEB] dark:text-[#C084FC]'
+                                : 'bg-gray-100 dark:bg-slate-800 text-[#4B5563] dark:text-[#94A3B8]'
+                            }`}
+                          >
+                            {displayCode}
+                          </span>
+                          <span className="truncate text-[13px]">{displayName}</span>
+                        </>
+                      ) : (
+                        <span className="truncate text-[13px]">{cleanText}</span>
+                      )}
+                    </div>
+                    {isSelected && (
+                      <Icon
+                        name="check"
+                        size={16}
+                        className="text-[#6D3EEB] dark:text-[#C084FC] shrink-0"
+                      />
+                    )}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 interface FilterToolbarProps {
   searchPlaceholder?: string;
@@ -256,26 +456,14 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
             </div>
           )}
 
-          {/* Filter Selects */}
+          {/* Modern Filter Dropdowns */}
           {filters.map(filter => (
-            <div key={filter.key} className="relative shrink-0">
-              <select
-                value={filter.value}
-                onChange={e => filter.onChange(e.target.value)}
-                className="h-[40px] pl-3 pr-7 bg-white dark:bg-[#1E293B] border border-[#E5E7EB] dark:border-[#334155] hover:border-[#6D3EEB] rounded-[12px] text-[13px] font-medium text-[#1F2937] dark:text-[#F8FAFC] appearance-none cursor-pointer shadow-xs outline-none whitespace-nowrap"
-              >
-                {filter.items.map(it => (
-                  <option key={it.value} value={it.value}>
-                    {it.label}
-                  </option>
-                ))}
-              </select>
-              <Icon
-                name="expand_more"
-                size={16}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-[#6B7280] pointer-events-none"
-              />
-            </div>
+            <FilterDropdown
+              key={filter.key}
+              filter={filter}
+              heightClass="h-[40px]"
+              compact={true}
+            />
           ))}
 
           {/* Sort Dropdown */}
@@ -385,26 +573,13 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
           )}
         </div>
 
-        {/* 2. Filter Selects */}
+        {/* 2. Modern Filter Dropdowns */}
         {filters.map(filter => (
-          <div key={filter.key} className="relative">
-            <select
-              value={filter.value}
-              onChange={e => filter.onChange(e.target.value)}
-              className="h-[42px] pl-3.5 pr-8 bg-white dark:bg-[#1E293B] border border-[#E5E7EB] dark:border-[#334155] hover:border-[#6D3EEB] rounded-[12px] text-[13.5px] font-medium text-[#1F2937] dark:text-[#F8FAFC] appearance-none cursor-pointer transition-colors shadow-sm outline-none"
-            >
-              {filter.items.map(it => (
-                <option key={it.value} value={it.value}>
-                  {it.label}
-                </option>
-              ))}
-            </select>
-            <Icon
-              name="expand_more"
-              size={16}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#6B7280] pointer-events-none"
-            />
-          </div>
+          <FilterDropdown
+            key={filter.key}
+            filter={filter}
+            heightClass="h-[42px]"
+          />
         ))}
 
         {/* 3. DateRangePicker */}
