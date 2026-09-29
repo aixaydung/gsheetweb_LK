@@ -105,6 +105,7 @@ interface AppContextType {
   createPurchaseOrder: (po: Partial<PurchaseOrder>, items: DocumentLineItem[]) => PurchaseOrder;
   updatePurchaseOrderStatus: (id: string, status: any) => void;
   createPurchaseReturn: (ret: Partial<PurchaseReturn>, items: DocumentLineItem[]) => PurchaseReturn;
+  updateReturnStatus: (id: string, status: any) => void;
 
   createStockVoucher: (voucher: Partial<StockVoucher>, items: DocumentLineItem[]) => StockVoucher;
   createStocktake: (stocktake: Partial<Stocktake>) => Stocktake;
@@ -289,7 +290,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const fetchSheetsData = async () => {
     setSyncStatus('syncing');
     try {
-      const [custRes, prodRes, vendRes, orderRes, poRes, payRes, stkRes, movRes] = await Promise.allSettled([
+      const [custRes, prodRes, vendRes, orderRes, poRes, payRes, stkRes, movRes, quoRes, retRes] = await Promise.allSettled([
         fetch('/api/customers'),
         fetch('/api/products'),
         fetch('/api/vendors'),
@@ -297,7 +298,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         fetch('/api/purchases'),
         fetch('/api/payments'),
         fetch('/api/stocktakes'),
-        fetch('/api/stock-movements')
+        fetch('/api/stock-movements'),
+        fetch('/api/quotations'),
+        fetch('/api/returns'),
       ]);
 
       if (custRes.status === 'fulfilled' && custRes.value.ok) {
@@ -440,6 +443,87 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
+      if (quoRes.status === 'fulfilled' && quoRes.value.ok) {
+        const data = await quoRes.value.json();
+        if (Array.isArray(data.quotations) && data.quotations.length > 0) {
+          const mappedQuotations = data.quotations.map((q: any) => ({
+            ...q,
+            subtotal: Number(q.subtotal) || 0,
+            discount_amount: Number(q.discount_amount) || 0,
+            vat_amount: Number(q.vat_amount) || 0,
+            shipping_fee: Number(q.shipping_fee) || 0,
+            total: Number(q.total) || 0,
+            items: (q.items || []).map((it: any) => ({
+              id: it.id,
+              product_id: it.product_id,
+              product_sku: it.sku || it.product_sku || '',
+              product_name: it.product_name,
+              unit: it.unit || 'Cái',
+              quantity: Number(it.quantity) || 1,
+              unit_price: Number(it.unit_price) || 0,
+              discount_amount: Number(it.discount_amount) || 0,
+              line_total: Number(it.line_total) || 0,
+              note: it.note || '',
+            })),
+          }));
+          setQuotations(mappedQuotations);
+        }
+      }
+
+      if (retRes.status === 'fulfilled' && retRes.value.ok) {
+        const data = await retRes.value.json();
+        if (Array.isArray(data.returns)) {
+          const salesRets = data.returns
+            .filter((r: any) => r.type === 'sales_return' || !r.type)
+            .map((r: any) => ({
+              ...r,
+              total_value: Number(r.total_value) || 0,
+              offset_amount: Number(r.offset_amount) || 0,
+              refund_due: Number(r.refund_due) || 0,
+              refunded_amount: Number(r.refunded_amount) || 0,
+              items: (r.items || []).map((it: any) => ({
+                id: it.id,
+                product_id: it.product_id,
+                product_sku: it.sku || it.product_sku || '',
+                product_name: it.product_name,
+                unit: it.unit || 'Cái',
+                quantity: Number(it.quantity) || 1,
+                unit_price: Number(it.unit_price) || 0,
+                line_total: Number(it.line_total) || 0,
+                note: it.note || '',
+              })),
+            }));
+
+          const purchaseRets = data.returns
+            .filter((r: any) => r.type === 'purchase_return')
+            .map((r: any) => ({
+              ...r,
+              total_value: Number(r.total_value) || 0,
+              offset_amount: Number(r.offset_amount) || 0,
+              refund_due: Number(r.refund_due) || 0,
+              refunded_amount: Number(r.refunded_amount) || 0,
+              items: (r.items || []).map((it: any) => ({
+                id: it.id,
+                product_id: it.product_id,
+                product_sku: it.sku || it.product_sku || '',
+                product_name: it.product_name,
+                unit: it.unit || 'Cái',
+                quantity: Number(it.quantity) || 1,
+                unit_price: Number(it.unit_price) || 0,
+                line_total: Number(it.line_total) || 0,
+                note: it.note || '',
+              })),
+            }));
+
+          if (salesRets.length > 0) {
+            setSalesReturns(salesRets);
+          }
+          if (purchaseRets.length > 0) {
+            setPurchaseReturns(purchaseRets);
+          }
+        }
+      }
+
       setSyncStatus('synced');
       setLastSyncTime(new Date());
     } catch (err) {
@@ -489,6 +573,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem(STORAGE_PREFIX + 'payments', JSON.stringify(payments));
   }, [payments]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_PREFIX + 'quotations', JSON.stringify(quotations));
+  }, [quotations]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_PREFIX + 'sales_returns', JSON.stringify(salesReturns));
+  }, [salesReturns]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_PREFIX + 'purchase_returns', JSON.stringify(purchaseReturns));
+  }, [purchaseReturns]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_PREFIX + 'recent_tabs', JSON.stringify(recentTabs));
@@ -899,6 +995,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setQuotations(prev => [newQuote, ...prev]);
+
+    // Background sync to Google Sheets
+    syncWithApi(
+      fetch('/api/quotations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quotation: {
+            id: newQuote.id,
+            code: newQuote.code,
+            quote_date: newQuote.quote_date,
+            expires_at: newQuote.expires_at,
+            customer_id: newQuote.customer_id,
+            customer_name: newQuote.customer_name,
+            customer_phone: newQuote.customer_phone,
+            subtotal: newQuote.subtotal,
+            discount_type: newQuote.discount_type,
+            discount_value: newQuote.discount_value,
+            discount_amount: newQuote.discount_amount,
+            vat_rate: newQuote.vat_rate,
+            vat_amount: newQuote.vat_amount,
+            shipping_fee: newQuote.shipping_fee,
+            total: newQuote.total,
+            status: newQuote.status,
+            note: newQuote.note,
+          },
+          items: newQuote.items.map(it => ({
+            product_id: it.product_id,
+            sku: it.sku || it.product_sku || '',
+            product_name: it.product_name,
+            unit: it.unit,
+            quantity: it.quantity,
+            unit_price: it.unit_price,
+            discount_amount: it.discount_amount ?? it.line_discount ?? 0,
+            line_total: it.line_total,
+            note: it.note || '',
+          })),
+        }),
+      })
+    );
+
     return newQuote;
   };
 
@@ -927,12 +1064,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
     );
 
+    // Sync converted status to Google Sheets
+    syncWithApi(
+      fetch(`/api/quotations/${quotationId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'converted', converted_invoice_id: newInv.id }),
+      })
+    );
+
     return newInv;
   };
 
   const updateQuotationStatus = (id: string, status: any) => {
     setQuotations(prev =>
       prev.map(q => (q.id === id ? { ...q, status } : q))
+    );
+    syncWithApi(
+      fetch(`/api/quotations/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
     );
   };
 
@@ -996,6 +1149,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           stock_quantity: newQty,
           stock_value: newQty * prod.cost_price,
         };
+      })
+    );
+
+    // Sync sales return to Google Sheets
+    syncWithApi(
+      fetch('/api/returns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          returnDoc: {
+            id: newReturn.id,
+            code: newReturn.code,
+            return_date: newReturn.return_date,
+            type: 'sales_return',
+            customer_id: newReturn.customer_id,
+            customer_name: newReturn.customer_name,
+            invoice_id: newReturn.invoice_id,
+            invoice_code: newReturn.invoice_code,
+            warehouse_id: newReturn.warehouse_id,
+            total_value: newReturn.total_value,
+            handling: newReturn.handling,
+            money_method: newReturn.money_method,
+            offset_amount: newReturn.offset_amount,
+            refund_due: newReturn.refund_due,
+            refunded_amount: newReturn.refunded_amount,
+            reason: newReturn.reason,
+            status: newReturn.status,
+            note: newReturn.note,
+          },
+          items: newReturn.items.map(it => ({
+            product_id: it.product_id,
+            sku: it.sku || it.product_sku || '',
+            product_name: it.product_name,
+            unit: it.unit,
+            quantity: it.quantity,
+            unit_price: it.unit_price,
+            line_total: it.line_total,
+            note: it.note || '',
+          })),
+        }),
       })
     );
 
@@ -1256,7 +1449,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
 
+    // Sync purchase return to Google Sheets
+    syncWithApi(
+      fetch('/api/returns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          returnDoc: {
+            id: newReturn.id,
+            code: newReturn.code,
+            return_date: newReturn.return_date,
+            type: 'purchase_return',
+            supplier_id: newReturn.supplier_id,
+            supplier_name: newReturn.supplier_name,
+            po_id: newReturn.po_id,
+            po_code: newReturn.po_code,
+            warehouse_id: newReturn.warehouse_id,
+            total_value: newReturn.total_value,
+            handling: newReturn.handling,
+            money_method: newReturn.money_method,
+            offset_amount: newReturn.offset_amount,
+            refund_due: newReturn.refund_due,
+            refunded_amount: newReturn.refunded_amount,
+            reason: newReturn.reason,
+            status: newReturn.status,
+            note: newReturn.note,
+          },
+          items: newReturn.items.map(it => ({
+            product_id: it.product_id,
+            sku: it.sku || it.product_sku || '',
+            product_name: it.product_name,
+            unit: it.unit,
+            quantity: it.quantity,
+            unit_price: it.unit_price,
+            line_total: it.line_total,
+            note: it.note || '',
+          })),
+        }),
+      })
+    );
+
     return newReturn;
+  };
+
+  const updateReturnStatus = (id: string, status: any) => {
+    setSalesReturns(prev => prev.map(r => (r.id === id ? { ...r, status } : r)));
+    setPurchaseReturns(prev => prev.map(r => (r.id === id ? { ...r, status } : r)));
+    syncWithApi(
+      fetch(`/api/returns/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+    );
   };
 
   // Stock Vouchers
@@ -2105,6 +2350,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         createPurchaseOrder,
         updatePurchaseOrderStatus,
         createPurchaseReturn,
+        updateReturnStatus,
         createStockVoucher,
         createStocktake,
         createPayment,

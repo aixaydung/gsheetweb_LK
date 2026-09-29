@@ -208,15 +208,27 @@ Spreadsheet ID: `1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY` đã khởi tạo
     - Tính năng Xuất Excel chuyên dụng cho từng bảng phân tích lợi nhuận.
     - Tích hợp tiêu đề tab vào hệ thống `tabNames` và breadcrumbs tại `App.tsx`.
 
+- [x] **Quản lý Báo giá (QUOTATIONS) & Đổi trả hàng (RETURNS) đồng bộ Google Sheets (Gói 8)**:
+  - [x] **Tự động khởi tạo Tab và Cấu trúc cột trên Google Sheets (`ensureSheetExists`)**:
+    - Tự động kiểm tra và khởi tạo các tab Google Sheets `QUOTATIONS`, `QUOTATION_ITEMS`, `RETURNS`, `RETURN_ITEMS` với hàng tiêu đề chuẩn (frozen header row).
+  - [x] **Backend Repositories & API Routes**:
+    - `server/repositories/quotations.ts`: Các hàm `getAllQuotations()`, `createQuotation()`, `updateQuotationStatus()`. Tự động gom dòng chi tiết từ `QUOTATION_ITEMS`.
+    - `server/repositories/returns.ts`: Các hàm `getAllReturns()`, `createReturn()`, `updateReturnStatus()`. Hỗ trợ cả phiếu Trả hàng bán (`sales_return`) và Trả hàng NCC (`purchase_return`), tự động ghi nhận biến động kho `STOCK_MOVEMENTS`.
+    - `server/routes/quotations.ts`: Các endpoint `GET /`, `POST /`, `PATCH /:id/status`.
+    - `server/routes/returns.ts`: Các endpoint `GET /`, `POST /`, `PATCH /:id/status`.
+    - Tích hợp routing đầy đủ vào `server/app.ts` (`/api/quotations`, `/api/returns`).
+  - [x] **Kết nối hai chiều trong `src/context/AppContext.tsx`**:
+    - `fetchSheetsData`: Tải dữ liệu Báo giá & Phiếu trả hàng khi mở app hoặc kích hoạt đồng bộ thủ công.
+    - Cập nhật Optimistic UI & Đồng bộ nền Google Sheets cho: `createQuotation`, `updateQuotationStatus`, `convertQuotationToInvoice`, `createSalesReturn`, `createPurchaseReturn`, `updateReturnStatus`.
+    - Tự động lưu cache offline `localStorage` cho `quotations`, `salesReturns`, `purchaseReturns`.
+
 ---
 
 ## 5. ĐỀ XUẤT CÁC HẠNG MỤC TIẾP THEO (GHI NHẬN KẾ HOẠCH - CHƯA TRIỂN KHAI)
 
 1. **Gói 7: Đồng bộ hóa 2 chiều Tự động định kỳ (Background Polling & Auto-sync)**
    - Cơ chế quét ngầm định kỳ (mỗi 60s hoặc khi người dùng focus tab) để tự động cập nhật dữ liệu nếu có người dùng khác sửa đổi trực tiếp trên file Google Sheets mà không cần bấm F5.
-2. **Gói 8: Quản lý Báo giá (`QUOTATIONS`) & Đổi trả hàng (`RETURNS`) đồng bộ Google Sheets**
-   - Mở rộng thêm 2 bảng `QUOTATIONS` và `RETURNS` trên Google Sheets để lưu trữ lịch sử Báo giá khách hàng và các Phiếu hàng bán bị trả lại / Trả hàng cho NCC, kèm mẫu in biên bản trả hàng.
-3. **Gói 9: Tối ưu Progressive Web App (PWA) & Offline Cache**
+2. **Gói 9: Tối ưu Progressive Web App (PWA) & Offline Cache**
    - Tạo file `manifest.json`, icon app, service worker giúp người dùng cài đặt ứng dụng LK ERP lên màn hình chính điện thoại / máy tính bảng, mở toàn màn hình như native app.
 
 ---

@@ -109,3 +109,39 @@ export const clearSheetData = async (spreadsheetId: string, range: string) => {
     throw new Error(error.message || 'Failed to clear data in Google Sheets');
   }
 };
+
+/**
+ * Automatically create sheet tab with frozen headers if not exists
+ */
+export const ensureSheetExists = async (spreadsheetId: string, sheetTitle: string, headers: string[]) => {
+  try {
+    const s = initGoogleSheets();
+    const meta = await s.spreadsheets.get({ spreadsheetId });
+    const existing = new Set(meta.data.sheets?.map((st: any) => st.properties?.title) || []);
+    if (!existing.has(sheetTitle)) {
+      await s.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          requests: [
+            {
+              addSheet: {
+                properties: {
+                  title: sheetTitle,
+                  gridProperties: { frozenRowCount: 1 },
+                },
+              },
+            },
+          ],
+        },
+      });
+      await s.spreadsheets.values.update({
+        spreadsheetId,
+        range: `${sheetTitle}!A1`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [headers] },
+      });
+    }
+  } catch (err: any) {
+    console.warn(`ensureSheetExists warning for ${sheetTitle}:`, err.message || err);
+  }
+};
