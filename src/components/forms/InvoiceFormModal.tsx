@@ -4,7 +4,7 @@ import { Modal } from '../ui/Modal';
 import { EntityCombobox, ComboboxItem } from '../ui/EntityCombobox';
 import { LineItemsEditor } from '../ui/LineItemsEditor';
 import { TotalsPanel } from '../ui/TotalsPanel';
-import { DocumentLineItem, DiscountType, InvoiceStatus } from '../../types';
+import { DocumentLineItem, DiscountType, InvoiceStatus, SalesInvoice } from '../../types';
 import { formatCurrency } from '../../lib/format';
 import { Icon } from '../ui/Icon';
 
@@ -13,14 +13,16 @@ interface InvoiceFormModalProps {
   onClose: () => void;
   onSaveAndPrint?: (code: string) => void;
   initialQuotationId?: string;
+  invoiceToEdit?: SalesInvoice | null;
 }
 
 export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
   isOpen,
   onClose,
   onSaveAndPrint,
+  invoiceToEdit,
 }) => {
-  const { customers, products, warehouses, createInvoice, createCustomer } = useApp();
+  const { customers, products, warehouses, createInvoice, updateInvoice, createCustomer } = useApp();
 
   const [customerId, setCustomerId] = useState<string>('');
   const [customerName, setCustomerName] = useState<string>('Khách lẻ');
@@ -37,6 +39,46 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
   const [shippingFee, setShippingFee] = useState<number>(0);
   const [paidAmount, setPaidAmount] = useState<number>(0);
   const [note, setNote] = useState<string>('');
+
+  React.useEffect(() => {
+    if (isOpen) {
+      if (invoiceToEdit) {
+        setCustomerId(invoiceToEdit.customer_id || '');
+        setCustomerName(invoiceToEdit.customer_name || 'Khách lẻ');
+        setCustomerPhone(invoiceToEdit.customer_phone || '');
+        setInvoiceDate(
+          invoiceToEdit.invoice_date
+            ? new Date(invoiceToEdit.invoice_date).toISOString().slice(0, 16)
+            : new Date().toISOString().slice(0, 16)
+        );
+        setDueDate(invoiceToEdit.due_date || '');
+        setWarehouseId(invoiceToEdit.warehouse_id || warehouses[0]?.id || 'wh-01');
+        setStatus(invoiceToEdit.status || 'completed');
+        setItems(invoiceToEdit.items || []);
+        setDiscountType(invoiceToEdit.discount_type || 'amount');
+        setDiscountValue(invoiceToEdit.discount_value || 0);
+        setVatRate(invoiceToEdit.vat_rate || 0);
+        setShippingFee(invoiceToEdit.shipping_fee || 0);
+        setPaidAmount(invoiceToEdit.paid_amount || 0);
+        setNote(invoiceToEdit.note || '');
+      } else {
+        setCustomerId('');
+        setCustomerName('Khách lẻ');
+        setCustomerPhone('');
+        setInvoiceDate(new Date().toISOString().slice(0, 16));
+        setDueDate('');
+        setWarehouseId(warehouses[0]?.id || 'wh-01');
+        setStatus('completed');
+        setItems([]);
+        setDiscountType('amount');
+        setDiscountValue(0);
+        setVatRate(0);
+        setShippingFee(0);
+        setPaidAmount(0);
+        setNote('');
+      }
+    }
+  }, [isOpen, invoiceToEdit, warehouses]);
 
   // Calculations
   const subtotal = items.reduce((sum, item) => sum + item.line_total, 0);
@@ -120,6 +162,34 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
       return;
     }
 
+    if (invoiceToEdit) {
+      updateInvoice(
+        invoiceToEdit.id,
+        {
+          customer_id: customerId || undefined,
+          customer_name: customerName,
+          customer_phone: customerPhone,
+          warehouse_id: warehouseId,
+          invoice_date: new Date(invoiceDate).toISOString(),
+          due_date: dueDate || undefined,
+          status,
+          discount_type: discountType,
+          discount_value: discountValue,
+          vat_rate: vatRate,
+          shipping_fee: shippingFee,
+          paid_amount: paidAmount,
+          note,
+        },
+        items
+      );
+
+      onClose();
+      if (shouldPrint && onSaveAndPrint) {
+        onSaveAndPrint(invoiceToEdit.code);
+      }
+      return;
+    }
+
     const created = createInvoice(
       {
         customer_id: customerId || undefined,
@@ -149,9 +219,13 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Tạo phiếu bán hàng"
-      subtitle="Xuất kho & ghi nhận doanh thu bán hàng"
-      icon="sell"
+      title={invoiceToEdit ? `Sửa hóa đơn ${invoiceToEdit.code}` : 'Tạo phiếu bán hàng'}
+      subtitle={
+        invoiceToEdit
+          ? 'Cập nhật sản phẩm, chiết khấu và thông tin hóa đơn'
+          : 'Xuất kho & ghi nhận doanh thu bán hàng'
+      }
+      icon={invoiceToEdit ? 'edit_note' : 'sell'}
       width="lg"
       footer={
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -186,7 +260,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
               className="px-5 py-2 bg-[#6D3EEB] hover:bg-[#5B2BD6] text-white text-[13.5px] font-semibold rounded-[12px] shadow-[0_8px_20px_-6px_rgba(109,62,235,0.55)] flex items-center gap-1.5 transition-all"
             >
               <Icon name="save" size={18} />
-              <span>Tạo phiếu bán</span>
+              <span>{invoiceToEdit ? 'Cập nhật hóa đơn' : 'Tạo phiếu bán'}</span>
             </button>
           </div>
         </div>

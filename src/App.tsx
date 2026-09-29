@@ -32,7 +32,7 @@ import { SettingsView } from './views/SettingsView';
 import { ProfileView } from './views/ProfileView';
 import { CashbookView } from './views/CashbookView';
 
-import { Product, Customer } from './types';
+import { Product, Customer, SalesInvoice, PurchaseOrder, Quotation, SalesReturn, PurchaseReturn, Supplier } from './types';
 
 function AppContent() {
   const {
@@ -69,6 +69,7 @@ function AppContent() {
 
   // Form Modal States
   const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
+  const [invoiceToEdit, setInvoiceToEdit] = useState<SalesInvoice | null>(null);
   const [isCreateQuoteOpen, setIsCreateQuoteOpen] = useState(false);
   const [quotationToEdit, setQuotationToEdit] = useState<Quotation | null>(null);
   const [isCreatePOOpen, setIsCreatePOOpen] = useState(false);
@@ -301,7 +302,14 @@ function AppContent() {
             <SalesView
               currentTab={currentTab}
               onTabChange={handleTabChange}
-              onOpenCreateInvoice={() => setIsCreateInvoiceOpen(true)}
+              onOpenCreateInvoice={() => {
+                setInvoiceToEdit(null);
+                setIsCreateInvoiceOpen(true);
+              }}
+              onOpenEditInvoice={inv => {
+                setInvoiceToEdit(inv);
+                setIsCreateInvoiceOpen(true);
+              }}
               onOpenCreateQuotation={() => {
                 setQuotationToEdit(null);
                 setIsCreateQuoteOpen(true);
@@ -486,8 +494,12 @@ function AppContent() {
       {/* Form Modals */}
       <InvoiceFormModal
         isOpen={isCreateInvoiceOpen}
-        onClose={() => setIsCreateInvoiceOpen(false)}
-        onSaveAndPrint={code => alert(`Đã tạo và sẵn sàng in hóa đơn ${code}!`)}
+        invoiceToEdit={invoiceToEdit}
+        onClose={() => {
+          setIsCreateInvoiceOpen(false);
+          setInvoiceToEdit(null);
+        }}
+        onSaveAndPrint={code => alert(`Đã lưu và sẵn sàng in hóa đơn ${code}!`)}
       />
 
       <PurchaseOrderFormModal

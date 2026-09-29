@@ -255,10 +255,19 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
           <button
             type="button"
             onClick={handlePrint}
-            className="px-5 py-2 bg-white border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-[#1F2937] dark:text-gray-200 text-[13.5px] font-semibold rounded-[12px] flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer active:scale-95"
+            className="px-5 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 text-[#1F2937] dark:text-gray-200 text-[13.5px] font-semibold rounded-[12px] flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer active:scale-95"
           >
-            <Icon name="print" size={18} className="text-[#4B5563]" />
+            <Icon name="print" size={18} className="text-[#4B5563] dark:text-gray-300" />
             <span>In</span>
+          </button>
+          <button
+            type="button"
+            onClick={handlePrint}
+            title="Xuất file PDF"
+            className="px-5 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 text-[#1F2937] dark:text-gray-200 text-[13.5px] font-semibold rounded-[12px] flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer active:scale-95"
+          >
+            <Icon name="download" size={18} className="text-[#4B5563] dark:text-gray-300" />
+            <span>Tải PDF</span>
           </button>
           <button
             type="button"

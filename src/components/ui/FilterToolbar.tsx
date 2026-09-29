@@ -41,6 +41,162 @@ interface FilterToolbarProps {
   className?: string;
 }
 
+const cleanSortLabel = (label: string) => label.replace(/^Sắp xếp:\s*/i, '').trim();
+
+const SortDropdown: React.FC<{
+  sortOptions: SortOption[];
+  currentSortKey?: string;
+  sortDirection: 'asc' | 'desc';
+  onSortChange: (key: string, direction: 'asc' | 'desc') => void;
+  heightClass?: string;
+}> = ({
+  sortOptions,
+  currentSortKey,
+  sortDirection,
+  onSortChange,
+  heightClass = 'h-[42px]',
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
+
+  const activeKey = currentSortKey || sortOptions[0]?.key;
+  const activeOpt = sortOptions.find(o => o.key === activeKey) || sortOptions[0];
+  const activeLabel = activeOpt ? cleanSortLabel(activeOpt.label) : '';
+
+  return (
+    <div ref={containerRef} className="relative shrink-0">
+      <div
+        className={`flex items-center ${heightClass} bg-white dark:bg-[#1E293B] border ${
+          isOpen ? 'border-[#6D3EEB] ring-2 ring-[#6D3EEB]/20' : 'border-[#E5E7EB] dark:border-[#334155]'
+        } rounded-[12px] shadow-xs transition-all`}
+      >
+        {/* Sort Pill Button */}
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className="flex items-center gap-1.5 pl-3 pr-2 h-full text-left cursor-pointer hover:bg-gray-50/70 dark:hover:bg-[#334155]/40 rounded-l-[12px] transition-colors"
+          title="Chọn tiêu chí sắp xếp"
+        >
+          <Icon name="sort" size={17} className="text-[#6D3EEB] dark:text-[#C084FC] shrink-0" />
+          <span className="text-[13px] font-medium text-[#1F2937] dark:text-[#F8FAFC] whitespace-nowrap">
+            Sắp xếp: <strong className="font-semibold text-[#111827] dark:text-white">{activeLabel}</strong>
+          </span>
+          <Icon
+            name="expand_more"
+            size={16}
+            className={`text-[#6B7280] transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+          />
+        </button>
+
+        {/* Direction Toggle Button */}
+        <button
+          type="button"
+          title={
+            sortDirection === 'asc'
+              ? 'Đang tăng dần (click để đổi sang giảm dần)'
+              : 'Đang giảm dần (click để đổi sang tăng dần)'
+          }
+          onClick={() => onSortChange(activeKey, sortDirection === 'asc' ? 'desc' : 'asc')}
+          className="h-full px-2.5 border-l border-[#F1F2F5] dark:border-[#334155] text-[#6D3EEB] dark:text-[#C084FC] hover:bg-[#F9F5FF] dark:hover:bg-purple-950/30 flex items-center justify-center rounded-r-[12px] transition-colors cursor-pointer group"
+        >
+          <Icon
+            name={sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward'}
+            size={16}
+            className="group-hover:scale-110 transition-transform"
+          />
+        </button>
+      </div>
+
+      {/* Floating Popover Menu */}
+      {isOpen && (
+        <div className="absolute right-0 top-full mt-1.5 z-50 min-w-[210px] bg-white dark:bg-[#1E293B] border border-[#E5E7EB] dark:border-[#334155] rounded-[14px] shadow-xl p-1.5 animate-in fade-in-0 zoom-in-95 duration-150">
+          <div className="px-2.5 py-1 text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider">
+            Tiêu chí sắp xếp
+          </div>
+          <div className="space-y-0.5">
+            {sortOptions.map(opt => {
+              const isSelected = opt.key === activeKey;
+              const labelClean = cleanSortLabel(opt.label);
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => {
+                    onSortChange(opt.key, sortDirection);
+                    setIsOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-[10px] text-[13px] transition-colors cursor-pointer text-left ${
+                    isSelected
+                      ? 'bg-[#F9F5FF] dark:bg-[#2E1065]/40 text-[#6D3EEB] dark:text-[#C084FC] font-semibold'
+                      : 'text-[#374151] dark:text-[#E2E8F0] hover:bg-gray-100 dark:hover:bg-[#334155]/60 font-medium'
+                  }`}
+                >
+                  <span>{labelClean}</span>
+                  {isSelected && (
+                    <Icon name="check" size={16} className="text-[#6D3EEB] dark:text-[#C084FC] shrink-0 ml-2" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="border-t border-[#F1F2F5] dark:border-[#334155] my-1 pt-1">
+            <div className="px-2.5 py-1 text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider">
+              Chiều sắp xếp
+            </div>
+            <div className="grid grid-cols-2 gap-1 px-1">
+              <button
+                type="button"
+                onClick={() => {
+                  onSortChange(activeKey, 'desc');
+                  setIsOpen(false);
+                }}
+                className={`flex items-center justify-center gap-1 py-1.5 px-2 rounded-[8px] text-[12px] font-medium transition-colors cursor-pointer ${
+                  sortDirection === 'desc'
+                    ? 'bg-[#6D3EEB] text-white shadow-2xs font-semibold'
+                    : 'text-[#6B7280] hover:bg-gray-100 dark:hover:bg-[#334155]'
+                }`}
+              >
+                <Icon name="arrow_downward" size={14} />
+                <span>Giảm dần</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onSortChange(activeKey, 'asc');
+                  setIsOpen(false);
+                }}
+                className={`flex items-center justify-center gap-1 py-1.5 px-2 rounded-[8px] text-[12px] font-medium transition-colors cursor-pointer ${
+                  sortDirection === 'asc'
+                    ? 'bg-[#6D3EEB] text-white shadow-2xs font-semibold'
+                    : 'text-[#6B7280] hover:bg-gray-100 dark:hover:bg-[#334155]'
+                }`}
+              >
+                <Icon name="arrow_upward" size={14} />
+                <span>Tăng dần</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const FilterToolbar: React.FC<FilterToolbarProps> = ({
   searchPlaceholder = 'Tìm kiếm...',
   searchValue,
@@ -122,45 +278,15 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
             </div>
           ))}
 
-          {/* Sort Select */}
+          {/* Sort Dropdown */}
           {sortOptions.length > 0 && onSortChange && (
-            <div className="flex items-center h-[40px] bg-white dark:bg-[#1E293B] border border-[#E5E7EB] dark:border-[#334155] rounded-[12px] shadow-xs shrink-0">
-              <div className="relative flex items-center pl-2.5 pr-1.5">
-                <Icon name="sort" size={16} className="text-[#6B7280] mr-1" />
-                <select
-                  value={currentSortKey || sortOptions[0]?.key}
-                  onChange={e => onSortChange(e.target.value, sortDirection)}
-                  className="bg-transparent text-[13px] font-medium text-[#1F2937] dark:text-[#F8FAFC] appearance-none pr-4 outline-none cursor-pointer"
-                >
-                  {sortOptions.map(opt => (
-                    <option key={opt.key} value={opt.key}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-                <Icon
-                  name="expand_more"
-                  size={14}
-                  className="absolute right-0.5 text-[#6B7280] pointer-events-none"
-                />
-              </div>
-              <button
-                type="button"
-                title="Đổi chiều sắp xếp"
-                onClick={() =>
-                  onSortChange(
-                    currentSortKey || sortOptions[0]?.key,
-                    sortDirection === 'asc' ? 'desc' : 'asc'
-                  )
-                }
-                className="h-full px-2 border-l border-[#F1F2F5] dark:border-[#334155] text-[#6317D6] dark:text-[#C084FC] hover:bg-[#F9FAFB] flex items-center justify-center rounded-r-[12px]"
-              >
-                <Icon
-                  name={sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward'}
-                  size={15}
-                />
-              </button>
-            </div>
+            <SortDropdown
+              sortOptions={sortOptions}
+              currentSortKey={currentSortKey}
+              sortDirection={sortDirection}
+              onSortChange={onSortChange}
+              heightClass="h-[40px]"
+            />
           )}
 
           {/* Clear Filters */}
@@ -286,45 +412,15 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
           <DateRangePicker value={dateRange} onChange={onDateRangeChange} />
         )}
 
-        {/* 4. Sort Select with direction toggle */}
+        {/* 4. Sort Dropdown with popover menu and direction toggle */}
         {sortOptions.length > 0 && onSortChange && (
-          <div className="flex items-center h-[42px] bg-white dark:bg-[#1E293B] border border-[#E5E7EB] dark:border-[#334155] rounded-[12px] shadow-sm">
-            <div className="relative flex items-center pl-3 pr-2">
-              <Icon name="sort" size={17} className="text-[#6B7280] mr-1.5" />
-              <select
-                value={currentSortKey || sortOptions[0]?.key}
-                onChange={e => onSortChange(e.target.value, sortDirection)}
-                className="bg-transparent text-[13.5px] font-medium text-[#1F2937] dark:text-[#F8FAFC] appearance-none pr-5 outline-none cursor-pointer"
-              >
-                {sortOptions.map(opt => (
-                  <option key={opt.key} value={opt.key}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-              <Icon
-                name="expand_more"
-                size={14}
-                className="absolute right-1 text-[#6B7280] pointer-events-none"
-              />
-            </div>
-            <button
-              type="button"
-              title="Đổi chiều sắp xếp"
-              onClick={() =>
-                onSortChange(
-                  currentSortKey || sortOptions[0]?.key,
-                  sortDirection === 'asc' ? 'desc' : 'asc'
-                )
-              }
-              className="h-full px-2.5 border-l border-[#F1F2F5] dark:border-[#334155] text-[#6317D6] dark:text-[#C084FC] hover:bg-[#F9FAFB] transition-colors flex items-center justify-center rounded-r-[12px]"
-            >
-              <Icon
-                name={sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward'}
-                size={16}
-              />
-            </button>
-          </div>
+          <SortDropdown
+            sortOptions={sortOptions}
+            currentSortKey={currentSortKey}
+            sortDirection={sortDirection}
+            onSortChange={onSortChange}
+            heightClass="h-[42px]"
+          />
         )}
 
         {/* 5. Clear Filters Button */}

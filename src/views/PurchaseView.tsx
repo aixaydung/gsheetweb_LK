@@ -12,6 +12,8 @@ import { Icon } from '../components/ui/Icon';
 import { DateRange } from '../components/ui/DateRangePicker';
 import { formatCurrency, formatDate } from '../lib/format';
 import { PurchaseOrder, Supplier, PurchaseReturn } from '../types';
+import { PurchaseOrderDetailModal } from '../components/dialogs/PurchaseOrderDetailModal';
+import { useAuth } from '../context/AuthContext';
 
 interface PurchaseViewProps {
   currentTab: string;
@@ -54,6 +56,13 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
     updateReturnStatus,
     updateInlineNote,
   } = useApp();
+
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+
+  // Purchase Order Detail Modal State
+  const [selectedPODetail, setSelectedPODetail] = useState<PurchaseOrder | null>(null);
+  const [isPODetailOpen, setIsPODetailOpen] = useState(false);
 
   const [search, setSearch] = useState('');
   const [filterPayment, setFilterPayment] = useState('all');
@@ -198,7 +207,18 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
     {
       key: 'code',
       header: 'MÃ PHIẾU',
-      render: row => <span className="font-semibold text-[#111827]">{row.code}</span>,
+      render: row => (
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedPODetail(row);
+            setIsPODetailOpen(true);
+          }}
+          className="font-bold text-[#6D3EEB] hover:underline cursor-pointer text-left"
+        >
+          {row.code}
+        </button>
+      ),
     },
     {
       key: 'date',
@@ -272,6 +292,17 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
         <div className="flex items-center justify-end gap-2 text-[#6B7280]">
           <button
             type="button"
+            title="Xem chi tiết phiếu mua"
+            onClick={() => {
+              setSelectedPODetail(row);
+              setIsPODetailOpen(true);
+            }}
+            className="p-1.5 hover:text-[#6D3EEB] text-[#6D3EEB] rounded-full hover:bg-purple-50 transition-colors cursor-pointer"
+          >
+            <Icon name="visibility" size={18} />
+          </button>
+          <button
+            type="button"
             title="In phiếu mua"
             onClick={() => onPrintDocument('PHIẾU MUA HÀNG', row.code, row)}
             className="p-1.5 hover:text-[#6D3EEB] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
@@ -301,9 +332,25 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
           </button>
           <button
             type="button"
-            title="Xóa phiếu mua"
+            title={isAdmin ? 'Xoá vĩnh viễn (Chỉ Admin)' : 'Hủy phiếu mua'}
             onClick={() => {
-              if (confirm(`Xóa phiếu mua ${row.code}?`)) deletePurchaseOrder(row.id);
+              if (isAdmin) {
+                if (
+                  confirm(
+                    `[ADMIN] Bạn có chắc muốn XÓA VĨNH VIỄN phiếu mua ${row.code}? (Dữ liệu sẽ bị xóa hoàn toàn khỏi hệ thống)`
+                  )
+                ) {
+                  deletePurchaseOrder(row.id);
+                }
+              } else {
+                if (
+                  confirm(
+                    `Bạn có chắc muốn HỦY phiếu mua ${row.code}? (Chuyển trạng thái 'Đã hủy' để lưu vết sổ sách)`
+                  )
+                ) {
+                  updatePurchaseOrderStatus(row.id, 'cancelled');
+                }
+              }
             }}
             className="p-1.5 hover:text-[#E11D48] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
           >
@@ -319,7 +366,18 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
     {
       key: 'code',
       header: 'MÃ PHIẾU',
-      render: row => <span className="font-semibold text-[#111827]">{row.code}</span>,
+      render: row => (
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedPODetail(row);
+            setIsPODetailOpen(true);
+          }}
+          className="font-bold text-[#6D3EEB] hover:underline cursor-pointer text-left"
+        >
+          {row.code}
+        </button>
+      ),
     },
     {
       key: 'date',
@@ -370,6 +428,17 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
       align: 'right',
       render: row => (
         <div className="flex items-center justify-end gap-2 text-[#6B7280]">
+          <button
+            type="button"
+            title="Xem chi tiết đơn đặt hàng"
+            onClick={() => {
+              setSelectedPODetail(row);
+              setIsPODetailOpen(true);
+            }}
+            className="p-1.5 hover:text-[#6D3EEB] text-[#6D3EEB] rounded-full hover:bg-purple-50 transition-colors cursor-pointer"
+          >
+            <Icon name="visibility" size={18} />
+          </button>
           {onOpenEditPO && (
             <button
               type="button"
@@ -394,9 +463,25 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
           </button>
           <button
             type="button"
-            title="Xóa đơn đặt hàng"
+            title={isAdmin ? 'Xoá vĩnh viễn (Chỉ Admin)' : 'Hủy đơn đặt hàng'}
             onClick={() => {
-              if (confirm(`Xóa đơn đặt hàng ${row.code}?`)) deletePurchaseOrder(row.id);
+              if (isAdmin) {
+                if (
+                  confirm(
+                    `[ADMIN] Bạn có chắc muốn XÓA VĨNH VIỄN đơn đặt hàng ${row.code}? (Dữ liệu sẽ bị xóa hoàn toàn khỏi hệ thống)`
+                  )
+                ) {
+                  deletePurchaseOrder(row.id);
+                }
+              } else {
+                if (
+                  confirm(
+                    `Bạn có chắc muốn HỦY đơn đặt hàng ${row.code}? (Chuyển trạng thái 'Đã hủy' để lưu vết sổ sách)`
+                  )
+                ) {
+                  updatePurchaseOrderStatus(row.id, 'cancelled');
+                }
+              }
             }}
             className="p-1.5 hover:text-[#E11D48] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
           >
@@ -818,9 +903,20 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
             onDeleteSelected={ids => {
-              if (confirm(`Xóa ${ids.length} phiếu mua đã chọn?`)) {
-                deletePurchaseOrdersBatch(ids);
-                setSelectedIds([]);
+              if (isAdmin) {
+                if (confirm(`[ADMIN] Xóa vĩnh viễn ${ids.length} phiếu mua đã chọn?`)) {
+                  deletePurchaseOrdersBatch(ids);
+                  setSelectedIds([]);
+                }
+              } else {
+                if (
+                  confirm(
+                    `Bạn có muốn HỦY ${ids.length} phiếu mua đã chọn? (Chuyển trạng thái 'Đã hủy' để lưu vết sổ sách)`
+                  )
+                ) {
+                  ids.forEach(id => updatePurchaseOrderStatus(id, 'cancelled'));
+                  setSelectedIds([]);
+                }
               }
             }}
             emptyMessage="Chưa có dữ liệu"
@@ -1070,6 +1166,53 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
           />
         </div>
       )}
+
+      {/* Purchase Order Detail Modal (Image 2) */}
+      <PurchaseOrderDetailModal
+        isOpen={isPODetailOpen}
+        order={selectedPODetail}
+        allOrders={purchaseOrders}
+        onSelectOrder={po => setSelectedPODetail(po)}
+        onClose={() => {
+          setIsPODetailOpen(false);
+          setSelectedPODetail(null);
+        }}
+        onPrint={po => onPrintDocument('PHIẾU MUA HÀNG', po.code, po)}
+        onEdit={po => {
+          setIsPODetailOpen(false);
+          setSelectedPODetail(null);
+          onOpenEditPO?.(po);
+        }}
+        onClone={po => {
+          setIsPODetailOpen(false);
+          setSelectedPODetail(null);
+          if (onOpenCreatePO) onOpenCreatePO();
+        }}
+        onPay={po => onOpenPaymentAllocation(po.supplier_id, po.id)}
+        onDelete={po => {
+          if (isAdmin) {
+            if (
+              confirm(
+                `[ADMIN] Bạn có chắc muốn XÓA VĨNH VIỄN phiếu mua ${po.code}? (Dữ liệu sẽ bị xóa hoàn toàn khỏi hệ thống)`
+              )
+            ) {
+              deletePurchaseOrder(po.id);
+              setIsPODetailOpen(false);
+              setSelectedPODetail(null);
+            }
+          } else {
+            if (
+              confirm(
+                `Bạn có chắc muốn HỦY phiếu mua ${po.code}? (Chuyển trạng thái 'Đã hủy' để lưu vết sổ sách)`
+              )
+            ) {
+              updatePurchaseOrderStatus(po.id, 'cancelled');
+              setIsPODetailOpen(false);
+              setSelectedPODetail(null);
+            }
+          }
+        }}
+      />
     </div>
   );
 };

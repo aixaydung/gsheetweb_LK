@@ -98,6 +98,7 @@ interface AppContextType {
 
   // Actions
   createInvoice: (inv: Partial<SalesInvoice>, items: DocumentLineItem[]) => SalesInvoice;
+  updateInvoice: (id: string, inv: Partial<SalesInvoice>, items?: DocumentLineItem[]) => void;
   updateInvoiceStatus: (id: string, status: any) => void;
   cancelInvoice: (id: string) => void;
   deleteInvoice: (id: string) => void;
@@ -996,6 +997,77 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     recalculateBalances(updatedInvoices, purchaseOrders);
     return newInvoice;
+  };
+
+  const updateInvoice = (id: string, invData: Partial<SalesInvoice>, items?: DocumentLineItem[]) => {
+    const existing = invoices.find(inv => inv.id === id);
+    if (!existing) return;
+
+    const currentItems = items || existing.items || [];
+    const subtotal = currentItems.reduce((sum, item) => sum + item.line_total, 0);
+    const discountType = invData.discount_type !== undefined ? invData.discount_type : existing.discount_type;
+    const discountVal = invData.discount_value !== undefined ? invData.discount_value : existing.discount_value;
+    const discountAmount =
+      discountType === 'amount' ? discountVal : Math.round((subtotal * discountVal) / 100);
+    const afterDiscount = Math.max(0, subtotal - discountAmount);
+    const vatRate = invData.vat_rate !== undefined ? invData.vat_rate : existing.vat_rate;
+    const vatAmount = Math.round((afterDiscount * vatRate) / 100);
+    const shippingFee = invData.shipping_fee !== undefined ? invData.shipping_fee : existing.shipping_fee;
+    const total = afterDiscount + vatAmount + shippingFee;
+    const paidAmount = invData.paid_amount !== undefined ? invData.paid_amount : existing.paid_amount;
+    const returnedAmount = existing.returned_amount || 0;
+    const debtAmount = Math.max(0, total - paidAmount - returnedAmount);
+
+    let paymentStatus = invData.payment_status || existing.payment_status;
+    if (paidAmount === 0) paymentStatus = 'unpaid';
+    else if (paidAmount < total) paymentStatus = 'partial';
+    else if (paidAmount === total) paymentStatus = 'paid';
+    else paymentStatus = 'overpaid';
+
+    const cogsAmount = currentItems.reduce(
+      (sum, item) => sum + item.quantity * (item.unit_cost || 0),
+      0
+    );
+
+    const updatedInv: SalesInvoice = {
+      ...existing,
+      ...invData,
+      subtotal,
+      discount_type: discountType,
+      discount_value: discountVal,
+      discount_amount: discountAmount,
+      vat_rate: vatRate,
+      vat_amount: vatAmount,
+      shipping_fee: shippingFee,
+      total,
+      paid_amount: paidAmount,
+      debt_amount: debtAmount,
+      payment_status: paymentStatus,
+      cogs_amount: cogsAmount,
+      items: currentItems.map((it, idx) => ({ ...it, id: it.id || `li-${Date.now()}-${idx}` })),
+    };
+
+    const nextInvoices = invoices.map(i => (i.id === id ? updatedInv : i));
+    setInvoices(nextInvoices);
+    recalculateBalances(nextInvoices, purchaseOrders);
+
+    logActivity({
+      action: 'update',
+      entity_type: 'sales_invoice',
+      entity_id: id,
+      entity_code: updatedInv.code,
+      title: `Cập nhật hóa đơn bán hàng ${updatedInv.code}`,
+      amount: total,
+      details: `Cập nhật hóa đơn của khách ${updatedInv.customer_name}, tổng tiền: ${total.toLocaleString('vi-VN')} đ`,
+    });
+
+    syncWithApi(
+      fetch(`/api/orders/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order: updatedInv, items: updatedInv.items }),
+      })
+    );
   };
 
   const updateInvoiceStatus = (id: string, status: any) => {
@@ -2829,6 +2901,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setAutoSyncEnabled,
         setAutoSyncInterval,
         createInvoice,
+        updateInvoice,
         updateInvoiceStatus,
         cancelInvoice,
         deleteInvoice,

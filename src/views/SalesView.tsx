@@ -15,11 +15,13 @@ import { SalesInvoice, Customer, Quotation, SalesReturn } from '../types';
 import { ExportDialog } from '../components/dialogs/ExportDialog';
 import { CustomerDetailModal } from '../components/dialogs/CustomerDetailModal';
 import { QuotationDetailModal } from '../components/dialogs/QuotationDetailModal';
+import { useAuth } from '../context/AuthContext';
 
 interface SalesViewProps {
   currentTab: string;
   onTabChange: (tab: string) => void;
   onOpenCreateInvoice: () => void;
+  onOpenEditInvoice?: (invoice: SalesInvoice) => void;
   onOpenCreateQuotation: () => void;
   onOpenEditQuotation?: (quotation: Quotation) => void;
   onOpenCreateReturn: () => void;
@@ -35,6 +37,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
   currentTab,
   onTabChange,
   onOpenCreateInvoice,
+  onOpenEditInvoice,
   onOpenCreateQuotation,
   onOpenEditQuotation,
   onOpenCreateReturn,
@@ -63,6 +66,9 @@ export const SalesView: React.FC<SalesViewProps> = ({
     updateReturnStatus,
     updateInlineNote,
   } = useApp();
+
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   const [search, setSearch] = useState('');
   const [filterPayment, setFilterPayment] = useState('all');
@@ -310,6 +316,16 @@ export const SalesView: React.FC<SalesViewProps> = ({
           >
             <Icon name="print" size={18} />
           </button>
+          {onOpenEditInvoice && (
+            <button
+              type="button"
+              title="Sửa hóa đơn"
+              onClick={() => onOpenEditInvoice(row)}
+              className="p-1.5 hover:text-[#6D3EEB] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+            >
+              <Icon name="edit" size={18} />
+            </button>
+          )}
           <button
             type="button"
             title="Thu tiền cho hóa đơn này"
@@ -325,11 +341,27 @@ export const SalesView: React.FC<SalesViewProps> = ({
           </button>
           <button
             type="button"
-            title="Xoá"
+            title={isAdmin ? 'Xoá vĩnh viễn (Chỉ Admin)' : 'Hủy hóa đơn'}
             onClick={() => {
-              if (confirm(`Xoá hóa đơn ${row.code}?`)) deleteInvoice(row.id);
+              if (isAdmin) {
+                if (
+                  confirm(
+                    `[ADMIN] Bạn có chắc muốn XÓA VĨNH VIỄN hóa đơn ${row.code}? (Dữ liệu sẽ bị xóa hoàn toàn khỏi hệ thống)`
+                  )
+                ) {
+                  deleteInvoice(row.id);
+                }
+              } else {
+                if (
+                  confirm(
+                    `Bạn có chắc muốn HỦY hóa đơn ${row.code}? (Hóa đơn sẽ chuyển trạng thái 'Đã hủy' để lưu vết sổ sách kế toán)`
+                  )
+                ) {
+                  cancelInvoice(row.id);
+                }
+              }
             }}
-            className="p-1.5 hover:text-[#E11D48] rounded-full hover:bg-gray-100 transition-colors"
+            className="p-1.5 hover:text-[#E11D48] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
           >
             <Icon name="delete" size={18} />
           </button>
@@ -612,10 +644,20 @@ export const SalesView: React.FC<SalesViewProps> = ({
           )}
           <button
             type="button"
-            title="Xoá báo giá"
+            title={isAdmin ? 'Xoá vĩnh viễn báo giá (Chỉ Admin)' : 'Hủy báo giá'}
             onClick={() => {
-              if (confirm(`Xoá báo giá ${row.code}?`)) {
-                deleteQuotation(row.id);
+              if (isAdmin) {
+                if (confirm(`[ADMIN] Bạn có chắc muốn XÓA VĨNH VIỄN báo giá ${row.code}?`)) {
+                  deleteQuotation(row.id);
+                }
+              } else {
+                if (
+                  confirm(
+                    `Bạn có chắc muốn HỦY báo giá ${row.code}? (Báo giá sẽ chuyển trạng thái 'Đã huỷ' để lưu vết sổ sách)`
+                  )
+                ) {
+                  updateQuotationStatus(row.id, 'cancelled');
+                }
               }
             }}
             className="p-1.5 hover:text-[#E11D48] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
@@ -731,10 +773,20 @@ export const SalesView: React.FC<SalesViewProps> = ({
           )}
           <button
             type="button"
-            title="Xóa phiếu trả hàng"
+            title={isAdmin ? 'Xóa vĩnh viễn phiếu trả hàng (Chỉ Admin)' : 'Hủy phiếu trả hàng'}
             onClick={() => {
-              if (confirm(`Xóa phiếu trả hàng ${row.code}?`)) {
-                deleteSalesReturn(row.id);
+              if (isAdmin) {
+                if (confirm(`[ADMIN] Bạn có chắc muốn XÓA VĨNH VIỄN phiếu trả hàng ${row.code}?`)) {
+                  deleteSalesReturn(row.id);
+                }
+              } else {
+                if (
+                  confirm(
+                    `Bạn có chắc muốn HỦY phiếu trả hàng ${row.code}? (Chuyển trạng thái 'Đã hủy' để lưu vết sổ sách)`
+                  )
+                ) {
+                  updateReturnStatus(row.id, 'cancelled');
+                }
               }
             }}
             className="p-1.5 hover:text-[#E11D48] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
@@ -1099,9 +1151,20 @@ export const SalesView: React.FC<SalesViewProps> = ({
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
             onDeleteSelected={ids => {
-              if (confirm(`Xóa ${ids.length} báo giá đã chọn?`)) {
-                deleteQuotationsBatch(ids);
-                setSelectedIds([]);
+              if (isAdmin) {
+                if (confirm(`[ADMIN] Xóa vĩnh viễn ${ids.length} báo giá đã chọn?`)) {
+                  deleteQuotationsBatch(ids);
+                  setSelectedIds([]);
+                }
+              } else {
+                if (
+                  confirm(
+                    `Bạn có muốn HỦY ${ids.length} báo giá đã chọn? (Chuyển trạng thái 'Đã huỷ' để lưu vết sổ sách)`
+                  )
+                ) {
+                  ids.forEach(id => updateQuotationStatus(id, 'cancelled'));
+                  setSelectedIds([]);
+                }
               }
             }}
             emptyMessage="Chưa có báo giá nào"
@@ -1278,10 +1341,18 @@ export const SalesView: React.FC<SalesViewProps> = ({
           }
         }}
         onDelete={quo => {
-          if (confirm(`Xoá báo giá ${quo.code}?`)) {
-            deleteQuotation(quo.id);
-            setIsQuotationDetailOpen(false);
-            setSelectedQuotationDetail(null);
+          if (isAdmin) {
+            if (confirm(`[ADMIN] Xóa vĩnh viễn báo giá ${quo.code}? (Dữ liệu sẽ bị xóa hoàn toàn khỏi hệ thống)`)) {
+              deleteQuotation(quo.id);
+              setIsQuotationDetailOpen(false);
+              setSelectedQuotationDetail(null);
+            }
+          } else {
+            if (confirm(`Hủy báo giá ${quo.code}? (Chuyển trạng thái 'Đã huỷ' để lưu vết sổ sách)`)) {
+              updateQuotationStatus(quo.id, 'cancelled');
+              setIsQuotationDetailOpen(false);
+              setSelectedQuotationDetail(null);
+            }
           }
         }}
         onEdit={() => {
