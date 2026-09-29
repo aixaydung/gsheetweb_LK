@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import {
   Product,
   ProductGroup,
@@ -90,6 +90,11 @@ interface AppContextType {
   syncStatus: 'synced' | 'syncing' | 'error';
   lastSyncTime: Date | null;
   triggerManualSync: () => Promise<void>;
+  autoSyncEnabled: boolean;
+  autoSyncInterval: number;
+  isBackgroundSyncing: boolean;
+  setAutoSyncEnabled: (enabled: boolean) => void;
+  setAutoSyncInterval: (interval: number) => void;
 
   // Actions
   createInvoice: (inv: Partial<SalesInvoice>, items: DocumentLineItem[]) => SalesInvoice;
@@ -268,6 +273,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error'>('synced');
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(() => new Date());
 
+  // Google Sheets Auto-sync & Polling state
+  const [autoSyncEnabled, setAutoSyncEnabledState] = useState<boolean>(() => {
+    const saved = localStorage.getItem('lkerp_auto_sync_enabled');
+    return saved !== null ? saved === 'true' : true;
+  });
+
+  const [autoSyncInterval, setAutoSyncIntervalState] = useState<number>(() => {
+    const saved = localStorage.getItem('lkerp_auto_sync_interval');
+    return saved ? Math.max(15, Number(saved)) : 60;
+  });
+
+  const [isBackgroundSyncing, setIsBackgroundSyncing] = useState<boolean>(false);
+  const isFetchingRef = useRef<boolean>(false);
+
+  const setAutoSyncEnabled = (enabled: boolean) => {
+    setAutoSyncEnabledState(enabled);
+    localStorage.setItem('lkerp_auto_sync_enabled', String(enabled));
+  };
+
+  const setAutoSyncInterval = (intervalSeconds: number) => {
+    const clamped = Math.max(15, intervalSeconds);
+    setAutoSyncIntervalState(clamped);
+    localStorage.setItem('lkerp_auto_sync_interval', String(clamped));
+  };
+
   const syncWithApi = (promise: Promise<Response>) => {
     setSyncStatus('syncing');
     return promise
@@ -287,8 +317,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Fetch / Sync from Google Sheets (Merges with or loads live records)
-  const fetchSheetsData = async () => {
-    setSyncStatus('syncing');
+  const fetchSheetsData = async (isBackground = false) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+
+    if (isBackground) {
+      setIsBackgroundSyncing(true);
+    } else {
+      setSyncStatus('syncing');
+    }
     try {
       const [custRes, prodRes, vendRes, orderRes, poRes, payRes, stkRes, movRes, quoRes, retRes] = await Promise.allSettled([
         fetch('/api/customers'),
@@ -528,18 +565,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setLastSyncTime(new Date());
     } catch (err) {
       console.warn('Fetch from Google Sheets error:', err);
-      setSyncStatus('error');
+      if (!isBackground) {
+        setSyncStatus('error');
+      }
+    } finally {
+      isFetchingRef.current = false;
+      setIsBackgroundSyncing(false);
     }
   };
 
   const triggerManualSync = async () => {
-    await fetchSheetsData();
+    await fetchSheetsData(false);
   };
 
   // Initial fetch on mount
   useEffect(() => {
-    fetchSheetsData();
+    fetchSheetsData(false);
   }, []);
+
+  // Background Auto-sync Polling Interval
+  useEffect(() => {
+    if (!autoSyncEnabled || autoSyncInterval <= 0) return;
+
+    const timer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchSheetsData(true);
+      }
+    }, autoSyncInterval * 1000);
+
+    return () => clearInterval(timer);
+  }, [autoSyncEnabled, autoSyncInterval]);
+
+  // Background Auto-sync on Window Focus & Visibility Change
+  useEffect(() => {
+    if (!autoSyncEnabled) return;
+
+    const handleFocusOrVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        const now = Date.now();
+        const last = lastSyncTime ? lastSyncTime.getTime() : 0;
+        // Trigger auto-sync if more than 30s elapsed since last sync
+        if (now - last > 30000) {
+          fetchSheetsData(true);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleFocusOrVisible);
+    window.addEventListener('focus', handleFocusOrVisible);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleFocusOrVisible);
+      window.removeEventListener('focus', handleFocusOrVisible);
+    };
+  }, [autoSyncEnabled, lastSyncTime]);
 
   // Sync to local storage
   useEffect(() => {
@@ -2339,6 +2418,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         syncStatus,
         lastSyncTime,
         triggerManualSync,
+        autoSyncEnabled,
+        autoSyncInterval,
+        isBackgroundSyncing,
+        setAutoSyncEnabled,
+        setAutoSyncInterval,
         createInvoice,
         updateInvoiceStatus,
         cancelInvoice,

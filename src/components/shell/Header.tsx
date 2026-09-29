@@ -24,24 +24,41 @@ export const Header: React.FC<HeaderProps> = ({
   alertCount = 6111,
   onNavigate,
 }) => {
-  const { theme, toggleTheme, syncStatus, lastSyncTime, triggerManualSync } = useApp();
+  const {
+    theme,
+    toggleTheme,
+    syncStatus,
+    lastSyncTime,
+    triggerManualSync,
+    autoSyncEnabled,
+    autoSyncInterval,
+    isBackgroundSyncing,
+    setAutoSyncEnabled,
+    setAutoSyncInterval,
+  } = useApp();
   const { user, logout } = useAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  const [isSyncMenuOpen, setIsSyncMenuOpen] = useState(false);
+  const syncMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
         setIsUserMenuOpen(false);
       }
+      if (syncMenuRef.current && !syncMenuRef.current.contains(event.target as Node)) {
+        setIsSyncMenuOpen(false);
+      }
     };
-    if (isUserMenuOpen) {
+    if (isUserMenuOpen || isSyncMenuOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isUserMenuOpen]);
+  }, [isUserMenuOpen, isSyncMenuOpen]);
 
   const displayName = user?.name || user?.email?.split('@')[0] || 'LK ERP';
   const displayEmail = user?.email || 'admin@lkerp.vn';
@@ -117,47 +134,171 @@ export const Header: React.FC<HeaderProps> = ({
           <Icon name="search" size={22} />
         </button>
 
-        {/* Google Sheets Sync Status Indicator */}
-        <div
-          onClick={() => syncStatus !== 'syncing' && triggerManualSync()}
-          title={
-            syncStatus === 'synced'
-              ? `Google Sheets: Đã đồng bộ ${lastSyncTime ? `(lúc ${lastSyncTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })})` : ''}. Nhấn để đồng bộ lại.`
-              : syncStatus === 'syncing'
-              ? 'Đang đồng bộ dữ liệu với Google Sheets...'
-              : 'Lỗi kết nối Google Sheets. Nhấn để thử lại.'
-          }
-          className={`h-[36px] sm:h-[40px] px-2.5 sm:px-3 rounded-[10px] sm:rounded-[12px] flex items-center gap-1.5 sm:gap-2 text-[12px] sm:text-[13px] font-medium border transition-all cursor-pointer select-none ${
-            syncStatus === 'synced'
-              ? 'bg-emerald-50/80 hover:bg-emerald-100/80 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
-              : syncStatus === 'syncing'
-              ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 animate-pulse'
-              : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
-          }`}
-        >
-          {syncStatus === 'synced' && (
-            <>
-              <span className="relative flex h-2 w-2 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span className="hidden md:inline font-semibold">Sheets:</span>
-              <span className="hidden sm:inline">Đã đồng bộ</span>
-              <Icon name="sync" size={14} className="text-emerald-600 opacity-60 hover:opacity-100 transition-opacity ml-0.5" />
-            </>
-          )}
-          {syncStatus === 'syncing' && (
-            <>
-              <Icon name="sync" size={15} className="animate-spin text-amber-600" />
-              <span className="font-medium text-amber-800 dark:text-amber-300">Đang đồng bộ...</span>
-            </>
-          )}
-          {syncStatus === 'error' && (
-            <>
-              <Icon name="warning" size={15} className="text-rose-600" />
-              <span className="hidden sm:inline font-semibold">Lỗi Sheets</span>
-              <span className="text-[11px] underline">Thử lại</span>
-            </>
+        {/* Google Sheets Sync Status Indicator & Quick Popover */}
+        <div className="relative" ref={syncMenuRef}>
+          <div
+            onClick={() => setIsSyncMenuOpen(prev => !prev)}
+            title={
+              syncStatus === 'synced'
+                ? `Google Sheets: Đã đồng bộ ${lastSyncTime ? `(lúc ${lastSyncTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })})` : ''}. Tự động quét: ${autoSyncEnabled ? `${autoSyncInterval}s` : 'Tắt'}. Nhấn để mở tùy chọn.`
+                : syncStatus === 'syncing'
+                ? 'Đang đồng bộ dữ liệu với Google Sheets...'
+                : 'Lỗi kết nối Google Sheets. Nhấn để thử lại.'
+            }
+            className={`h-[36px] sm:h-[40px] px-2.5 sm:px-3 rounded-[10px] sm:rounded-[12px] flex items-center gap-1.5 sm:gap-2 text-[12px] sm:text-[13px] font-medium border transition-all cursor-pointer select-none ${
+              syncStatus === 'synced'
+                ? 'bg-emerald-50/80 hover:bg-emerald-100/80 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                : syncStatus === 'syncing'
+                ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 animate-pulse'
+                : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
+            }`}
+          >
+            {syncStatus === 'synced' && (
+              <>
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className={`absolute inline-flex h-full w-full rounded-full bg-emerald-400 ${autoSyncEnabled ? 'animate-ping opacity-75' : 'opacity-40'}`}></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span className="hidden md:inline font-semibold">Sheets:</span>
+                {isBackgroundSyncing ? (
+                  <span className="inline-flex items-center gap-1 text-emerald-600 font-medium">
+                    <Icon name="sync" size={13} className="animate-spin" />
+                    <span className="hidden sm:inline">Đang quét...</span>
+                  </span>
+                ) : (
+                  <span className="hidden sm:inline">Đã đồng bộ</span>
+                )}
+                {autoSyncEnabled && (
+                  <span className="hidden lg:inline text-[10.5px] px-1.5 py-0.5 rounded-full bg-emerald-200/60 dark:bg-emerald-900/60 font-semibold">
+                    {autoSyncInterval}s
+                  </span>
+                )}
+                <Icon name="arrow_drop_down" size={16} className="text-emerald-600 opacity-60 ml-0.5" />
+              </>
+            )}
+            {syncStatus === 'syncing' && (
+              <>
+                <Icon name="sync" size={15} className="animate-spin text-amber-600" />
+                <span className="font-medium text-amber-800 dark:text-amber-300">Đang đồng bộ...</span>
+              </>
+            )}
+            {syncStatus === 'error' && (
+              <>
+                <Icon name="warning" size={15} className="text-rose-600" />
+                <span className="hidden sm:inline font-semibold">Lỗi Sheets</span>
+                <span className="text-[11px] underline">Thử lại</span>
+              </>
+            )}
+          </div>
+
+          {/* Quick Sync Dropdown Popover */}
+          {isSyncMenuOpen && (
+            <div className="absolute right-0 top-full mt-2 w-[290px] sm:w-[320px] bg-white dark:bg-[#1E293B] rounded-[16px] shadow-[0_12px_40px_-8px_rgba(0,0,0,0.18)] dark:shadow-[0_12px_40px_-8px_rgba(0,0,0,0.6)] border border-[#E5E7EB] dark:border-[#334155] p-3.5 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-[#F1F2F5] dark:border-[#334155]">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+                  <span className="font-bold text-[13.5px] text-[#111827] dark:text-[#F8FAFC]">Đồng bộ Google Sheets</span>
+                </div>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                  Live API
+                </span>
+              </div>
+
+              {/* Force sync button */}
+              <button
+                type="button"
+                disabled={syncStatus === 'syncing' || isBackgroundSyncing}
+                onClick={async () => {
+                  await triggerManualSync();
+                }}
+                className="w-full h-9 bg-[#6D3EEB] hover:bg-[#5B2BD6] disabled:opacity-50 text-white rounded-[10px] text-[13px] font-semibold flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+              >
+                <Icon name="sync" size={16} className={syncStatus === 'syncing' || isBackgroundSyncing ? 'animate-spin' : ''} />
+                <span>{syncStatus === 'syncing' ? 'Đang đồng bộ...' : 'Đồng bộ ngay bây giờ'}</span>
+              </button>
+
+              {/* Auto sync switch */}
+              <div className="bg-[#F9FAFB] dark:bg-[#0F172A] p-2.5 rounded-[12px] border border-[#F1F2F5] dark:border-[#334155] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[12.5px] font-semibold text-[#1F2937] dark:text-[#E2E8F0]">
+                    Tự động đồng bộ ngầm
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setAutoSyncEnabled(!autoSyncEnabled)}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      autoSyncEnabled ? 'bg-[#6D3EEB]' : 'bg-gray-300 dark:bg-gray-600'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                        autoSyncEnabled ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+                <p className="text-[11.5px] text-[#6B7280] dark:text-[#94A3B8] leading-tight">
+                  Tự động quét thay đổi từ Google Sheets và đồng bộ khi bạn mở lại tab.
+                </p>
+
+                {autoSyncEnabled && (
+                  <div className="pt-2 border-t border-[#E5E7EB] dark:border-[#1E293B]">
+                    <div className="flex items-center justify-between text-[11.5px] text-[#6B7280] dark:text-[#94A3B8] mb-1.5 font-medium">
+                      <span>Chu kỳ quét:</span>
+                      <span className="font-bold text-[#6D3EEB]">{autoSyncInterval} giây</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1">
+                      {[
+                        { sec: 30, label: '30s' },
+                        { sec: 60, label: '60s' },
+                        { sec: 120, label: '2p' },
+                        { sec: 300, label: '5p' },
+                      ].map(opt => (
+                        <button
+                          key={opt.sec}
+                          type="button"
+                          onClick={() => setAutoSyncInterval(opt.sec)}
+                          className={`py-1 text-[11px] font-semibold rounded-[6px] border transition-all cursor-pointer ${
+                            autoSyncInterval === opt.sec
+                              ? 'bg-[#6D3EEB] text-white border-[#6D3EEB]'
+                              : 'bg-white dark:bg-[#1E293B] text-[#4B5563] dark:text-[#CBD5E1] border-[#E5E7EB] dark:border-[#334155] hover:bg-gray-50'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Status info */}
+              <div className="text-[11px] text-[#6B7280] dark:text-[#94A3B8] space-y-1 pt-1">
+                <div className="flex justify-between">
+                  <span>Lần sync gần nhất:</span>
+                  <span className="font-semibold text-[#111827] dark:text-[#E2E8F0]">
+                    {lastSyncTime ? lastSyncTime.toLocaleTimeString('vi-VN') : 'Chưa sync'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Số bảng live:</span>
+                  <span className="font-semibold text-[#059669]">14 bảng Sheets</span>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-[#F1F2F5] dark:border-[#334155]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSyncMenuOpen(false);
+                    onNavigate?.('/cai-dat?tab=dong-bo-sheets');
+                  }}
+                  className="w-full text-center text-[12px] font-semibold text-[#6D3EEB] hover:text-[#5B2BD6] py-1 transition-colors cursor-pointer"
+                >
+                  Cài đặt đồng bộ chi tiết →
+                </button>
+              </div>
+            </div>
           )}
         </div>
 

@@ -48,6 +48,14 @@ export const SETTING_GROUPS: SettingTabGroup[] = [
         shortDesc: 'Thiết lập khổ in A4/A5/K80, logo & tiêu đề hóa đơn',
         icon: 'print',
       },
+      {
+        id: 'dong-bo-sheets',
+        name: 'Đồng bộ Google Sheets',
+        shortDesc: 'Tự động quét định kỳ (Polling), kết nối Service Account 14 bảng',
+        icon: 'sync',
+        badge: 'Live Auto',
+        badgeColor: 'emerald',
+      },
     ],
   },
   {

@@ -21,6 +21,7 @@ import { ReferenceAccountsTab } from './settings/components/ReferenceAccountsTab
 import { UsersPermissionsTab } from './settings/components/UsersPermissionsTab';
 import { AuditLogTab } from './settings/components/AuditLogTab';
 import { UpgradeRoadmapTab } from './settings/components/UpgradeRoadmapTab';
+import { AutoSyncSettingsTab } from './settings/components/AutoSyncSettingsTab';
 
 interface SettingsViewProps {
   currentTab?: string;
@@ -449,6 +450,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentTab, onTabCha
           {activeTabId === 'chi-nhanh-kho' && <BranchesWarehousesTab />}
           {activeTabId === 'vietqr-ngan-hang' && <VietQrBankTab />}
           {activeTabId === 'mau-in-chung-tu' && <PrintTemplatesTab />}
+          {activeTabId === 'dong-bo-sheets' && <AutoSyncSettingsTab />}
 
           {activeTabId === 'nghiep-vu-ban-hang' && <BusinessSalesTab />}
           {activeTabId === 'nghiep-vu-mua-kho' && <BusinessWarehouseTab />}

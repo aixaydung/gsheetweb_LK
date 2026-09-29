@@ -159,6 +159,7 @@ function AppContent() {
       'chi-nhanh-kho': 'Chi nhánh & Kho',
       'vietqr-ngan-hang': 'VietQR & Ngân hàng',
       'mau-in-chung-tu': 'Mẫu in & Chứng từ',
+      'dong-bo-sheets': 'Đồng bộ Google Sheets',
       'nghiep-vu-ban-hang': 'Thiết lập Bán hàng',
       'nghiep-vu-mua-kho': 'Quản lý Kho & Tồn',
       'chinh-sach-cong-no': 'Chính sách Công nợ',

@@ -222,13 +222,27 @@ Spreadsheet ID: `1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY` đã khởi tạo
     - Cập nhật Optimistic UI & Đồng bộ nền Google Sheets cho: `createQuotation`, `updateQuotationStatus`, `convertQuotationToInvoice`, `createSalesReturn`, `createPurchaseReturn`, `updateReturnStatus`.
     - Tự động lưu cache offline `localStorage` cho `quotations`, `salesReturns`, `purchaseReturns`.
 
+- [x] **Đồng bộ hóa 2 chiều Tự động định kỳ (Background Polling & Auto-sync - Gói 7)**:
+  - [x] **Cơ chế Background Polling Timer**:
+    - Tự động quét và cập nhật ngầm định kỳ (mặc định 60 giây, hỗ trợ tuỳ chỉnh 30s, 60s, 2 phút, 5 phút).
+    - Tích hợp cờ `isBackgroundSyncing` và `isFetchingRef` ngăn chặn trùng lặp request (race condition / throttling).
+  - [x] **Window Focus & Smart Visibility Auto-sync**:
+    - Tự động kiểm tra và đồng bộ khi người dùng quay lại tab trình duyệt (`document.visibilityState === 'visible'` hoặc `window.onfocus`) nếu đã quá 30 giây kể từ lần đồng bộ trước.
+    - Không tiêu hao tài nguyên khi người dùng ẩn hoặc thu nhỏ trình duyệt.
+  - [x] **Quick Sync Popover Dropdown trên Header**:
+    - Nút ép đồng bộ thủ công tức thời kèm hiệu ứng xoay.
+    - Công tắc Toggle bật/tắt tính năng Tự động quét ngầm.
+    - Bộ chọn tần suất quét nhanh (30s, 60s, 2p, 5p).
+    - Hiển thị thời gian đồng bộ gần nhất chi tiết đến từng giây và trạng thái 14 bảng dữ liệu.
+  - [x] **Tab Cài đặt Chuyên sâu `dong-bo-sheets` (`AutoSyncSettingsTab.tsx`)**:
+    - Quản lý trạng thái đồng bộ 14 bảng dữ liệu Google Sheets (`CUSTOMERS`, `PRODUCTS`, `VENDORS`, `ORDERS`, `ORDER_ITEMS`, `PURCHASES`, `PURCHASE_ITEMS`, `PAYMENTS`, `STOCKTAKES`, `STOCK_MOVEMENTS`, `QUOTATIONS`, `QUOTATION_ITEMS`, `RETURNS`, `RETURN_ITEMS`).
+    - Hiển thị Spreadsheet ID, Service Account IAM, liên kết mở trực tiếp Google Sheets và kiểm tra kết nối live.
+
 ---
 
 ## 5. ĐỀ XUẤT CÁC HẠNG MỤC TIẾP THEO (GHI NHẬN KẾ HOẠCH - CHƯA TRIỂN KHAI)
 
-1. **Gói 7: Đồng bộ hóa 2 chiều Tự động định kỳ (Background Polling & Auto-sync)**
-   - Cơ chế quét ngầm định kỳ (mỗi 60s hoặc khi người dùng focus tab) để tự động cập nhật dữ liệu nếu có người dùng khác sửa đổi trực tiếp trên file Google Sheets mà không cần bấm F5.
-2. **Gói 9: Tối ưu Progressive Web App (PWA) & Offline Cache**
+1. **Gói 9: Tối ưu Progressive Web App (PWA) & Offline Cache**
    - Tạo file `manifest.json`, icon app, service worker giúp người dùng cài đặt ứng dụng LK ERP lên màn hình chính điện thoại / máy tính bảng, mở toàn màn hình như native app.
 
 ---
