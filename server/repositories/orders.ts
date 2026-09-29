@@ -44,28 +44,59 @@ export interface OrderRecord {
 }
 
 export const getAllOrders = async (): Promise<OrderRecord[]> => {
-  const rows = await getSheetData(SPREADSHEET_ID, `${ORDERS_SHEET}!A2:R`);
-  return rows.map((row: any, index: number) => ({
-    id: row[0] || '',
-    code: row[1] || '',
-    customer_id: row[2] || '',
-    customer_name: row[3] || '',
-    order_date: row[4] || '',
-    subtotal: Number(row[5]) || 0,
-    discount_amount: Number(row[6]) || 0,
-    vat_rate: Number(row[7]) || 0,
-    vat_amount: Number(row[8]) || 0,
-    shipping_fee: Number(row[9]) || 0,
-    total: Number(row[10]) || 0,
-    paid_amount: Number(row[11]) || 0,
-    debt_amount: Number(row[12]) || 0,
-    payment_status: (row[13] as any) || 'unpaid',
-    status: (row[14] as any) || 'completed',
-    note: row[15] || '',
-    created_by: row[16] || '',
-    created_at: row[17] || '',
-    rowIndex: index + 2,
-  }));
+  const [orderRows, itemRows] = await Promise.all([
+    getSheetData(SPREADSHEET_ID, `${ORDERS_SHEET}!A2:R`),
+    getSheetData(SPREADSHEET_ID, `${ORDER_ITEMS_SHEET}!A2:K`),
+  ]);
+
+  const itemsByOrderId = new Map<string, OrderItemRecord[]>();
+  for (const row of itemRows) {
+    const orderId = row[1] || '';
+    if (!orderId) continue;
+    const item: OrderItemRecord = {
+      id: row[0] || '',
+      order_id: orderId,
+      product_id: row[2] || '',
+      sku: row[3] || '',
+      product_name: row[4] || '',
+      unit: row[5] || 'Cái',
+      quantity: Number(row[6]) || 0,
+      unit_price: Number(row[7]) || 0,
+      discount_amount: Number(row[8]) || 0,
+      line_total: Number(row[9]) || 0,
+      note: row[10] || '',
+    };
+    if (!itemsByOrderId.has(orderId)) {
+      itemsByOrderId.set(orderId, []);
+    }
+    itemsByOrderId.get(orderId)!.push(item);
+  }
+
+  return orderRows.map((row: any, index: number) => {
+    const id = row[0] || '';
+    return {
+      id,
+      code: row[1] || '',
+      customer_id: row[2] || '',
+      customer_name: row[3] || '',
+      order_date: row[4] || '',
+      subtotal: Number(row[5]) || 0,
+      discount_amount: Number(row[6]) || 0,
+      vat_rate: Number(row[7]) || 0,
+      vat_amount: Number(row[8]) || 0,
+      shipping_fee: Number(row[9]) || 0,
+      total: Number(row[10]) || 0,
+      paid_amount: Number(row[11]) || 0,
+      debt_amount: Number(row[12]) || 0,
+      payment_status: (row[13] as any) || 'unpaid',
+      status: (row[14] as any) || 'completed',
+      note: row[15] || '',
+      created_by: row[16] || '',
+      created_at: row[17] || '',
+      items: itemsByOrderId.get(id) || [],
+      rowIndex: index + 2,
+    };
+  });
 };
 
 export const generateOrderCode = async (): Promise<string> => {

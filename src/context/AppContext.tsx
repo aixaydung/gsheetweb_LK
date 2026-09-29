@@ -289,56 +289,111 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const fetchSheetsData = async () => {
     setSyncStatus('syncing');
     try {
-      const [custRes, prodRes, vendRes, orderRes, poRes, payRes, stkRes] = await Promise.allSettled([
+      const [custRes, prodRes, vendRes, orderRes, poRes, payRes, stkRes, movRes] = await Promise.allSettled([
         fetch('/api/customers'),
         fetch('/api/products'),
         fetch('/api/vendors'),
         fetch('/api/orders'),
         fetch('/api/purchases'),
         fetch('/api/payments'),
-        fetch('/api/stocktakes')
+        fetch('/api/stocktakes'),
+        fetch('/api/stock-movements')
       ]);
 
       if (custRes.status === 'fulfilled' && custRes.value.ok) {
         const data = await custRes.value.json();
-        if (Array.isArray(data.customers) && data.customers.length > 0) {
+        if (Array.isArray(data.customers)) {
           setCustomers(data.customers);
         }
       }
       if (prodRes.status === 'fulfilled' && prodRes.value.ok) {
         const data = await prodRes.value.json();
-        if (Array.isArray(data.products) && data.products.length > 0) {
+        if (Array.isArray(data.products)) {
           setProducts(data.products);
         }
       }
       if (vendRes.status === 'fulfilled' && vendRes.value.ok) {
         const data = await vendRes.value.json();
-        if (Array.isArray(data.vendors) && data.vendors.length > 0) {
+        if (Array.isArray(data.vendors)) {
           setSuppliers(data.vendors);
         }
       }
       if (orderRes.status === 'fulfilled' && orderRes.value.ok) {
         const data = await orderRes.value.json();
-        if (Array.isArray(data.orders) && data.orders.length > 0) {
-          setInvoices(data.orders);
+        if (Array.isArray(data.orders)) {
+          const mappedOrders = data.orders.map((o: any) => ({
+            ...o,
+            invoice_date: o.order_date || o.invoice_date || o.created_at,
+            items: (o.items || []).map((it: any) => ({
+              id: it.id,
+              product_id: it.product_id,
+              product_sku: it.sku || it.product_sku || '',
+              product_name: it.product_name,
+              unit: it.unit || 'Cái',
+              quantity: Number(it.quantity) || 1,
+              unit_price: Number(it.unit_price) || 0,
+              unit_cost: it.unit_cost || 0,
+              discount_amount: Number(it.discount_amount) || 0,
+              line_total: Number(it.line_total) || 0,
+              note: it.note || '',
+            })),
+          }));
+          setInvoices(mappedOrders);
         }
       }
       if (poRes.status === 'fulfilled' && poRes.value.ok) {
         const data = await poRes.value.json();
-        if (Array.isArray(data.purchases) && data.purchases.length > 0) {
-          setPurchaseOrders(data.purchases);
+        if (Array.isArray(data.purchases)) {
+          const mappedPurchases = data.purchases.map((p: any) => ({
+            ...p,
+            items: (p.items || []).map((it: any) => ({
+              id: it.id,
+              product_id: it.product_id,
+              product_sku: it.sku || it.product_sku || '',
+              product_name: it.product_name,
+              unit: it.unit || 'Cái',
+              quantity: Number(it.quantity) || 1,
+              unit_price: Number(it.unit_price) || 0,
+              unit_cost: Number(it.unit_price) || 0,
+              discount_amount: Number(it.discount_amount) || 0,
+              line_total: Number(it.line_total) || 0,
+              note: it.note || '',
+            })),
+          }));
+          setPurchaseOrders(mappedPurchases);
         }
       }
       if (payRes.status === 'fulfilled' && payRes.value.ok) {
         const data = await payRes.value.json();
-        if (Array.isArray(data.payments) && data.payments.length > 0) {
+        if (Array.isArray(data.payments)) {
           setPayments(data.payments);
         }
       }
       if (stkRes.status === 'fulfilled' && stkRes.value.ok) {
         const data = await stkRes.value.json();
-        if (Array.isArray(data.stocktakes) && data.stocktakes.length > 0) {
-          setStocktakes(data.stocktakes);
+        if (Array.isArray(data.stocktakes)) {
+          const mappedStocktakes = data.stocktakes.map((s: any) => ({
+            ...s,
+            items: (s.items || []).map((it: any) => ({
+              product_id: it.product_id,
+              product_sku: it.sku || '',
+              product_name: it.product_name,
+              unit: it.unit || 'Cái',
+              system_qty: Number(it.system_qty) || 0,
+              actual_qty: Number(it.actual_qty) || 0,
+              diff_qty: Number(it.diff_qty) || 0,
+              unit_cost: Number(it.unit_cost) || 0,
+              diff_value: Number(it.diff_value) || 0,
+              reason: it.reason || '',
+            })),
+          }));
+          setStocktakes(mappedStocktakes);
+        }
+      }
+      if (movRes.status === 'fulfilled' && movRes.value.ok) {
+        const data = await movRes.value.json();
+        if (Array.isArray(data.movements)) {
+          setStockMovements(data.movements);
         }
       }
 

@@ -22,10 +22,55 @@ interface ReportViewProps {
 export const ReportView: React.FC<ReportViewProps> = ({ currentTab, onTabChange }) => {
   const { invoices, purchaseOrders, products: contextProducts, customers: contextCustomers, suppliers: contextSuppliers } = useApp();
 
+  // Helper to compute date range dynamically
+  const getPresetDates = (p: string) => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const toYMD = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+    if (p === 'Hôm nay') {
+      const todayStr = toYMD(now);
+      return { from: todayStr, to: todayStr };
+    }
+    if (p === 'Hôm qua') {
+      const y = new Date(now);
+      y.setDate(y.getDate() - 1);
+      const yStr = toYMD(y);
+      return { from: yStr, to: yStr };
+    }
+    if (p === '7 ngày qua') {
+      const past = new Date(now);
+      past.setDate(past.getDate() - 6);
+      return { from: toYMD(past), to: toYMD(now) };
+    }
+    if (p === 'Tháng này') {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { from: toYMD(firstDay), to: toYMD(now) };
+    }
+    if (p === 'Tháng trước') {
+      const firstDay = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
+      return { from: toYMD(firstDay), to: toYMD(lastDay) };
+    }
+    if (p === 'Quý này') {
+      const currentQuarter = Math.floor(now.getMonth() / 3);
+      const firstDay = new Date(now.getFullYear(), currentQuarter * 3, 1);
+      const lastDay = new Date(now.getFullYear(), (currentQuarter + 1) * 3, 0);
+      return { from: toYMD(firstDay), to: toYMD(lastDay) };
+    }
+    if (p === 'Năm nay') {
+      const firstDay = new Date(now.getFullYear(), 0, 1);
+      const lastDay = new Date(now.getFullYear(), 11, 31);
+      return { from: toYMD(firstDay), to: toYMD(lastDay) };
+    }
+    return { from: toYMD(new Date(now.getFullYear(), now.getMonth(), 1)), to: toYMD(now) };
+  };
+
+  const initialDates = useMemo(() => getPresetDates('Tháng này'), []);
   // Top Filter Bar State
   const [preset, setPreset] = useState('Tháng này');
-  const [fromDate, setFromDate] = useState('2026-09-01');
-  const [toDate, setToDate] = useState('2026-09-27');
+  const [fromDate, setFromDate] = useState(initialDates.from);
+  const [toDate, setToDate] = useState(initialDates.to);
 
   // Search & Filter state for individual tabs
   const [inventorySearch, setInventorySearch] = useState('');
@@ -82,217 +127,113 @@ export const ReportView: React.FC<ReportViewProps> = ({ currentTab, onTabChange 
   // Handle preset date change
   const handlePresetChange = (newPreset: string) => {
     setPreset(newPreset);
-    if (newPreset === 'Hôm nay') {
-      setFromDate('2026-09-27');
-      setToDate('2026-09-27');
-    } else if (newPreset === 'Hôm qua') {
-      setFromDate('2026-09-26');
-      setToDate('2026-09-26');
-    } else if (newPreset === '7 ngày qua') {
-      setFromDate('2026-09-20');
-      setToDate('2026-09-27');
-    } else if (newPreset === 'Tháng này') {
-      setFromDate('2026-09-01');
-      setToDate('2026-09-27');
-    } else if (newPreset === 'Tháng trước') {
-      setFromDate('2026-08-01');
-      setToDate('2026-08-31');
-    } else if (newPreset === 'Quý này') {
-      setFromDate('2026-07-01');
-      setToDate('2026-09-30');
-    } else if (newPreset === 'Năm nay') {
-      setFromDate('2026-01-01');
-      setToDate('2026-12-31');
-    }
+    const dates = getPresetDates(newPreset);
+    setFromDate(dates.from);
+    setToDate(dates.to);
   };
 
+  // Filter invoices and purchase orders by date range and active status
+  const rangeInvoices = useMemo(() => {
+    return invoices.filter(inv => {
+      if (inv.status === 'cancelled') return false;
+      const d = (inv.date || '').slice(0, 10);
+      if (fromDate && d < fromDate) return false;
+      if (toDate && d > toDate) return false;
+      return true;
+    });
+  }, [invoices, fromDate, toDate]);
+
+  const rangePurchases = useMemo(() => {
+    return purchaseOrders.filter(po => {
+      if (po.status === 'cancelled') return false;
+      const d = (po.date || '').slice(0, 10);
+      if (fromDate && d < fromDate) return false;
+      if (toDate && d > toDate) return false;
+      return true;
+    });
+  }, [purchaseOrders, fromDate, toDate]);
+
   // =========================================================================
-  // DATASET 1: TỔNG HỢP & KPI (matching Screenshot 1.png)
+  // DATASET 1: TỔNG HỢP & KPI (Dynamic 100% from Google Sheets)
   // =========================================================================
-  const revenue = 2999000;
-  const cogs = 1603000;
-  const profit = 1396000;
-  const purchases = 0;
+  const { revenue, cogs, profit, purchases, dailyChartData } = useMemo(() => {
+    let rev = 0;
+    let cost = 0;
+    let purch = 0;
 
-  // 27-day daily distribution matching 1.png exactly
-  const dailyChartData = useMemo(() => {
-    const data = [];
-    for (let day = 1; day <= 27; day++) {
-      const dayStr = day < 10 ? `0${day}/09` : `${day}/09`;
-      let dRevenue = 0;
-      let dCost = 0;
-      let dProfit = 0;
+    const dailyMap = new Map<string, { day: string; revenue: number; cost: number; profit: number }>();
 
-      if (day === 8) {
-        dRevenue = 600000;
-        dCost = 350000;
-        dProfit = 250000;
-      } else if (day === 9) {
-        dRevenue = 580000;
-        dCost = 300000;
-        dProfit = 280000;
-      } else if (day === 10) {
-        dRevenue = 420000;
-        dCost = 200000;
-        dProfit = 220000;
-      } else if (day === 25) {
-        dRevenue = 840000;
-        dCost = 500000;
-        dProfit = 340000;
-      } else if (day === 26) {
-        dRevenue = 490000;
-        dCost = 220000;
-        dProfit = 270000;
-      } else if (day === 15) {
-        dRevenue = 69000;
-        dCost = 33000;
-        dProfit = 36000;
-      }
+    rangeInvoices.forEach(inv => {
+      const invTotal = inv.total || 0;
+      rev += invTotal;
 
-      data.push({
-        day: dayStr,
-        revenue: dRevenue,
-        cost: dCost,
-        profit: dProfit,
+      let invCost = 0;
+      (inv.items || []).forEach(item => {
+        const prod = contextProducts.find(p => p.id === item.product_id || p.sku === item.product_sku);
+        const costPrice = prod?.cost_price || item.unit_cost || 0;
+        invCost += costPrice * (item.quantity || 1);
       });
+      cost += invCost;
+
+      const dStr = (inv.date || '').slice(0, 10);
+      if (dStr) {
+        const parts = dStr.split('-');
+        const displayDay = parts.length === 3 ? `${parts[2]}/${parts[1]}` : dStr;
+        const cur = dailyMap.get(displayDay) || { day: displayDay, revenue: 0, cost: 0, profit: 0 };
+        cur.revenue += invTotal;
+        cur.cost += invCost;
+        cur.profit += (invTotal - invCost);
+        dailyMap.set(displayDay, cur);
+      }
+    });
+
+    rangePurchases.forEach(po => {
+      purch += po.total || 0;
+    });
+
+    const prof = rev - cost;
+
+    let chartData = Array.from(dailyMap.values());
+    if (fromDate && toDate) {
+      const start = new Date(fromDate);
+      const end = new Date(toDate);
+      const diffDays = Math.round((end.getTime() - start.getTime()) / (1000 * 3600 * 24));
+      if (diffDays >= 0 && diffDays <= 31) {
+        const slots = [];
+        const pad = (n: number) => String(n).padStart(2, '0');
+        for (let i = 0; i <= diffDays; i++) {
+          const curD = new Date(start);
+          curD.setDate(curD.getDate() + i);
+          const key = `${pad(curD.getDate())}/${pad(curD.getMonth() + 1)}`;
+          const existing = dailyMap.get(key) || { day: key, revenue: 0, cost: 0, profit: 0 };
+          slots.push(existing);
+        }
+        chartData = slots;
+      }
     }
-    return data;
-  }, []);
+
+    return {
+      revenue: rev,
+      cogs: cost,
+      profit: prof,
+      purchases: purch,
+      dailyChartData: chartData,
+    };
+  }, [rangeInvoices, rangePurchases, contextProducts, fromDate, toDate]);
 
   // =========================================================================
-  // DATASET 2: TỒN KHO (matching Screenshot 2.png)
+  // DATASET 2: TỒN KHO (Dynamic 100% from Google Sheets PRODUCTS)
   // =========================================================================
   const rawInventoryProducts = useMemo(() => {
-    if (contextProducts && contextProducts.length > 0) {
-      return contextProducts.map(p => ({
-        id: p.id,
-        name: p.name,
-        sku: p.sku || '',
-        stock: p.stock_quantity,
-        value: p.stock_value || (p.stock_quantity * p.cost_price),
-        status: p.stock_quantity <= 0 ? 'out' : p.stock_quantity <= (p.min_stock || 5) ? 'low' : 'ok',
-        statusText: p.stock_quantity <= 0 ? 'Hết hàng' : p.stock_quantity <= (p.min_stock || 5) ? 'Sắp hết' : 'Còn hàng',
-      }));
-    }
-    return [
-    {
-      id: 'inv-01',
-      name: 'Thiết bị giám sát, điều khiển hệ thống điện mặt trời mái nhà (Nexatus) LK',
-      sku: 'Nexatus ( Xuất tách)',
-      stock: 32,
-      value: 537600000,
-      status: 'ok',
-      statusText: 'Còn hàng',
-    },
-    {
-      id: 'inv-02',
-      name: 'KEO CHÀ RON GRANO',
-      sku: 'G01',
-      stock: 2000,
-      value: 100000000,
-      status: 'ok',
-      statusText: 'Còn hàng',
-    },
-    {
-      id: 'inv-03',
-      name: 'Thiết bị giám sát, điều khiển hệ thống điện mặt trời mái nhà (Nexatus) LK1',
-      sku: 'Nexatus ( Xuất gộp)',
-      stock: 4,
-      value: 79600000,
-      status: 'low',
-      statusText: 'Sắp hết',
-    },
-    {
-      id: 'inv-04',
-      name: 'Công tơ điện tử 3 pha 1 giá gián tiếp DT03P05(LK)',
-      sku: 'DT03P05',
-      stock: 17,
-      value: 24327000,
-      status: 'ok',
-      statusText: 'Còn hàng',
-    },
-    {
-      id: 'inv-05',
-      name: 'Cà phê rang xay',
-      sku: 'CP001',
-      stock: 173,
-      value: 20760000,
-      status: 'ok',
-      statusText: 'Còn hàng',
-    },
-    {
-      id: 'inv-06',
-      name: 'Modem thu thập số liệu 4G',
-      sku: 'RMR TurboJet',
-      stock: 12,
-      value: 19872000,
-      status: 'ok',
-      statusText: 'Còn hàng',
-    },
-    {
-      id: 'inv-07',
-      name: 'Công tơ điện tử 1 pha DT01P80-RF(LK)',
-      sku: 'DT01P80-RF',
-      stock: 45,
-      value: 19350000,
-      status: 'ok',
-      statusText: 'Còn hàng',
-    },
-    {
-      id: 'inv-08',
-      name: 'Công tơ điện tử 1 pha DT01P-RF(LK)',
-      sku: 'DT01P-RF',
-      stock: 43,
-      value: 18103000,
-      status: 'ok',
-      statusText: 'Còn hàng',
-    },
-    {
-      id: 'inv-09',
-      name: 'Hạt Arabica',
-      sku: 'CF016',
-      stock: 80,
-      value: 14400000,
-      status: 'ok',
-      statusText: 'Còn hàng',
-    },
-    {
-      id: 'inv-10',
-      name: 'Ly nhựa',
-      sku: 'LY001',
-      stock: 577,
-      value: 12694000,
-      status: 'ok',
-      statusText: 'Còn hàng',
-    },
-    {
-      id: 'inv-11',
-      name: 'Công tơ điện tử 3 pha 1 giá trực tiếp DT03P-RF(LK)',
-      sku: 'DT03P-RF',
-      stock: 8,
-      value: 12544000,
-      status: 'low',
-      statusText: 'Sắp hết',
-    },
-    {
-      id: 'inv-12',
-      name: 'film',
-      sku: 'i 503',
-      stock: 200,
-      value: 11000000,
-      status: 'ok',
-      statusText: 'Còn hàng',
-    },
-    {
-      id: 'inv-13',
-      name: 'Công tơ điện tử 1 pha DT01P60-RF(LK)',
-      sku: 'DT01P60-RF',
-      stock: 20,
-      value: 8840000,
-      status: 'ok',
-      statusText: 'Còn hàng',
-    },
-    ];
+    return (contextProducts || []).map(p => ({
+      id: p.id,
+      name: p.name,
+      sku: p.sku || '',
+      stock: p.stock_quantity || 0,
+      value: p.stock_value || ((p.stock_quantity || 0) * (p.cost_price || 0)),
+      status: (p.stock_quantity || 0) <= 0 ? 'out' : (p.stock_quantity || 0) <= (p.min_stock || 5) ? 'low' : 'ok',
+      statusText: (p.stock_quantity || 0) <= 0 ? 'Hết hàng' : (p.stock_quantity || 0) <= (p.min_stock || 5) ? 'Sắp hết' : 'Còn hàng',
+    }));
   }, [contextProducts]);
 
   const filteredInventory = useMemo(() => {
@@ -322,20 +263,14 @@ export const ReportView: React.FC<ReportViewProps> = ({ currentTab, onTabChange 
   // DATASET 3: CÔNG NỢ (matching Screenshot 3.png)
   // =========================================================================
   const rawDebtCustomers = useMemo(() => {
-    if (contextCustomers && contextCustomers.some(c => c.debt_amount > 0)) {
-      return contextCustomers
-        .filter(c => c.debt_amount > 0)
-        .map(c => ({
-          id: c.id,
-          name: c.name,
-          totalPurchase: c.total_purchase,
-          remainingDebt: c.debt_amount,
-        }));
-    }
-    return [
-      { id: 'dc-1', name: 'Công ty Minh An', totalPurchase: 1467000, remainingDebt: 250000 },
-      { id: 'dc-2', name: 'Shop Mộc Nhiên', totalPurchase: 643500, remainingDebt: 643500 },
-    ];
+    return (contextCustomers || [])
+      .filter(c => (c.debt_amount || 0) > 0)
+      .map(c => ({
+        id: c.id,
+        name: c.name,
+        totalPurchase: c.total_purchase || 0,
+        remainingDebt: c.debt_amount || 0,
+      }));
   }, [contextCustomers]);
 
   const filteredDebtCustomers = useMemo(() => {
@@ -347,17 +282,16 @@ export const ReportView: React.FC<ReportViewProps> = ({ currentTab, onTabChange 
       });
   }, [rawDebtCustomers, debtCustSearch, debtCustSortAsc]);
 
-  // In 3.png, Top NCC còn nợ is empty state ("Chưa có dữ liệu", 0 kết quả)
+  // In 3.png, Top NCC còn nợ
   const rawDebtSuppliers = useMemo(() => {
-    const list = contextSuppliers
-      .filter(s => s.debt_amount > 0)
+    return (contextSuppliers || [])
+      .filter(s => (s.debt_amount || 0) > 0)
       .map(s => ({
         id: s.id,
         name: s.name,
-        totalPurchase: s.total_purchase,
-        remainingDebt: s.debt_amount,
+        totalPurchase: s.total_purchase || 0,
+        remainingDebt: s.debt_amount || 0,
       }));
-    return list;
   }, [contextSuppliers]);
 
   const filteredDebtSuppliers = useMemo(() => {
@@ -370,17 +304,36 @@ export const ReportView: React.FC<ReportViewProps> = ({ currentTab, onTabChange 
   }, [rawDebtSuppliers, debtSuppSearch, debtSuppSortAsc]);
 
   // =========================================================================
-  // DATASET 4: TOP SẢN PHẨM (matching Screenshot 4.png)
+  // DATASET 4: TOP SẢN PHẨM (Dynamic aggregation from rangeInvoices)
   // =========================================================================
-  const rawTopProducts = useMemo(() => [
-    { id: 'tp-1', name: 'Cà phê rang xay', quantity: 7, revenue: 1750000, profit: 910000 },
-    { id: 'tp-2', name: 'Hạt điều', quantity: 2, revenue: 600000, profit: 240000 },
-    { id: 'tp-3', name: 'Trà đào túi lọc', quantity: 3, revenue: 255000, profit: 120000 },
-    { id: 'tp-4', name: 'Hot Pink (No Spool)', quantity: 1, revenue: 245000, profit: 25000 },
-    { id: 'tp-5', name: 'Gặm nướu silicon GB hình thỏ có hộp', quantity: 1, revenue: 65000, profit: 65000 },
-    { id: 'tp-6', name: 'Sữa tươi', quantity: 2, revenue: 64000, profit: 28000 },
-    { id: 'tp-7', name: 'Nước ép đóng chai', quantity: 1, revenue: 25000, profit: 13000 },
-  ], []);
+  const rawTopProducts = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; quantity: number; revenue: number; profit: number }>();
+
+    rangeInvoices.forEach(inv => {
+      (inv.items || []).forEach(item => {
+        const prod = contextProducts.find(p => p.id === item.product_id || p.sku === item.product_sku);
+        const costPrice = prod?.cost_price || item.unit_cost || 0;
+        const lineRev = item.line_total || ((item.quantity || 1) * (item.unit_price || 0));
+        const lineCost = costPrice * (item.quantity || 1);
+        const lineProfit = lineRev - lineCost;
+        const key = prod?.id || item.product_id || item.product_name;
+
+        const cur = map.get(key) || {
+          id: key,
+          name: prod?.name || item.product_name,
+          quantity: 0,
+          revenue: 0,
+          profit: 0,
+        };
+        cur.quantity += (item.quantity || 1);
+        cur.revenue += lineRev;
+        cur.profit += lineProfit;
+        map.set(key, cur);
+      });
+    });
+
+    return Array.from(map.values());
+  }, [rangeInvoices, contextProducts]);
 
   const filteredTopProducts = useMemo(() => {
     return rawTopProducts
@@ -396,17 +349,28 @@ export const ReportView: React.FC<ReportViewProps> = ({ currentTab, onTabChange 
   }, [rawTopProducts, topProdSearch, topProdSort, topProdSortAsc]);
 
   // =========================================================================
-  // DATASET 5: TOP KHÁCH HÀNG (matching Screenshot 5.png)
+  // DATASET 5: TOP KHÁCH HÀNG (Dynamic aggregation from rangeInvoices)
   // =========================================================================
-  const rawTopCustomers = useMemo(() => [
-    { id: 'tc-1', name: 'Công ty Minh An', totalPurchase: 1467000, remainingDebt: 250000 },
-    { id: 'tc-2', name: 'Shop Mộc Nhiên', totalPurchase: 643500, remainingDebt: 643500 },
-    { id: 'tc-3', name: 'anh binh', totalPurchase: 300000, remainingDebt: 0 },
-    { id: 'tc-4', name: 'le van a', totalPurchase: 255000, remainingDebt: 0 },
-    { id: 'tc-5', name: 'Khanh', totalPurchase: 245000, remainingDebt: 0 },
-    { id: 'tc-6', name: 'huyền', totalPurchase: 182000, remainingDebt: 0 },
-    { id: 'tc-7', name: 'nắng rooftop-minh', totalPurchase: 25000, remainingDebt: 0 },
-  ], []);
+  const rawTopCustomers = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; totalPurchase: number; remainingDebt: number }>();
+
+    rangeInvoices.forEach(inv => {
+      const custId = inv.customer_id || inv.customer_name || 'unknown-cust';
+      const cust = contextCustomers.find(c => c.id === custId || c.name === inv.customer_name);
+      const key = cust?.id || custId;
+
+      const cur = map.get(key) || {
+        id: key,
+        name: cust?.name || inv.customer_name,
+        totalPurchase: 0,
+        remainingDebt: cust?.debt_amount || 0,
+      };
+      cur.totalPurchase += inv.total || 0;
+      map.set(key, cur);
+    });
+
+    return Array.from(map.values());
+  }, [rangeInvoices, contextCustomers]);
 
   const filteredTopCustomers = useMemo(() => {
     return rawTopCustomers
@@ -421,22 +385,28 @@ export const ReportView: React.FC<ReportViewProps> = ({ currentTab, onTabChange 
   }, [rawTopCustomers, topCustSearch, topCustSort, topCustSortAsc]);
 
   // =========================================================================
-  // DATASET 6: TOP NCC (matching Screenshot 6.png)
+  // DATASET 6: TOP NCC (Dynamic aggregation from rangePurchases)
   // =========================================================================
-  // In 6.png, Top NCC has 0 transactions this month -> Empty state "Chưa có dữ liệu"
   const rawTopSuppliers = useMemo(() => {
-    // If user has created purchase orders, aggregate them
-    const hasPurchases = purchaseOrders.some(p => p.status !== 'cancelled' && p.total > 0);
-    if (!hasPurchases) {
-      return []; // Exact match with screenshot 6.png!
-    }
-    return contextSuppliers.map(s => ({
-      id: s.id,
-      name: s.name,
-      totalPurchase: s.total_purchase,
-      remainingDebt: s.debt_amount,
-    }));
-  }, [purchaseOrders, contextSuppliers]);
+    const map = new Map<string, { id: string; name: string; totalPurchase: number; remainingDebt: number }>();
+
+    rangePurchases.forEach(po => {
+      const suppId = po.supplier_id || po.supplier_name || 'unknown-supp';
+      const supp = contextSuppliers.find(s => s.id === suppId || s.name === po.supplier_name);
+      const key = supp?.id || suppId;
+
+      const cur = map.get(key) || {
+        id: key,
+        name: supp?.name || po.supplier_name,
+        totalPurchase: 0,
+        remainingDebt: supp?.debt_amount || 0,
+      };
+      cur.totalPurchase += po.total || 0;
+      map.set(key, cur);
+    });
+
+    return Array.from(map.values());
+  }, [rangePurchases, contextSuppliers]);
 
   const filteredTopSuppliers = useMemo(() => {
     return rawTopSuppliers
@@ -485,18 +455,16 @@ export const ReportView: React.FC<ReportViewProps> = ({ currentTab, onTabChange 
       remainingDebt: number;
     }>();
 
-    const validInvoices = invoices.filter(inv => inv.status !== 'cancelled');
-
-    validInvoices.forEach(inv => {
+    rangeInvoices.forEach(inv => {
       const custId = inv.customer_id || inv.customer_name || 'unknown-cust';
       const custObj = contextCustomers.find(c => c.id === custId || c.name === inv.customer_name);
 
       let invCogs = 0;
       (inv.items || []).forEach(item => {
         const prod = contextProducts.find(p => p.id === item.product_id || p.sku === item.product_sku);
-        const costPrice = prod?.cost_price || item.unit_cost || Math.round(item.unit_price * 0.6);
-        const lineRev = item.line_total || item.quantity * item.unit_price;
-        const lineCogs = costPrice * item.quantity;
+        const costPrice = prod?.cost_price || item.unit_cost || Math.round((item.unit_price || 0) * 0.6);
+        const lineRev = item.line_total || ((item.quantity || 1) * (item.unit_price || 0));
+        const lineCogs = costPrice * (item.quantity || 1);
         invCogs += lineCogs;
 
         const prodKey = prod?.id || item.product_id || item.product_name;
@@ -512,7 +480,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ currentTab, onTabChange 
           margin: 0,
         };
 
-        existing.soldQty += item.quantity;
+        existing.soldQty += (item.quantity || 1);
         existing.revenue += lineRev;
         existing.cogs += lineCogs;
         existing.grossProfit = existing.revenue - existing.cogs;
@@ -541,29 +509,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ currentTab, onTabChange 
       customerMap.set(custKey, existingCust);
     });
 
-    let pList = Array.from(productMap.values());
-    if (pList.length === 0) {
-      pList = [
-        { id: 'p1', sku: 'CF001', name: 'Cà phê rang xay Robusta', unit: 'Gói 500g', soldQty: 24, revenue: 3600000, cogs: 1920000, grossProfit: 1680000, margin: 46.67 },
-        { id: 'p2', sku: 'HD002', name: 'Hạt điều rang muối Bình Phước', unit: 'Hộp 500g', soldQty: 18, revenue: 2700000, cogs: 1620000, grossProfit: 1080000, margin: 40.0 },
-        { id: 'p3', sku: 'TD003', name: 'Trà đào túi lọc Cozy', unit: 'Hộp', soldQty: 30, revenue: 1500000, cogs: 900000, grossProfit: 600000, margin: 40.0 },
-        { id: 'p4', sku: 'HP004', name: 'Hot Pink (No Spool 1kg)', unit: 'Cuộn', soldQty: 12, revenue: 2940000, cogs: 2160000, grossProfit: 780000, margin: 26.53 },
-        { id: 'p5', sku: 'GN005', name: 'Gặm nướu silicon GB hình thỏ', unit: 'Cái', soldQty: 15, revenue: 975000, cogs: 450000, grossProfit: 525000, margin: 53.85 },
-        { id: 'p6', sku: 'ST006', name: 'Sữa tươi thanh trùng Đà Lạt', unit: 'Chai 900ml', soldQty: 40, revenue: 1280000, cogs: 960000, grossProfit: 320000, margin: 25.0 },
-        { id: 'p7', sku: 'DT03P-RF', name: 'Công tơ điện tử 3 pha DT03P-RF', unit: 'Bộ', soldQty: 3, revenue: 4704000, cogs: 3600000, grossProfit: 1104000, margin: 23.47 },
-      ];
-    }
-
-    let cList = Array.from(customerMap.values());
-    if (cList.length === 0) {
-      cList = [
-        { id: 'c1', code: 'KH001', name: 'Công ty Cổ phần Minh An', orderCount: 5, revenue: 5800000, cogs: 3480000, grossProfit: 2320000, margin: 40.0, remainingDebt: 250000 },
-        { id: 'c2', code: 'KH002', name: 'Shop Mộc Nhiên Decor', orderCount: 3, revenue: 3200000, cogs: 2100000, grossProfit: 1100000, margin: 34.38, remainingDebt: 643500 },
-        { id: 'c3', code: 'KH003', name: 'Đại lý Điện tử Quang Minh', orderCount: 2, revenue: 4704000, cogs: 3600000, grossProfit: 1104000, margin: 23.47, remainingDebt: 0 },
-        { id: 'c4', code: 'KH004', name: 'Lê Văn An (Khách công trình)', orderCount: 4, revenue: 2150000, cogs: 1400000, grossProfit: 750000, margin: 34.88, remainingDebt: 0 },
-        { id: 'c5', code: 'KH005', name: 'Nhà hàng Nắng Rooftop', orderCount: 2, revenue: 1850000, cogs: 1150000, grossProfit: 700000, margin: 37.84, remainingDebt: 0 },
-      ];
-    }
+    const pList = Array.from(productMap.values());
+    const cList = Array.from(customerMap.values());
 
     const totalProfitRevenue = pList.reduce((sum, item) => sum + item.revenue, 0);
     const totalProfitCOGS = pList.reduce((sum, item) => sum + item.cogs, 0);
@@ -578,7 +525,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ currentTab, onTabChange 
       totalProfitGross,
       avgProfitMargin,
     };
-  }, [invoices, contextProducts, contextCustomers]);
+  }, [rangeInvoices, contextProducts, contextCustomers]);
 
   const filteredProductProfits = useMemo(() => {
     return productProfitList

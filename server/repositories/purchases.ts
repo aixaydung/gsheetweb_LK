@@ -45,29 +45,60 @@ export interface PurchaseOrderRecord {
 }
 
 export const getAllPurchases = async (): Promise<PurchaseOrderRecord[]> => {
-  const rows = await getSheetData(SPREADSHEET_ID, `${PO_SHEET}!A2:S`);
-  return rows.map((row: any, index: number) => ({
-    id: row[0] || '',
-    code: row[1] || '',
-    supplier_id: row[2] || '',
-    supplier_name: row[3] || '',
-    order_date: row[4] || '',
-    expected_date: row[5] || '',
-    subtotal: Number(row[6]) || 0,
-    discount_amount: Number(row[7]) || 0,
-    vat_rate: Number(row[8]) || 0,
-    vat_amount: Number(row[9]) || 0,
-    shipping_fee: Number(row[10]) || 0,
-    total: Number(row[11]) || 0,
-    paid_amount: Number(row[12]) || 0,
-    debt_amount: Number(row[13]) || 0,
-    payment_status: (row[14] as any) || 'unpaid',
-    status: (row[15] as any) || 'received',
-    note: row[16] || '',
-    created_by: row[17] || '',
-    created_at: row[18] || '',
-    rowIndex: index + 2,
-  }));
+  const [poRows, itemRows] = await Promise.all([
+    getSheetData(SPREADSHEET_ID, `${PO_SHEET}!A2:S`),
+    getSheetData(SPREADSHEET_ID, `${PO_ITEMS_SHEET}!A2:K`),
+  ]);
+
+  const itemsByPoId = new Map<string, PurchaseOrderItemRecord[]>();
+  for (const row of itemRows) {
+    const poId = row[1] || '';
+    if (!poId) continue;
+    const item: PurchaseOrderItemRecord = {
+      id: row[0] || '',
+      po_id: poId,
+      product_id: row[2] || '',
+      sku: row[3] || '',
+      product_name: row[4] || '',
+      unit: row[5] || 'Cái',
+      quantity: Number(row[6]) || 0,
+      unit_price: Number(row[7]) || 0,
+      discount_amount: Number(row[8]) || 0,
+      line_total: Number(row[9]) || 0,
+      note: row[10] || '',
+    };
+    if (!itemsByPoId.has(poId)) {
+      itemsByPoId.set(poId, []);
+    }
+    itemsByPoId.get(poId)!.push(item);
+  }
+
+  return poRows.map((row: any, index: number) => {
+    const id = row[0] || '';
+    return {
+      id,
+      code: row[1] || '',
+      supplier_id: row[2] || '',
+      supplier_name: row[3] || '',
+      order_date: row[4] || '',
+      expected_date: row[5] || '',
+      subtotal: Number(row[6]) || 0,
+      discount_amount: Number(row[7]) || 0,
+      vat_rate: Number(row[8]) || 0,
+      vat_amount: Number(row[9]) || 0,
+      shipping_fee: Number(row[10]) || 0,
+      total: Number(row[11]) || 0,
+      paid_amount: Number(row[12]) || 0,
+      debt_amount: Number(row[13]) || 0,
+      payment_status: (row[14] as any) || 'unpaid',
+      status: (row[15] as any) || 'received',
+      note: row[16] || '',
+      created_by: row[17] || '',
+      created_at: row[18] || '',
+      items: itemsByPoId.get(id) || [],
+      rowIndex: index + 2,
+    };
+  });
 };
 
 export const generatePurchaseCode = async (): Promise<string> => {

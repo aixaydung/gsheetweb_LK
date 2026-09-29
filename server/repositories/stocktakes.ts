@@ -42,25 +42,56 @@ export interface StocktakeRecord {
 }
 
 export const getAllStocktakes = async (): Promise<StocktakeRecord[]> => {
-  const rows = await getSheetData(SPREADSHEET_ID, `${STOCKTAKES_SHEET}!A2:N`);
-  return rows.map((row: any, index: number) => ({
-    id: row[0] || '',
-    code: row[1] || '',
-    stocktake_date: row[2] || '',
-    warehouse_id: row[3] || 'wh-01',
-    warehouse_name: row[4] || 'Kho Tổng TP.HCM',
-    counted_by: row[5] || 'Thủ kho',
-    item_count: Number(row[6]) || 0,
-    increase_count: Number(row[7]) || 0,
-    decrease_count: Number(row[8]) || 0,
-    diff_value: Number(row[9]) || 0,
-    status: (row[10] as any) || 'completed',
-    note: row[11] || '',
-    created_by: row[12] || '',
-    created_at: row[13] || '',
-    items: [],
-    rowIndex: index + 2,
-  }));
+  const [stockRows, itemRows] = await Promise.all([
+    getSheetData(SPREADSHEET_ID, `${STOCKTAKES_SHEET}!A2:N`),
+    getSheetData(SPREADSHEET_ID, `${STOCKTAKE_ITEMS_SHEET}!A2:L`),
+  ]);
+
+  const itemsByStocktakeId = new Map<string, StocktakeItemRecord[]>();
+  for (const row of itemRows) {
+    const stkId = row[1] || '';
+    if (!stkId) continue;
+    const item: StocktakeItemRecord = {
+      id: row[0] || '',
+      stocktake_id: stkId,
+      product_id: row[2] || '',
+      sku: row[3] || '',
+      product_name: row[4] || '',
+      unit: row[5] || 'Cái',
+      system_qty: Number(row[6]) || 0,
+      actual_qty: Number(row[7]) || 0,
+      diff_qty: Number(row[8]) || 0,
+      unit_cost: Number(row[9]) || 0,
+      diff_value: Number(row[10]) || 0,
+      reason: row[11] || '',
+    };
+    if (!itemsByStocktakeId.has(stkId)) {
+      itemsByStocktakeId.set(stkId, []);
+    }
+    itemsByStocktakeId.get(stkId)!.push(item);
+  }
+
+  return stockRows.map((row: any, index: number) => {
+    const id = row[0] || '';
+    return {
+      id,
+      code: row[1] || '',
+      stocktake_date: row[2] || '',
+      warehouse_id: row[3] || 'wh-01',
+      warehouse_name: row[4] || 'Kho Tổng TP.HCM',
+      counted_by: row[5] || 'Thủ kho',
+      item_count: Number(row[6]) || 0,
+      increase_count: Number(row[7]) || 0,
+      decrease_count: Number(row[8]) || 0,
+      diff_value: Number(row[9]) || 0,
+      status: (row[10] as any) || 'completed',
+      note: row[11] || '',
+      created_by: row[12] || '',
+      created_at: row[13] || '',
+      items: itemsByStocktakeId.get(id) || [],
+      rowIndex: index + 2,
+    };
+  });
 };
 
 export const generateStocktakeCode = async (): Promise<string> => {

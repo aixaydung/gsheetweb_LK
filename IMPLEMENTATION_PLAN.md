@@ -210,7 +210,18 @@ Spreadsheet ID: `1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY` đã khởi tạo
 
 ---
 
-## 5. HƯỚNG DẪN DÀNH CHO AI TRONG CÁC LƯỢT TIẾP THEO
+## 5. ĐỀ XUẤT CÁC HẠNG MỤC TIẾP THEO (GHI NHẬN KẾ HOẠCH - CHƯA TRIỂN KHAI)
+
+1. **Gói 7: Đồng bộ hóa 2 chiều Tự động định kỳ (Background Polling & Auto-sync)**
+   - Cơ chế quét ngầm định kỳ (mỗi 60s hoặc khi người dùng focus tab) để tự động cập nhật dữ liệu nếu có người dùng khác sửa đổi trực tiếp trên file Google Sheets mà không cần bấm F5.
+2. **Gói 8: Quản lý Báo giá (`QUOTATIONS`) & Đổi trả hàng (`RETURNS`) đồng bộ Google Sheets**
+   - Mở rộng thêm 2 bảng `QUOTATIONS` và `RETURNS` trên Google Sheets để lưu trữ lịch sử Báo giá khách hàng và các Phiếu hàng bán bị trả lại / Trả hàng cho NCC, kèm mẫu in biên bản trả hàng.
+3. **Gói 9: Tối ưu Progressive Web App (PWA) & Offline Cache**
+   - Tạo file `manifest.json`, icon app, service worker giúp người dùng cài đặt ứng dụng LK ERP lên màn hình chính điện thoại / máy tính bảng, mở toàn màn hình như native app.
+
+---
+
+## 6. HƯỚNG DẪN DÀNH CHO AI TRONG CÁC LƯỢT TIẾP THEO
 
 1. **Tuân thủ Optimistic UI (Lựa chọn A):**
    * Trong `src/context/AppContext.tsx`, luôn cập nhật React state trước để giao diện mượt mà và tức thì.
