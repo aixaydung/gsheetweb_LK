@@ -11,6 +11,7 @@ import { formatCurrency, formatDate } from '../lib/format';
 import { exportToExcelFile, ExportColumn } from '../lib/excelExport';
 import { Customer, Supplier, SalesInvoice, PurchaseOrder, Payment } from '../types';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from 'recharts';
+import { DebtReconciliationModal } from '../components/dialogs/DebtReconciliationModal';
 
 interface DebtViewProps {
   currentTab: string;
@@ -28,11 +29,24 @@ export const DebtView: React.FC<DebtViewProps> = ({
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterDirection, setFilterDirection] = useState('all');
+  const [agingPartnerType, setAgingPartnerType] = useState<'customer' | 'supplier'>('customer');
+  const [agingRiskFilter, setAgingRiskFilter] = useState<'all' | 'safe' | 'warning' | 'danger'>('all');
+
+  const [reconciliationState, setReconciliationState] = useState<{
+    isOpen: boolean;
+    partnerId?: string;
+    partnerType?: 'customer' | 'supplier';
+  }>({
+    isOpen: false,
+    partnerId: undefined,
+    partnerType: 'customer',
+  });
 
   const tabs: TabItem[] = [
     { id: 'tong-quan', label: 'Tổng quan công nợ' },
     { id: 'khach-hang-no', label: 'Khách hàng nợ' },
     { id: 'no-ncc', label: 'Nợ nhà cung cấp' },
+    { id: 'tuoi-no', label: 'Tuổi nợ (Aging)' },
     { id: 'phai-thu', label: 'Chi tiết phải thu' },
     { id: 'phai-tra', label: 'Chi tiết phải trả' },
     { id: 'dong-tien', label: 'Dòng tiền 30 ngày' },
@@ -118,14 +132,289 @@ export const DebtView: React.FC<DebtViewProps> = ({
       }));
   }, [purchaseOrders, search]);
 
-  // Cashflow 30 days buckets (Section 5.5.6)
-  const cashflowBuckets = [
-    { period: 'Quá hạn', inAmount: 1554160, outAmount: 0, net: 1554160 },
-    { period: '0-7 ngày', inAmount: 250000, outAmount: 80000, net: 170000 },
-    { period: '8-14 ngày', inAmount: 0, outAmount: 0, net: 0 },
-    { period: '15-21 ngày', inAmount: 643500, outAmount: 0, net: 643500 },
-    { period: '22-30 ngày', inAmount: 0, outAmount: 0, net: 0 },
+  // Dynamic Cashflow 30 days buckets
+  const { cashflowBuckets, totalExpectedIn, totalExpectedOut, netCashflow } = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const getDaysDiff = (dateStr?: string | null) => {
+      if (!dateStr) return 999;
+      const d = new Date(dateStr);
+      d.setHours(0, 0, 0, 0);
+      return Math.round((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    };
+
+    const buckets = [
+      { period: 'Quá hạn', inAmount: 0, outAmount: 0, net: 0 },
+      { period: '0-7 ngày', inAmount: 0, outAmount: 0, net: 0 },
+      { period: '8-14 ngày', inAmount: 0, outAmount: 0, net: 0 },
+      { period: '15-21 ngày', inAmount: 0, outAmount: 0, net: 0 },
+      { period: '22-30 ngày', inAmount: 0, outAmount: 0, net: 0 },
+    ];
+
+    let sumIn = 0;
+    let sumOut = 0;
+
+    for (const inv of invoices) {
+      if (inv.debt_amount <= 0 || inv.status === 'cancelled') continue;
+      const diff = getDaysDiff(inv.due_date || inv.invoice_date);
+      if (diff < 0) {
+        buckets[0].inAmount += inv.debt_amount;
+        sumIn += inv.debt_amount;
+      } else if (diff <= 7) {
+        buckets[1].inAmount += inv.debt_amount;
+        sumIn += inv.debt_amount;
+      } else if (diff <= 14) {
+        buckets[2].inAmount += inv.debt_amount;
+        sumIn += inv.debt_amount;
+      } else if (diff <= 21) {
+        buckets[3].inAmount += inv.debt_amount;
+        sumIn += inv.debt_amount;
+      } else if (diff <= 30) {
+        buckets[4].inAmount += inv.debt_amount;
+        sumIn += inv.debt_amount;
+      }
+    }
+
+    for (const po of purchaseOrders) {
+      if (po.debt_amount <= 0 || po.status === 'cancelled') continue;
+      const diff = getDaysDiff(po.due_date || po.order_date);
+      if (diff < 0) {
+        buckets[0].outAmount += po.debt_amount;
+        sumOut += po.debt_amount;
+      } else if (diff <= 7) {
+        buckets[1].outAmount += po.debt_amount;
+        sumOut += po.debt_amount;
+      } else if (diff <= 14) {
+        buckets[2].outAmount += po.debt_amount;
+        sumOut += po.debt_amount;
+      } else if (diff <= 21) {
+        buckets[3].outAmount += po.debt_amount;
+        sumOut += po.debt_amount;
+      } else if (diff <= 30) {
+        buckets[4].outAmount += po.debt_amount;
+        sumOut += po.debt_amount;
+      }
+    }
+
+    for (const b of buckets) {
+      b.net = b.inAmount - b.outAmount;
+    }
+
+    return {
+      cashflowBuckets: buckets,
+      totalExpectedIn: sumIn,
+      totalExpectedOut: sumOut,
+      netCashflow: sumIn - sumOut,
+    };
+  }, [invoices, purchaseOrders]);
+
+  // Aging Analysis Calculations
+  const customerAgingData = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return debtors.map(c => {
+      const custInvoices = invoices.filter(
+        i => i.customer_id === c.id && i.debt_amount > 0 && i.status !== 'cancelled'
+      );
+      let current = 0;
+      let days1to30 = 0;
+      let days31to60 = 0;
+      let days61to90 = 0;
+      let over90 = 0;
+
+      for (const inv of custInvoices) {
+        if (!inv.due_date) {
+          current += inv.debt_amount;
+          continue;
+        }
+        const due = new Date(inv.due_date);
+        due.setHours(0, 0, 0, 0);
+        const daysLate = Math.round((today.getTime() - due.getTime()) / (1000 * 60 * 60 * 24));
+        if (daysLate <= 0) current += inv.debt_amount;
+        else if (daysLate <= 30) days1to30 += inv.debt_amount;
+        else if (daysLate <= 60) days31to60 += inv.debt_amount;
+        else if (daysLate <= 90) days61to90 += inv.debt_amount;
+        else over90 += inv.debt_amount;
+      }
+
+      const accounted = current + days1to30 + days31to60 + days61to90 + over90;
+      if (accounted < c.debt_amount) {
+        const diff = c.debt_amount - accounted;
+        if (c.overdue_amount > 0) days1to30 += diff;
+        else current += diff;
+      }
+
+      let riskLevel: 'safe' | 'warning' | 'danger' = 'safe';
+      if (over90 > 0 || days61to90 > 0) riskLevel = 'danger';
+      else if (days31to60 > 0 || c.overdue_amount > 0) riskLevel = 'warning';
+
+      return {
+        id: c.id,
+        code: c.code,
+        name: c.name,
+        phone: c.phone || '',
+        totalDebt: c.debt_amount,
+        current,
+        days1to30,
+        days31to60,
+        days61to90,
+        over90,
+        riskLevel,
+      };
+    });
+  }, [debtors, invoices]);
+
+  const supplierAgingData = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return supplierDebtors.map(s => {
+      const supPOs = purchaseOrders.filter(
+        p => p.supplier_id === s.id && p.debt_amount > 0 && p.status !== 'cancelled'
+      );
+      let current = 0;
+      let days1to30 = 0;
+      let days31to60 = 0;
+      let days61to90 = 0;
+      let over90 = 0;
+
+      for (const po of supPOs) {
+        if (!po.due_date) {
+          current += po.debt_amount;
+          continue;
+        }
+        const due = new Date(po.due_date);
+        due.setHours(0, 0, 0, 0);
+        const daysLate = Math.round((today.getTime() - due.getTime()) / (1000 * 60 * 60 * 24));
+        if (daysLate <= 0) current += po.debt_amount;
+        else if (daysLate <= 30) days1to30 += po.debt_amount;
+        else if (daysLate <= 60) days31to60 += po.debt_amount;
+        else if (daysLate <= 90) days61to90 += po.debt_amount;
+        else over90 += po.debt_amount;
+      }
+
+      const accounted = current + days1to30 + days31to60 + days61to90 + over90;
+      if (accounted < s.debt_amount) {
+        const diff = s.debt_amount - accounted;
+        if (s.overdue_amount > 0) days1to30 += diff;
+        else current += diff;
+      }
+
+      let riskLevel: 'safe' | 'warning' | 'danger' = 'safe';
+      if (over90 > 0 || days61to90 > 0) riskLevel = 'danger';
+      else if (days31to60 > 0 || s.overdue_amount > 0) riskLevel = 'warning';
+
+      return {
+        id: s.id,
+        code: s.code,
+        name: s.name,
+        phone: s.phone || '',
+        totalDebt: s.debt_amount,
+        current,
+        days1to30,
+        days31to60,
+        days61to90,
+        over90,
+        riskLevel,
+      };
+    });
+  }, [supplierDebtors, purchaseOrders]);
+
+  const activeAgingList = agingPartnerType === 'customer' ? customerAgingData : supplierAgingData;
+  const filteredAgingList = useMemo(() => {
+    return activeAgingList.filter(item => {
+      const matchSearch =
+        item.name.toLowerCase().includes(search.toLowerCase()) ||
+        item.code.toLowerCase().includes(search.toLowerCase());
+      const matchRisk = agingRiskFilter === 'all' || item.riskLevel === agingRiskFilter;
+      return matchSearch && matchRisk;
+    });
+  }, [activeAgingList, search, agingRiskFilter]);
+
+  const agingTotals = useMemo(() => {
+    return activeAgingList.reduce(
+      (acc, item) => ({
+        total: acc.total + item.totalDebt,
+        current: acc.current + item.current,
+        days1to30: acc.days1to30 + item.days1to30,
+        days31to60: acc.days31to60 + item.days31to60,
+        days61to90: acc.days61to90 + item.days61to90,
+        over90: acc.over90 + item.over90,
+      }),
+      { total: 0, current: 0, days1to30: 0, days31to60: 0, days61to90: 0, over90: 0 }
+    );
+  }, [activeAgingList]);
+
+  const agingChartData = [
+    { name: 'Trong hạn', amount: agingTotals.current, fill: '#10B981' },
+    { name: '1-30 ngày', amount: agingTotals.days1to30, fill: '#FBBF24' },
+    { name: '31-60 ngày', amount: agingTotals.days31to60, fill: '#F59E0B' },
+    { name: '61-90 ngày', amount: agingTotals.days61to90, fill: '#EF4444' },
+    { name: '> 90 ngày', amount: agingTotals.over90, fill: '#B91C1C' },
   ];
+
+  // High-risk watchlist
+  const riskWatchlist = useMemo(() => {
+    const list: Array<{
+      id: string;
+      partnerId: string;
+      code: string;
+      name: string;
+      type: 'customer' | 'supplier';
+      totalDebt: number;
+      overdueDebt: number;
+      reason: string;
+      riskLevel: 'warning' | 'danger';
+    }> = [];
+
+    for (const c of customerAgingData) {
+      if (c.over90 > 0 || c.days61to90 > 0) {
+        list.push({
+          id: `c-${c.id}`,
+          partnerId: c.id,
+          code: c.code,
+          name: c.name,
+          type: 'customer',
+          totalDebt: c.totalDebt,
+          overdueDebt: c.days1to30 + c.days31to60 + c.days61to90 + c.over90,
+          reason: c.over90 > 0 ? `Nợ trễ hạn trên 90 ngày (${formatCurrency(c.over90)})` : `Nợ trễ hạn 61-90 ngày`,
+          riskLevel: 'danger',
+        });
+      } else if (c.days31to60 > 0) {
+        list.push({
+          id: `c-${c.id}`,
+          partnerId: c.id,
+          code: c.code,
+          name: c.name,
+          type: 'customer',
+          totalDebt: c.totalDebt,
+          overdueDebt: c.days1to30 + c.days31to60,
+          reason: `Nợ trễ hạn 31-60 ngày (${formatCurrency(c.days31to60)})`,
+          riskLevel: 'warning',
+        });
+      }
+    }
+
+    for (const s of supplierAgingData) {
+      if (s.over90 > 0 || s.days61to90 > 0) {
+        list.push({
+          id: `s-${s.id}`,
+          partnerId: s.id,
+          code: s.code,
+          name: s.name,
+          type: 'supplier',
+          totalDebt: s.totalDebt,
+          overdueDebt: s.days1to30 + s.days31to60 + s.days61to90 + s.over90,
+          reason: `Nợ NCC quá hạn nghiêm trọng (${formatCurrency(s.over90 + s.days61to90)})`,
+          riskLevel: 'danger',
+        });
+      }
+    }
+
+    return list;
+  }, [customerAgingData, supplierAgingData]);
 
   // Overdue items
   const overdueItems = useMemo(() => {
@@ -231,13 +520,30 @@ export const DebtView: React.FC<DebtViewProps> = ({
       header: '',
       align: 'right',
       render: row => (
-        <button
-          type="button"
-          onClick={() => onOpenPaymentAllocation(row.id, undefined, 'in')}
-          className="px-3 py-1 bg-[#F9F5FF] hover:bg-[#F3EBFE] text-[#6317D6] text-[12.5px] font-semibold rounded-[8px] transition-colors"
-        >
-          Thu nợ
-        </button>
+        <div className="flex items-center justify-end gap-1.5">
+          <button
+            type="button"
+            onClick={() =>
+              setReconciliationState({
+                isOpen: true,
+                partnerId: row.id,
+                partnerType: 'customer',
+              })
+            }
+            className="px-2.5 py-1 border border-[#E5E7EB] hover:bg-[#F9FAFB] text-[#4B5563] text-[12px] font-semibold rounded-[8px] transition-colors flex items-center gap-1"
+            title="Biên bản đối chiếu công nợ Mẫu 01-ĐCCN"
+          >
+            <Icon name="receipt_long" size={15} className="text-[#6D3EEB]" />
+            <span>Đối chiếu</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenPaymentAllocation(row.id, undefined, 'in')}
+            className="px-3 py-1 bg-[#F9F5FF] hover:bg-[#F3EBFE] text-[#6317D6] text-[12.5px] font-semibold rounded-[8px] transition-colors"
+          >
+            Thu nợ
+          </button>
+        </div>
       ),
     },
   ];
@@ -281,13 +587,30 @@ export const DebtView: React.FC<DebtViewProps> = ({
       header: '',
       align: 'right',
       render: row => (
-        <button
-          type="button"
-          onClick={() => onOpenPaymentAllocation(row.id, undefined, 'out')}
-          className="px-3 py-1 bg-[#F9F5FF] hover:bg-[#F3EBFE] text-[#6317D6] text-[12.5px] font-semibold rounded-[8px] transition-colors"
-        >
-          Thanh toán
-        </button>
+        <div className="flex items-center justify-end gap-1.5">
+          <button
+            type="button"
+            onClick={() =>
+              setReconciliationState({
+                isOpen: true,
+                partnerId: row.id,
+                partnerType: 'supplier',
+              })
+            }
+            className="px-2.5 py-1 border border-[#E5E7EB] hover:bg-[#F9FAFB] text-[#4B5563] text-[12px] font-semibold rounded-[8px] transition-colors flex items-center gap-1"
+            title="Biên bản đối chiếu công nợ Mẫu 01-ĐCCN"
+          >
+            <Icon name="receipt_long" size={15} className="text-[#6D3EEB]" />
+            <span>Đối chiếu</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenPaymentAllocation(row.id, undefined, 'out')}
+            className="px-3 py-1 bg-[#F9F5FF] hover:bg-[#F3EBFE] text-[#6317D6] text-[12.5px] font-semibold rounded-[8px] transition-colors"
+          >
+            Thanh toán
+          </button>
+        </div>
       ),
     },
   ];
@@ -329,6 +652,33 @@ export const DebtView: React.FC<DebtViewProps> = ({
         { key: 'isOverdue', header: 'Quá hạn', accessor: p => (p.isOverdue ? 'Quá hạn' : 'Trong hạn') },
       ];
       exportToExcelFile(openPOs, columns, 'Chi_tiet_phai_tra');
+    } else if (currentTab === 'tuoi-no') {
+      const columns: ExportColumn<any>[] = [
+        { key: 'code', header: agingPartnerType === 'customer' ? 'Mã KH' : 'Mã NCC' },
+        { key: 'name', header: agingPartnerType === 'customer' ? 'Tên khách hàng' : 'Tên nhà cung cấp' },
+        { key: 'phone', header: 'Số điện thoại' },
+        { key: 'totalDebt', header: 'Tổng nợ' },
+        { key: 'current', header: 'Trong hạn' },
+        { key: 'days1to30', header: 'Quá hạn 1-30 ngày' },
+        { key: 'days31to60', header: 'Quá hạn 31-60 ngày' },
+        { key: 'days61to90', header: 'Quá hạn 61-90 ngày' },
+        { key: 'over90', header: 'Quá hạn > 90 ngày' },
+        {
+          key: 'riskLevel',
+          header: 'Mức rủi ro',
+          accessor: r =>
+            r.riskLevel === 'danger'
+              ? 'Rủi ro cao'
+              : r.riskLevel === 'warning'
+              ? 'Cần chú ý'
+              : 'An toàn',
+        },
+      ];
+      exportToExcelFile(
+        filteredAgingList,
+        columns,
+        `Phan_tich_tuoi_no_${agingPartnerType === 'customer' ? 'KH' : 'NCC'}`
+      );
     } else if (currentTab === 'lich-su-thanh-toan') {
       const columns: ExportColumn<Payment>[] = [
         { key: 'code', header: 'Mã phiếu' },
@@ -362,15 +712,26 @@ export const DebtView: React.FC<DebtViewProps> = ({
         title="Quản lý Công nợ"
         subtitle="Tổng hợp công nợ phải thu khách hàng và phải trả nhà cung cấp"
         rightAction={
-          <button
-            type="button"
-            onClick={handleExportExcel}
-            className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-[12px] border border-[#E5E7EB] bg-white hover:bg-[#F9FAFB] text-[#374151] text-[13px] sm:text-[14px] font-semibold transition-all shadow-xs active:scale-98"
-            title="Xuất dữ liệu tab hiện tại ra file Excel (CSV UTF-8 BOM)"
-          >
-            <Icon name="download" size={17} className="text-[#6D3EEB]" />
-            <span>Xuất Excel</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setReconciliationState({ isOpen: true })}
+              className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-[12px] border border-[#6D3EEB]/30 bg-[#F9F5FF] hover:bg-[#F3EBFE] text-[#6317D6] text-[13px] sm:text-[14px] font-semibold transition-all shadow-xs"
+              title="Lập và in biên bản đối chiếu công nợ Mẫu 01-ĐCCN"
+            >
+              <Icon name="receipt_long" size={17} />
+              <span>Đối chiếu công nợ</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-[12px] border border-[#E5E7EB] bg-white hover:bg-[#F9FAFB] text-[#374151] text-[13px] sm:text-[14px] font-semibold transition-all shadow-xs active:scale-98"
+              title="Xuất dữ liệu tab hiện tại ra file Excel (CSV UTF-8 BOM)"
+            >
+              <Icon name="download" size={17} className="text-[#6D3EEB]" />
+              <span>Xuất Excel</span>
+            </button>
+          </div>
         }
       />
 
@@ -517,6 +878,108 @@ export const DebtView: React.FC<DebtViewProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Cảnh báo rủi ro & Danh sách cần theo dõi đặc biệt */}
+          <div className="bg-white rounded-[16px] p-5 border border-[#F1F2F5] shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-8 h-8 rounded-[10px] bg-[#FFF1F2] text-[#E11D48] flex items-center justify-center">
+                  <Icon name="warning" size={18} />
+                </span>
+                <div>
+                  <h3 className="text-[15px] font-bold text-[#111827]">
+                    Danh sách cảnh báo nợ rủi ro cao & Quá hạn lâu ngày
+                  </h3>
+                  <p className="text-[12px] text-[#6B7280]">
+                    Các đối tác có khoản nợ quá hạn trên 30-90 ngày hoặc cần đôn đốc thanh toán gấp
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => onTabChange('tuoi-no')}
+                className="text-[12.5px] font-semibold text-[#6317D6] hover:underline flex items-center gap-1"
+              >
+                <span>Xem chi tiết Tuổi nợ</span>
+                <Icon name="arrow_forward" size={15} />
+              </button>
+            </div>
+
+            {riskWatchlist.length === 0 ? (
+              <div className="py-6 text-center text-[#10B981] text-[13px] bg-[#ECFDF5] rounded-[12px] border border-[#A7F3D0]">
+                ✓ Tuyệt vời! Không có khách hàng hay nhà cung cấp nào rơi vào nhóm nợ rủi ro cao (&gt; 30 ngày).
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {riskWatchlist.slice(0, 6).map(item => (
+                  <div
+                    key={item.id}
+                    className={`p-3.5 rounded-[12px] border transition-all ${
+                      item.riskLevel === 'danger'
+                        ? 'border-[#FECDD3] bg-[#FFF1F2]/40 hover:bg-[#FFF1F2]'
+                        : 'border-[#FDE68A] bg-[#FFFBEB]/40 hover:bg-[#FFFBEB]'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="font-bold text-[#111827] text-[13.5px] line-clamp-1">
+                          {item.name}
+                        </div>
+                        <div className="text-[11.5px] font-mono text-[#6B7280]">{item.code}</div>
+                      </div>
+                      <span
+                        className={`text-[10.5px] font-bold px-2 py-0.5 rounded-[6px] uppercase shrink-0 ${
+                          item.riskLevel === 'danger'
+                            ? 'bg-[#E11D48] text-white'
+                            : 'bg-[#D97706] text-white'
+                        }`}
+                      >
+                        {item.riskLevel === 'danger' ? 'RỦI RO CAO' : 'CHÚ Ý'}
+                      </span>
+                    </div>
+
+                    <div className="mt-2.5 pt-2 border-t border-black/5 flex items-center justify-between text-[12px]">
+                      <span className="text-[#4B5563]">{item.reason}</span>
+                      <span className="font-bold text-[#E11D48] tabular-nums">
+                        {formatCurrency(item.totalDebt)}
+                      </span>
+                    </div>
+
+                    <div className="mt-2.5 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setReconciliationState({
+                            isOpen: true,
+                            partnerId: item.partnerId,
+                            partnerType: item.type,
+                          })
+                        }
+                        className="flex-1 py-1 px-2 rounded-[8px] bg-white border border-[#D1D5DB] text-[#374151] hover:bg-[#F3F4F6] text-[11.5px] font-semibold flex items-center justify-center gap-1 shadow-2xs"
+                      >
+                        <Icon name="receipt_long" size={14} className="text-[#6D3EEB]" />
+                        <span>Đối chiếu</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onOpenPaymentAllocation(
+                            item.partnerId,
+                            undefined,
+                            item.type === 'customer' ? 'in' : 'out'
+                          )
+                        }
+                        className="flex-1 py-1 px-2 rounded-[8px] bg-[#6D3EEB] hover:bg-[#5B2BD6] text-white text-[11.5px] font-semibold flex items-center justify-center gap-1"
+                      >
+                        <span>{item.type === 'customer' ? 'Thu nợ' : 'Trả tiền'}</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -610,6 +1073,279 @@ export const DebtView: React.FC<DebtViewProps> = ({
             data={filteredSupplierDebtors}
             keyExtractor={row => row.id}
             emptyMessage="Không còn nợ nhà cung cấp nào"
+          />
+        </div>
+      )}
+
+      {/* Tab 3.5: Tuổi nợ (Aging) */}
+      {currentTab === 'tuoi-no' && (
+        <div className="space-y-6">
+          {/* Header Switcher & Aging Summary */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-[17px] font-bold text-[#111827]">
+                Báo cáo Phân loại Tuổi nợ (Aging Schedule)
+              </h3>
+              <p className="text-[13px] text-[#6B7280]">
+                Phân bổ công nợ theo các mốc thời gian quá hạn để lập kế hoạch thu hồi và trích lập rủi ro
+              </p>
+            </div>
+
+            {/* Switch Partner Type */}
+            <div className="inline-flex p-1 rounded-[12px] bg-[#F1F2F5] shrink-0">
+              <button
+                type="button"
+                onClick={() => setAgingPartnerType('customer')}
+                className={`px-3.5 py-1.5 rounded-[9px] text-[13px] font-semibold transition-all ${
+                  agingPartnerType === 'customer'
+                    ? 'bg-white text-[#6D3EEB] shadow-xs'
+                    : 'text-[#4B5563] hover:text-[#111827]'
+                }`}
+              >
+                Khách hàng phải thu
+              </button>
+              <button
+                type="button"
+                onClick={() => setAgingPartnerType('supplier')}
+                className={`px-3.5 py-1.5 rounded-[9px] text-[13px] font-semibold transition-all ${
+                  agingPartnerType === 'supplier'
+                    ? 'bg-white text-[#6D3EEB] shadow-xs'
+                    : 'text-[#4B5563] hover:text-[#111827]'
+                }`}
+              >
+                Nhà cung cấp phải trả
+              </button>
+            </div>
+          </div>
+
+          {/* 4 KPIs */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <KpiCard
+              label={agingPartnerType === 'customer' ? 'Tổng phải thu' : 'Tổng phải trả'}
+              value={formatCurrency(agingTotals.total)}
+              icon="account_balance_wallet"
+              iconBg="bg-[#F3EBFE]"
+              iconColor="text-[#6D3EEB]"
+            />
+            <KpiCard
+              label="Trong hạn (An toàn)"
+              value={formatCurrency(agingTotals.current)}
+              icon="verified"
+              iconBg="bg-[#ECFDF5]"
+              iconColor="text-[#059669]"
+              trend={{
+                value: `${Math.round((agingTotals.current / (agingTotals.total || 1)) * 100)}% tổng nợ`,
+                isUp: true,
+              }}
+            />
+            <KpiCard
+              label="Quá hạn 1 - 60 ngày"
+              value={formatCurrency(agingTotals.days1to30 + agingTotals.days31to60)}
+              icon="schedule"
+              iconBg="bg-[#FFFBEB]"
+              iconColor="text-[#D97706]"
+              trend={{
+                value: `${Math.round(((agingTotals.days1to30 + agingTotals.days31to60) / (agingTotals.total || 1)) * 100)}% tổng nợ`,
+                isUp: false,
+              }}
+            />
+            <KpiCard
+              label="Quá hạn > 60 ngày (Rủi ro)"
+              value={formatCurrency(agingTotals.days61to90 + agingTotals.over90)}
+              icon="warning"
+              iconBg="bg-[#FFF1F2]"
+              iconColor="text-[#E11D48]"
+              trend={{
+                value: `${Math.round(((agingTotals.days61to90 + agingTotals.over90) / (agingTotals.total || 1)) * 100)}% nợ xấu`,
+                isUp: false,
+              }}
+            />
+          </div>
+
+          {/* Aging Distribution Chart */}
+          <div className="bg-white rounded-[16px] p-5 border border-[#F1F2F5] shadow-sm">
+            <h4 className="text-[15px] font-bold text-[#111827] mb-1">
+              Phân bổ số dư theo kỳ hạn nợ
+            </h4>
+            <p className="text-[12.5px] text-[#6B7280] mb-4">
+              Cơ cấu các khoản nợ theo từng phân khúc tuổi nợ
+            </p>
+            <div className="h-60 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={agingChartData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
+                  <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#6B7280' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#6B7280' }} />
+                  <Tooltip formatter={(value: any) => formatCurrency(Number(value))} />
+                  <Bar dataKey="amount" name="Số tiền nợ" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Filter Toolbar */}
+          <FilterToolbar
+            searchPlaceholder={agingPartnerType === 'customer' ? 'Tìm khách hàng theo mã, tên...' : 'Tìm nhà cung cấp...'}
+            searchValue={search}
+            onSearchChange={setSearch}
+            filters={[
+              {
+                label: 'Mức rủi ro',
+                key: 'risk',
+                value: agingRiskFilter,
+                items: [
+                  { value: 'all', label: 'Rủi ro: Tất cả' },
+                  { value: 'safe', label: '🟢 An toàn (Trong hạn)' },
+                  { value: 'warning', label: '🟡 Cần chú ý (1-60 ngày)' },
+                  { value: 'danger', label: '🔴 Rủi ro cao (> 60 ngày)' },
+                ],
+                onChange: (v: any) => setAgingRiskFilter(v),
+              },
+            ]}
+            onClearFilters={() => {
+              setSearch('');
+              setAgingRiskFilter('all');
+            }}
+            onExportExcel={handleExportExcel}
+          />
+
+          {/* Aging Matrix Table */}
+          <DataTable
+            columns={[
+              {
+                key: 'partner',
+                header: agingPartnerType === 'customer' ? 'KHÁCH HÀNG' : 'NHÀ CUNG CẤP',
+                render: row => (
+                  <div>
+                    <div className="font-semibold text-[#111827]">{row.name}</div>
+                    <div className="text-[11.5px] text-[#6B7280] font-mono mt-0.5">
+                      {row.code} {row.phone && `· ${row.phone}`}
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                key: 'total',
+                header: 'TỔNG NỢ',
+                align: 'right',
+                render: row => (
+                  <span className="font-bold text-[#111827] tabular-nums">
+                    {formatCurrency(row.totalDebt)}
+                  </span>
+                ),
+              },
+              {
+                key: 'current',
+                header: 'TRONG HẠN',
+                align: 'right',
+                render: row => (
+                  <span className="text-[#059669] font-medium tabular-nums">
+                    {row.current > 0 ? formatCurrency(row.current) : '—'}
+                  </span>
+                ),
+              },
+              {
+                key: 'days1to30',
+                header: '1 - 30 NGÀY',
+                align: 'right',
+                render: row => (
+                  <span className="text-[#D97706] tabular-nums">
+                    {row.days1to30 > 0 ? formatCurrency(row.days1to30) : '—'}
+                  </span>
+                ),
+              },
+              {
+                key: 'days31to60',
+                header: '31 - 60 NGÀY',
+                align: 'right',
+                render: row => (
+                  <span className="text-[#EA580C] font-medium tabular-nums">
+                    {row.days31to60 > 0 ? formatCurrency(row.days31to60) : '—'}
+                  </span>
+                ),
+              },
+              {
+                key: 'days61to90',
+                header: '61 - 90 NGÀY',
+                align: 'right',
+                render: row => (
+                  <span className="text-[#E11D48] font-bold tabular-nums">
+                    {row.days61to90 > 0 ? formatCurrency(row.days61to90) : '—'}
+                  </span>
+                ),
+              },
+              {
+                key: 'over90',
+                header: '> 90 NGÀY',
+                align: 'right',
+                render: row => (
+                  <span className="text-[#991B1B] font-black tabular-nums">
+                    {row.over90 > 0 ? formatCurrency(row.over90) : '—'}
+                  </span>
+                ),
+              },
+              {
+                key: 'risk',
+                header: 'ĐÁNH GIÁ',
+                align: 'center',
+                render: row => (
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-[6px] text-[11px] font-bold ${
+                      row.riskLevel === 'danger'
+                        ? 'bg-[#FFF1F2] text-[#E11D48] border border-[#FECDD3]'
+                        : row.riskLevel === 'warning'
+                        ? 'bg-[#FFFBEB] text-[#D97706] border border-[#FDE68A]'
+                        : 'bg-[#ECFDF5] text-[#059669] border border-[#A7F3D0]'
+                    }`}
+                  >
+                    {row.riskLevel === 'danger'
+                      ? '🔴 Rủi ro cao'
+                      : row.riskLevel === 'warning'
+                      ? '🟡 Cần đôn đốc'
+                      : '🟢 An toàn'}
+                  </span>
+                ),
+              },
+              {
+                key: 'actions',
+                header: '',
+                align: 'right',
+                render: row => (
+                  <div className="flex items-center justify-end gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setReconciliationState({
+                          isOpen: true,
+                          partnerId: row.id,
+                          partnerType: agingPartnerType,
+                        })
+                      }
+                      className="px-2.5 py-1 border border-[#E5E7EB] hover:bg-[#F9FAFB] text-[#4B5563] text-[12px] font-semibold rounded-[8px] transition-colors flex items-center gap-1"
+                      title="Biên bản đối chiếu công nợ Mẫu 01-ĐCCN"
+                    >
+                      <Icon name="receipt_long" size={15} className="text-[#6D3EEB]" />
+                      <span>Đối chiếu</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onOpenPaymentAllocation(
+                          row.id,
+                          undefined,
+                          agingPartnerType === 'customer' ? 'in' : 'out'
+                        )
+                      }
+                      className="px-3 py-1 bg-[#F9F5FF] hover:bg-[#F3EBFE] text-[#6317D6] text-[12.5px] font-semibold rounded-[8px] transition-colors"
+                    >
+                      {agingPartnerType === 'customer' ? 'Thu nợ' : 'Thanh toán'}
+                    </button>
+                  </div>
+                ),
+              },
+            ]}
+            data={filteredAgingList}
+            keyExtractor={row => row.id}
+            emptyMessage="Không có dữ liệu tuổi nợ"
           />
         </div>
       )}
@@ -766,21 +1502,21 @@ export const DebtView: React.FC<DebtViewProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <KpiCard
               label="Dự kiến thu (30 ngày)"
-              value={formatCurrency(1974160)}
+              value={formatCurrency(totalExpectedIn)}
               icon="south_west"
               iconBg="bg-[#ECFDF5]"
               iconColor="text-[#059669]"
             />
             <KpiCard
               label="Dự kiến chi (30 ngày)"
-              value={formatCurrency(80000)}
+              value={formatCurrency(totalExpectedOut)}
               icon="north_east"
               iconBg="bg-[#FFFBEB]"
               iconColor="text-[#D97706]"
             />
             <KpiCard
               label="Dòng tiền ròng"
-              value={formatCurrency(1894160)}
+              value={formatCurrency(netCashflow)}
               icon="trending_up"
               iconBg="bg-[#F3EBFE]"
               iconColor="text-[#6D3EEB]"
@@ -974,19 +1710,36 @@ export const DebtView: React.FC<DebtViewProps> = ({
                 header: '',
                 align: 'right',
                 render: row => (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onOpenPaymentAllocation(
-                        row.partner_id,
-                        row.id,
-                        row.type === 'receivable' ? 'in' : 'out'
-                      )
-                    }
-                    className="px-3 py-1 bg-[#F9F5FF] text-[#6317D6] font-semibold text-[12.5px] rounded-[8px]"
-                  >
-                    {row.type === 'receivable' ? 'Thu nợ' : 'Trả tiền'}
-                  </button>
+                  <div className="flex items-center justify-end gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setReconciliationState({
+                          isOpen: true,
+                          partnerId: row.partner_id,
+                          partnerType: row.type === 'receivable' ? 'customer' : 'supplier',
+                        })
+                      }
+                      className="px-2.5 py-1 border border-[#E5E7EB] hover:bg-[#F9FAFB] text-[#4B5563] text-[12px] font-semibold rounded-[8px] transition-colors flex items-center gap-1"
+                      title="Biên bản đối chiếu công nợ Mẫu 01-ĐCCN"
+                    >
+                      <Icon name="receipt_long" size={15} className="text-[#6D3EEB]" />
+                      <span>Đối chiếu</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onOpenPaymentAllocation(
+                          row.partner_id,
+                          row.id,
+                          row.type === 'receivable' ? 'in' : 'out'
+                        )
+                      }
+                      className="px-3 py-1 bg-[#F9F5FF] text-[#6317D6] font-semibold text-[12.5px] rounded-[8px]"
+                    >
+                      {row.type === 'receivable' ? 'Thu nợ' : 'Trả tiền'}
+                    </button>
+                  </div>
                 ),
               },
             ]}
@@ -996,6 +1749,14 @@ export const DebtView: React.FC<DebtViewProps> = ({
           />
         </div>
       )}
+
+      {/* Debt Reconciliation Modal */}
+      <DebtReconciliationModal
+        isOpen={reconciliationState.isOpen}
+        onClose={() => setReconciliationState(prev => ({ ...prev, isOpen: false }))}
+        initialPartnerId={reconciliationState.partnerId}
+        initialPartnerType={reconciliationState.partnerType}
+      />
     </div>
   );
 };

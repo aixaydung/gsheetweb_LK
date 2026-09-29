@@ -141,6 +141,7 @@ function AppContent() {
       'lich-su': 'Lịch sử kho',
       'khach-hang-no': 'Khách hàng nợ',
       'no-ncc': 'Nợ NCC',
+      'tuoi-no': 'Tuổi nợ (Aging)',
       'phai-thu': 'Chi tiết phải thu',
       'phai-tra': 'Chi tiết phải trả',
       'dong-tien': 'Dòng tiền 30 ngày',

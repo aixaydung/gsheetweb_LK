@@ -117,7 +117,7 @@ Spreadsheet ID: `1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY` đã khởi tạo
   - [x] Nút "In" trực quan tại từng dòng ở Sổ quỹ (`CashbookView`), Mua hàng (`PurchaseView`), Bán hàng (`SalesView`), và Kho hàng (`WarehouseView`).
   - [x] Hỗ trợ tùy biến khổ in A4 / A5 / K80, ẩn/hiện logo công ty, chữ ký, QR code ngân hàng và xuất file PDF.
 
-### Giai đoạn D: Dashboard Báo cáo, Thẻ kho, Google Sheets Sync, Xuất & Nhập Excel [ĐÃ HOÀN THÀNH GÓI 1, 2, 3 & 4]
+### Giai đoạn D: Dashboard Báo cáo, Thẻ kho, Google Sheets Sync, Xuất & Nhập Excel, Quản lý Công nợ chuyên sâu [ĐÃ HOÀN THÀNH GÓI 1, 2, 3, 4 & 5]
 - [x] **Dashboard phân tích tài chính & vận hành thực tế (Gói 1)**:
   - [x] Động hóa 100% biểu đồ `ComposedChart` trên Dashboard: nhóm dữ liệu theo ngày / tuần / tháng dựa trên hóa đơn bán hàng và giá vốn thực tế thay vì mock data cứng.
   - [x] Bổ sung khối **Báo cáo Hiệu quả Kinh doanh (P&L) & Dòng tiền thực tế**:
@@ -167,6 +167,25 @@ Spreadsheet ID: `1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY` đã khởi tạo
     - Tab Khách hàng (`SalesView.tsx`).
     - Tab Nhà cung cấp (`PurchaseView.tsx`).
     - Tab Danh mục sản phẩm (`WarehouseView.tsx`).
+- [x] **Quản lý Công nợ chuyên sâu, Tuổi nợ (Aging) & Biên bản đối chiếu công nợ (Gói 5)**:
+  - [x] **Động hóa 100% Dòng tiền 30 ngày (`dong-tien`)**:
+    - Tính toán dự kiến thu, dự kiến chi và dòng tiền ròng động 100% dựa trên ngày đến hạn thanh toán của các hóa đơn bán hàng và đơn mua hàng thực tế.
+  - [x] **Báo cáo Phân loại Tuổi nợ (Aging Schedule - Tab `tuoi-no`)**:
+    - Phân bổ số dư công nợ theo 5 kỳ hạn tài chính: *Trong hạn, Quá hạn 1-30 ngày, 31-60 ngày, 61-90 ngày, >90 ngày (Rủi ro cao)*.
+    - Bộ chuyển đổi mượt mà giữa Khách hàng phải thu và Nhà cung cấp phải trả.
+    - 4 thẻ KPI chỉ số: Tổng nợ, Tỷ lệ an toàn trong hạn (%), Quá hạn 1-60 ngày, Nợ xấu rủi ro cao (>60 ngày).
+    - Biểu đồ phân bổ nhóm tuổi nợ `BarChart`.
+    - Bảng ma trận đối tác chi tiết kèm đánh giá mức độ rủi ro (🟢 An toàn, 🟡 Cần đôn đốc, 🔴 Rủi ro cao).
+    - Nút bấm nhanh "Đối chiếu công nợ" và "Thu nợ / Thanh toán" tại từng dòng.
+    - Hỗ trợ Xuất Excel bảng phân tích tuổi nợ.
+  - [x] **Danh sách cảnh báo nợ rủi ro cao & Quá hạn lâu ngày (Watchlist)**:
+    - Bổ sung khối giám sát rủi ro công nợ trực tiếp trên màn hình Tổng quan công nợ (`tong-quan`) giúp phát hiện sớm các khoản nợ trễ hạn trên 30-90 ngày.
+  - [x] **Biên bản đối chiếu công nợ Mẫu 01-ĐCCN (`DebtReconciliationModal.tsx`)**:
+    - Chuẩn Chế độ Kế toán Doanh nghiệp (TT 200/2014 & TT 133/2016/TT-BTC).
+    - Tự động tập hợp số dư đầu kỳ, các chứng từ phát sinh trong kỳ (mua/bán hàng, thanh toán sổ quỹ, phiếu trả hàng), tính số dư cuối kỳ trong khoảng thời gian tùy chọn.
+    - Tích hợp 4 vị trí chữ ký phê duyệt: Người lập biểu, Kế toán trưởng, Đại diện Bên A, Đại diện Bên B.
+    - Hỗ trợ In biên bản đối chiếu (`window.print()`) và Xuất file Excel chuẩn UTF-8 BOM.
+    - Nút bấm "Đối chiếu công nợ" trên thanh công cụ Header và tại từng dòng đối tác.
 
 ---
 
