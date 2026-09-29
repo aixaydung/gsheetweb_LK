@@ -117,7 +117,7 @@ Spreadsheet ID: `1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY` đã khởi tạo
   - [x] Nút "In" trực quan tại từng dòng ở Sổ quỹ (`CashbookView`), Mua hàng (`PurchaseView`), Bán hàng (`SalesView`), và Kho hàng (`WarehouseView`).
   - [x] Hỗ trợ tùy biến khổ in A4 / A5 / K80, ẩn/hiện logo công ty, chữ ký, QR code ngân hàng và xuất file PDF.
 
-### Giai đoạn D: Dashboard Báo cáo, Thẻ kho, Google Sheets Sync & Xuất Excel [ĐÃ HOÀN THÀNH GÓI 1, 2 & 3]
+### Giai đoạn D: Dashboard Báo cáo, Thẻ kho, Google Sheets Sync, Xuất & Nhập Excel [ĐÃ HOÀN THÀNH GÓI 1, 2, 3 & 4]
 - [x] **Dashboard phân tích tài chính & vận hành thực tế (Gói 1)**:
   - [x] Động hóa 100% biểu đồ `ComposedChart` trên Dashboard: nhóm dữ liệu theo ngày / tuần / tháng dựa trên hóa đơn bán hàng và giá vốn thực tế thay vì mock data cứng.
   - [x] Bổ sung khối **Báo cáo Hiệu quả Kinh doanh (P&L) & Dòng tiền thực tế**:
@@ -150,6 +150,23 @@ Spreadsheet ID: `1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY` đã khởi tạo
   - [x] **Xuất Excel cho Báo cáo Vận hành (`ReportView.tsx`)**:
     - Kết nối dữ liệu live với context Google Sheets (`contextProducts`, `contextCustomers`, `contextSuppliers`), hỗ trợ xuất Excel cho cả 6 tab báo cáo: Tổng hợp, Tồn kho, Công nợ, Top sản phẩm, Top khách hàng, Top nhà cung cấp.
   - [x] Đảm bảo 100% file xuất dùng chuẩn UTF-8 BOM (`\uFEFF`) để font tiếng Việt có dấu hiển thị sắc nét trong Excel mà không bị lỗi font/ký tự lạ.
+- [x] **Nhập dữ liệu hàng loạt từ file Excel/CSV (Gói 4)**:
+  - [x] Cài đặt thư viện chuẩn công nghiệp `xlsx` (SheetJS) hỗ trợ đọc & ghi file Excel `.xlsx`, `.xls`, `.csv`.
+  - [x] Xây dựng Backend Batch Repository & Endpoints:
+    - `POST /api/products/batch`: Thêm hàng loạt sản phẩm vào tab `PRODUCTS` trên Google Sheets chỉ trong 1 request.
+    - `POST /api/customers/batch`: Thêm hàng loạt khách hàng vào tab `CUSTOMERS` trên Google Sheets chỉ trong 1 request.
+    - `POST /api/vendors/batch`: Thêm hàng loạt nhà cung cấp vào tab `VENDORS` trên Google Sheets chỉ trong 1 request.
+  - [x] Xây dựng Universal Import Modal `src/components/ui/ImportModal.tsx` đa năng cho Sản phẩm, Khách hàng, Nhà cung cấp:
+    - Tải mẫu file Excel `.xlsx` tự động sinh kèm dòng mẫu và định dạng chuẩn (`Mau_nhap_san_pham_LKERP.xlsx`, `Mau_nhap_khach_hang_LKERP.xlsx`, `Mau_nhap_nha_cung_cap_LKERP.xlsx`).
+    - Kéo thả / Chọn file `.xlsx`, `.xls`, `.csv` với parser thông minh (fuzzy matching tiêu đề cột, lọc số tiền/số lượng có dấu chấm/phẩy).
+    - Bảng xem trước dữ liệu với phân tích hợp lệ / cảnh báo lỗi trực quan từng ô.
+    - Tùy chọn bỏ qua dòng lỗi để import các dòng hợp lệ.
+  - [x] Tích hợp Optimistic UI & Google Sheets Sync trong `src/context/AppContext.tsx`:
+    - `importProductsBatch`, `importCustomersBatch`, `importSuppliersBatch` cập nhật giao diện người dùng lập tức và đồng bộ ngầm an toàn lên Google Sheets.
+  - [x] Tích hợp nút bấm **"Nhập Excel"** trực quan vào thanh công cụ FilterToolbar:
+    - Tab Khách hàng (`SalesView.tsx`).
+    - Tab Nhà cung cấp (`PurchaseView.tsx`).
+    - Tab Danh mục sản phẩm (`WarehouseView.tsx`).
 
 ---
 

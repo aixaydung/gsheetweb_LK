@@ -21,6 +21,7 @@ interface SalesViewProps {
   onOpenCreateQuotation: () => void;
   onOpenCreateReturn: () => void;
   onOpenCreateCustomer: () => void;
+  onOpenImportCustomerDialog?: () => void;
   onOpenPaymentAllocation: (customerId?: string, invoiceId?: string) => void;
   onPrintDocument: (type: string, code: string, doc: any) => void;
 }
@@ -32,6 +33,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
   onOpenCreateQuotation,
   onOpenCreateReturn,
   onOpenCreateCustomer,
+  onOpenImportCustomerDialog,
   onOpenPaymentAllocation,
   onPrintDocument,
 }) => {
@@ -774,6 +776,15 @@ export const SalesView: React.FC<SalesViewProps> = ({
               setFilterGroup('all');
             }}
             onExportExcel={() => setIsExportOpen(true)}
+            secondaryAction={
+              onOpenImportCustomerDialog
+                ? {
+                    label: 'Nhập Excel',
+                    icon: 'upload_file',
+                    onClick: onOpenImportCustomerDialog,
+                  }
+                : undefined
+            }
             primaryAction={{
               label: '+ Thêm khách hàng',
               onClick: onOpenCreateCustomer,

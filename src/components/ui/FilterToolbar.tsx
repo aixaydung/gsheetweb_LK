@@ -28,6 +28,11 @@ interface FilterToolbarProps {
   onSortChange?: (key: string, direction: 'asc' | 'desc') => void;
   onClearFilters?: () => void;
   onExportExcel?: () => void;
+  secondaryAction?: {
+    label: string;
+    icon?: string;
+    onClick: () => void;
+  };
   primaryAction?: {
     label: string;
     icon?: string;
@@ -49,6 +54,7 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
   onSortChange,
   onClearFilters,
   onExportExcel,
+  secondaryAction,
   primaryAction,
   className = '',
 }) => {
@@ -185,8 +191,8 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
           </button>
         </div>
 
-        {/* Row 3: Action Buttons (Xuất Excel + Tạo mới) */}
-        {(primaryAction || onExportExcel) && (
+        {/* Row 3: Action Buttons (Xuất Excel + Thao tác phụ + Tạo mới) */}
+        {(primaryAction || secondaryAction || onExportExcel) && (
           <div className="flex items-center gap-2 pt-0.5">
             {onExportExcel && (
               <button
@@ -196,6 +202,17 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
               >
                 <Icon name="download" size={17} className="text-[#6D3EEB] dark:text-[#C084FC]" />
                 <span>Xuất Excel</span>
+              </button>
+            )}
+
+            {secondaryAction && (
+              <button
+                type="button"
+                onClick={secondaryAction.onClick}
+                className="h-[40px] px-3.5 bg-white dark:bg-[#1E293B] border border-[#E5E7EB] dark:border-[#334155] text-[#1F2937] dark:text-[#F8FAFC] hover:bg-[#F9F5FF] text-[13px] font-semibold rounded-[12px] flex items-center justify-center gap-1.5 transition-colors shadow-xs shrink-0"
+              >
+                {secondaryAction.icon && <Icon name={secondaryAction.icon} size={17} />}
+                <span>{secondaryAction.label}</span>
               </button>
             )}
 
@@ -346,6 +363,18 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
           >
             <Icon name="download" size={18} className="text-[#6D3EEB] dark:text-[#C084FC]" />
             <span>Xuất Excel</span>
+          </button>
+        )}
+
+        {/* 7.5 Secondary Action (e.g. Nhập Excel) */}
+        {secondaryAction && (
+          <button
+            type="button"
+            onClick={secondaryAction.onClick}
+            className="h-[42px] px-3.5 bg-white dark:bg-[#1E293B] border border-[#E5E7EB] dark:border-[#334155] hover:border-[#6D3EEB] text-[#1F2937] dark:text-[#F8FAFC] hover:bg-[#F9F5FF] text-[13.5px] font-semibold rounded-[12px] flex items-center gap-1.5 transition-colors shadow-sm whitespace-nowrap"
+          >
+            {secondaryAction.icon && <Icon name={secondaryAction.icon} size={18} />}
+            <span>{secondaryAction.label}</span>
           </button>
         )}
 

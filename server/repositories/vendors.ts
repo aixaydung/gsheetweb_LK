@@ -65,6 +65,40 @@ export const createVendor = async (data: Partial<VendorRecord>) => {
   return { ...data, id, code, created_at: now, updated_at: now };
 };
 
+export const createVendorsBatch = async (items: Partial<VendorRecord>[]) => {
+  const existing = await getAllVendors();
+  let nextNum = existing.length + 1;
+  const now = new Date().toISOString();
+  const created: any[] = [];
+  const rows: any[][] = [];
+
+  for (const data of items) {
+    const id = data.id || crypto.randomUUID();
+    const code = data.code || `NCC-${String(nextNum++).padStart(4, '0')}`;
+    const row = [
+      id,
+      code,
+      data.name || '',
+      data.phone || '',
+      data.email || '',
+      data.address || '',
+      data.tax_code || '',
+      Number(data.debt_amount) || 0,
+      data.note || '',
+      data.status || 'active',
+      now,
+      now,
+    ];
+    rows.push(row);
+    created.push({ ...data, id, code, created_at: now, updated_at: now });
+  }
+
+  if (rows.length > 0) {
+    await appendSheetData(SPREADSHEET_ID, `${SHEET_NAME}!A:L`, rows);
+  }
+  return created;
+};
+
 export const updateVendor = async (id: string, data: Partial<VendorRecord>) => {
   const vendors = await getAllVendors();
   const target = vendors.find(v => v.id === id);

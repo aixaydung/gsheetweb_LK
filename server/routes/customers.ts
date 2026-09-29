@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getAllCustomers, createCustomer, updateCustomer, deleteCustomer } from '../repositories/customers.js';
+import { getAllCustomers, createCustomer, createCustomersBatch, updateCustomer, deleteCustomer } from '../repositories/customers.js';
 import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
@@ -11,6 +11,21 @@ router.get('/', requireAuth, async (req, res) => {
     res.json({ customers });
   } catch (error: any) {
     console.error('Error fetching customers:', error.message);
+    res.status(500).json({ error: { code: 'DATABASE_ERROR', message: error.message } });
+  }
+});
+
+// BATCH CREATE customers (Import Excel)
+router.post('/batch', requireAuth, async (req, res) => {
+  try {
+    const list = Array.isArray(req.body.customers) ? req.body.customers : Array.isArray(req.body) ? req.body : [];
+    if (list.length === 0) {
+      return res.status(400).json({ error: { message: 'Danh sách khách hàng trống' } });
+    }
+    const created = await createCustomersBatch(list);
+    res.status(201).json({ count: created.length, customers: created });
+  } catch (error: any) {
+    console.error('Error batch creating customers:', error.message);
     res.status(500).json({ error: { code: 'DATABASE_ERROR', message: error.message } });
   }
 });

@@ -127,6 +127,11 @@ interface AppContextType {
   createWarehouse: (wh: Partial<Warehouse>) => Warehouse;
   updateWarehouse: (id: string, wh: Partial<Warehouse>) => void;
 
+  // Batch Import Excel
+  importProductsBatch: (items: Partial<Product>[]) => Promise<{ successCount: number; errorCount: number }>;
+  importCustomersBatch: (items: Partial<Customer>[]) => Promise<{ successCount: number; errorCount: number }>;
+  importSuppliersBatch: (items: Partial<Supplier>[]) => Promise<{ successCount: number; errorCount: number }>;
+
   updateSettings: (settings: Partial<CompanySettings>) => void;
   updateInlineNote: (entityType: string, id: string, note: string) => void;
   markNotificationRead: (id: string) => void;
@@ -1524,6 +1529,175 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setWarehouses(prev => prev.map(w => (w.id === id ? { ...w, ...whData } : w)));
   };
 
+  // Batch Import Excel handlers
+  const importProductsBatch = async (items: Partial<Product>[]): Promise<{ successCount: number; errorCount: number }> => {
+    let nextNum = products.length + 1;
+    const newProducts: Product[] = [];
+    const payloadItems: any[] = [];
+
+    for (const item of items) {
+      const sku = item.sku || `SP-${String(nextNum++).padStart(4, '0')}`;
+      const costPrice = Number(item.cost_price) || 0;
+      const salePrice = Number(item.sale_price) || 0;
+      const stockQty = Number(item.stock_quantity) || 0;
+      const minStock = Number(item.min_stock) || 5;
+
+      const prodRecord: Product = {
+        id: item.id || `prod-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        sku,
+        name: item.name || 'Sản phẩm mới',
+        group_id: item.group_id || 'pg-10',
+        group_name: item.group_name || 'Khác',
+        unit: item.unit || 'Cái',
+        cost_price: costPrice,
+        last_purchase_price: costPrice,
+        sale_price: salePrice,
+        min_stock: minStock,
+        max_stock: item.max_stock || 1000,
+        is_service: false,
+        is_active: true,
+        stock_quantity: stockQty,
+        stock_value: stockQty * costPrice,
+        stock_level: stockQty <= 0 ? 'out' : stockQty <= minStock ? 'low' : 'ok',
+        description: item.description || '',
+        note: item.note || '',
+      };
+
+      newProducts.push(prodRecord);
+      payloadItems.push({
+        id: prodRecord.id,
+        sku: prodRecord.sku,
+        name: prodRecord.name,
+        unit: prodRecord.unit,
+        cost_price: prodRecord.cost_price,
+        selling_price: prodRecord.sale_price,
+        stock_quantity: prodRecord.stock_quantity,
+        min_stock: prodRecord.min_stock,
+        max_stock: prodRecord.max_stock,
+        group_id: prodRecord.group_id,
+        description: prodRecord.description,
+        status: 'active',
+      });
+    }
+
+    // Merge into local state optimistically
+    setProducts(prev => {
+      const existingMap = new Map(prev.map(p => [p.sku.toLowerCase(), p]));
+      for (const np of newProducts) {
+        existingMap.set(np.sku.toLowerCase(), np);
+      }
+      return Array.from(existingMap.values());
+    });
+
+    // Background sync to Google Sheets
+    syncWithApi(
+      fetch('/api/products/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ products: payloadItems }),
+      })
+    );
+
+    return { successCount: newProducts.length, errorCount: 0 };
+  };
+
+  const importCustomersBatch = async (items: Partial<Customer>[]): Promise<{ successCount: number; errorCount: number }> => {
+    let nextNum = customers.length + 1;
+    const newCustomers: Customer[] = [];
+    const payloadItems: any[] = [];
+
+    for (const item of items) {
+      const code = item.code || `KH-${String(nextNum++).padStart(4, '0')}`;
+      const custRecord: Customer = {
+        id: item.id || `cust-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        code,
+        name: item.name || 'Khách hàng mới',
+        phone: item.phone || '',
+        email: item.email || '',
+        address: item.address || '',
+        tax_code: item.tax_code || '',
+        group_id: item.group_id || 'cg-3',
+        group_name: item.group_name || 'Khách lẻ',
+        status: item.status || 'active',
+        note: item.note || '',
+        total_purchase: 0,
+        debt_amount: Number(item.debt_amount) || 0,
+        overdue_amount: 0,
+        open_docs_count: 0,
+      };
+
+      newCustomers.push(custRecord);
+      payloadItems.push(custRecord);
+    }
+
+    setCustomers(prev => {
+      const existingMap = new Map(prev.map(c => [c.code.toLowerCase(), c]));
+      for (const nc of newCustomers) {
+        existingMap.set(nc.code.toLowerCase(), nc);
+      }
+      return Array.from(existingMap.values());
+    });
+
+    syncWithApi(
+      fetch('/api/customers/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customers: payloadItems }),
+      })
+    );
+
+    return { successCount: newCustomers.length, errorCount: 0 };
+  };
+
+  const importSuppliersBatch = async (items: Partial<Supplier>[]): Promise<{ successCount: number; errorCount: number }> => {
+    let nextNum = suppliers.length + 1;
+    const newSuppliers: Supplier[] = [];
+    const payloadItems: any[] = [];
+
+    for (const item of items) {
+      const code = item.code || `NCC-${String(nextNum++).padStart(4, '0')}`;
+      const supRecord: Supplier = {
+        id: item.id || `sup-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        code,
+        name: item.name || 'Nhà cung cấp mới',
+        contact_name: item.contact_name || '',
+        phone: item.phone || '',
+        email: item.email || '',
+        address: item.address || '',
+        tax_code: item.tax_code || '',
+        group_id: item.group_id || 'sg-1',
+        group_name: item.group_name || 'Nguyên liệu',
+        status: item.status || 'active',
+        note: item.note || '',
+        total_purchase: 0,
+        debt_amount: Number(item.debt_amount) || 0,
+        overdue_amount: 0,
+        open_docs_count: 0,
+      };
+
+      newSuppliers.push(supRecord);
+      payloadItems.push(supRecord);
+    }
+
+    setSuppliers(prev => {
+      const existingMap = new Map(prev.map(s => [s.code.toLowerCase(), s]));
+      for (const ns of newSuppliers) {
+        existingMap.set(ns.code.toLowerCase(), ns);
+      }
+      return Array.from(existingMap.values());
+    });
+
+    syncWithApi(
+      fetch('/api/vendors/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vendors: payloadItems }),
+      })
+    );
+
+    return { successCount: newSuppliers.length, errorCount: 0 };
+  };
+
   const updateSettings = (settingsData: Partial<CompanySettings>) => {
     setCompanySettings(prev => ({ ...prev, ...settingsData }));
   };
@@ -1639,6 +1813,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteSupplier,
         createWarehouse,
         updateWarehouse,
+        importProductsBatch,
+        importCustomersBatch,
+        importSuppliersBatch,
         updateSettings,
         updateInlineNote,
         markNotificationRead,

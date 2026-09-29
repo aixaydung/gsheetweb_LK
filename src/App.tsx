@@ -7,7 +7,7 @@ import { QuickCreateModal } from './components/dialogs/QuickCreateModal';
 import { GlobalSearchModal } from './components/dialogs/GlobalSearchModal';
 import { AlertsPopover } from './components/dialogs/AlertsPopover';
 import { NotificationsModal } from './components/dialogs/NotificationsModal';
-import { ImportDialog } from './components/dialogs/ImportDialog';
+import { ImportModal, ImportType } from './components/ui/ImportModal';
 import { PrintDialog } from './components/dialogs/PrintDialog';
 
 import { InvoiceFormModal } from './components/forms/InvoiceFormModal';
@@ -34,7 +34,15 @@ import { CashbookView } from './views/CashbookView';
 import { Product } from './types';
 
 function AppContent() {
-  const { recentTabs, addRecentTab, alerts, notifications } = useApp();
+  const {
+    recentTabs,
+    addRecentTab,
+    alerts,
+    notifications,
+    importProductsBatch,
+    importCustomersBatch,
+    importSuppliersBatch,
+  } = useApp();
 
   // Route & Tab management
   const [currentPath, setCurrentPath] = useState<string>(() => {
@@ -54,6 +62,7 @@ function AppContent() {
   const [isAlertsOpen, setIsAlertsOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [importType, setImportType] = useState<ImportType>('products');
 
   // Form Modal States
   const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
@@ -283,6 +292,10 @@ function AppContent() {
               onOpenCreateQuotation={() => setIsCreateQuoteOpen(true)}
               onOpenCreateReturn={() => setIsCreateSalesReturnOpen(true)}
               onOpenCreateCustomer={() => setIsCreateCustomerOpen(true)}
+              onOpenImportCustomerDialog={() => {
+                setImportType('customers');
+                setIsImportOpen(true);
+              }}
               onOpenPaymentAllocation={(cust, inv) =>
                 setPaymentModalState({ isOpen: true, partnerId: cust, docId: inv, direction: 'in' })
               }
@@ -297,6 +310,10 @@ function AppContent() {
               onOpenCreatePO={() => setIsCreatePOOpen(true)}
               onOpenCreateReturn={() => setIsCreatePurchaseReturnOpen(true)}
               onOpenCreateSupplier={() => setIsCreateSupplierOpen(true)}
+              onOpenImportSupplierDialog={() => {
+                setImportType('suppliers');
+                setIsImportOpen(true);
+              }}
               onOpenPaymentAllocation={(sup, po) =>
                 setPaymentModalState({ isOpen: true, partnerId: sup, docId: po, direction: 'out' })
               }
@@ -316,7 +333,10 @@ function AppContent() {
                 setProductToEdit(prod);
                 setIsCreateProductOpen(true);
               }}
-              onOpenImportDialog={() => setIsImportOpen(true)}
+              onOpenImportDialog={() => {
+                setImportType('products');
+                setIsImportOpen(true);
+              }}
               onOpenStocktakeModal={() => setIsStocktakeOpen(true)}
               onOpenStockVoucherModal={dir => {
                 if (dir === 'in') setIsCreatePOOpen(true);
@@ -398,9 +418,13 @@ function AppContent() {
         onNavigate={navigateTo}
       />
 
-      <ImportDialog
+      <ImportModal
         isOpen={isImportOpen}
         onClose={() => setIsImportOpen(false)}
+        type={importType}
+        onImportProducts={importProductsBatch}
+        onImportCustomers={importCustomersBatch}
+        onImportSuppliers={importSuppliersBatch}
       />
 
       {/* Form Modals */}

@@ -19,6 +19,7 @@ interface PurchaseViewProps {
   onOpenCreatePO: () => void;
   onOpenCreateReturn: () => void;
   onOpenCreateSupplier: () => void;
+  onOpenImportSupplierDialog?: () => void;
   onOpenPaymentAllocation: (supplierId?: string, poId?: string) => void;
   onPrintDocument: (type: string, code: string, doc: any) => void;
 }
@@ -29,6 +30,7 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
   onOpenCreatePO,
   onOpenCreateReturn,
   onOpenCreateSupplier,
+  onOpenImportSupplierDialog,
   onOpenPaymentAllocation,
   onPrintDocument,
 }) => {
@@ -675,6 +677,15 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
               setSearch('');
               setFilterGroup('all');
             }}
+            secondaryAction={
+              onOpenImportSupplierDialog
+                ? {
+                    label: 'Nhập Excel',
+                    icon: 'upload_file',
+                    onClick: onOpenImportSupplierDialog,
+                  }
+                : undefined
+            }
             primaryAction={{
               label: '+ Thêm NCC',
               onClick: onOpenCreateSupplier,

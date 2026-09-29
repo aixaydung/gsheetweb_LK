@@ -74,6 +74,43 @@ export const createProduct = async (data: Partial<ProductRecord>) => {
   return { ...data, id, sku, created_at: now, updated_at: now };
 };
 
+export const createProductsBatch = async (items: Partial<ProductRecord>[]) => {
+  const existing = await getAllProducts();
+  let nextNum = existing.length + 1;
+  const now = new Date().toISOString();
+  const created: any[] = [];
+  const rows: any[][] = [];
+
+  for (const data of items) {
+    const id = data.id || crypto.randomUUID();
+    const sku = data.sku || `SP-${String(nextNum++).padStart(4, '0')}`;
+    const row = [
+      id,
+      sku,
+      data.name || '',
+      data.unit || 'Cái',
+      Number(data.cost_price) || 0,
+      Number(data.selling_price) || 0,
+      Number(data.stock_quantity) || 0,
+      Number(data.min_stock) || 5,
+      Number(data.max_stock) || 1000,
+      data.group_id || 'GRP_GENERAL',
+      data.barcode || '',
+      data.description || '',
+      data.status || 'active',
+      now,
+      now,
+    ];
+    rows.push(row);
+    created.push({ ...data, id, sku, created_at: now, updated_at: now });
+  }
+
+  if (rows.length > 0) {
+    await appendSheetData(SPREADSHEET_ID, `${SHEET_NAME}!A:O`, rows);
+  }
+  return created;
+};
+
 export const updateProduct = async (id: string, data: Partial<ProductRecord>) => {
   const products = await getAllProducts();
   const target = products.find(p => p.id === id);

@@ -71,6 +71,42 @@ export const createCustomer = async (data: Partial<CustomerRecord>) => {
   return { ...data, id, code, created_at: now, updated_at: now };
 };
 
+export const createCustomersBatch = async (items: Partial<CustomerRecord>[]) => {
+  const existing = await getAllCustomers();
+  let nextNum = existing.length + 1;
+  const now = new Date().toISOString();
+  const created: any[] = [];
+  const rows: any[][] = [];
+
+  for (const data of items) {
+    const id = data.id || crypto.randomUUID();
+    const code = data.code || `KH-${String(nextNum++).padStart(4, '0')}`;
+    const row = [
+      id,
+      code,
+      data.name || '',
+      data.phone || '',
+      data.email || '',
+      data.address || '',
+      data.tax_code || '',
+      data.group_id || 'GRP_RETAIL',
+      Number(data.debt_amount) || 0,
+      Number(data.credit_limit) || 0,
+      data.note || '',
+      data.status || 'active',
+      now,
+      now,
+    ];
+    rows.push(row);
+    created.push({ ...data, id, code, created_at: now, updated_at: now });
+  }
+
+  if (rows.length > 0) {
+    await appendSheetData(SPREADSHEET_ID, `${SHEET_NAME}!A:N`, rows);
+  }
+  return created;
+};
+
 export const updateCustomer = async (id: string, data: Partial<CustomerRecord>) => {
   const customers = await getAllCustomers();
   const target = customers.find(c => c.id === id);
