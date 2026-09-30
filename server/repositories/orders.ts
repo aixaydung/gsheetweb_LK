@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { getSheetData, appendSheetData, updateSheetData, clearSheetData } from '../google-sheets.js';
+import { adjustProductStockBatch } from './products.js';
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY';
 const ORDERS_SHEET = 'ORDERS';
@@ -176,6 +177,20 @@ export const createOrderWithItems = async (orderData: Partial<OrderRecord>, item
   ];
   await appendSheetData(SPREADSHEET_ID, `${STOCK_MOVEMENTS_SHEET}!A:L`, [movementRow]);
 
+  // 4. Automatically deduct product stocks in PRODUCTS sheet
+  if (orderData.status !== 'cancelled') {
+    if (items && items.length > 0) {
+      await adjustProductStockBatch(
+        items.map(it => ({
+          product_id: it.product_id,
+          sku: it.sku,
+          quantity: Number(it.quantity) || 1,
+        })),
+        'out'
+      ).catch(err => console.error('Failed to deduct stock on create order:', err.message));
+    }
+  }
+
   return { ...orderData, id, code, items, created_at: now };
 };
 
@@ -184,8 +199,31 @@ export const updateOrderStatus = async (id: string, newStatus: string) => {
   const target = orders.find(o => o.id === id);
   if (!target || !target.rowIndex) throw new Error('Order not found');
 
+  const oldStatus = target.status;
   // Status column is O (column 15)
   await updateSheetData(SPREADSHEET_ID, `${ORDERS_SHEET}!O${target.rowIndex}:O${target.rowIndex}`, [[newStatus]]);
+
+  if (oldStatus !== 'cancelled' && newStatus === 'cancelled' && target.items && target.items.length > 0) {
+    // Rollback stock (put back) if order cancelled
+    await adjustProductStockBatch(
+      target.items.map(it => ({
+        product_id: it.product_id,
+        sku: it.sku,
+        quantity: Number(it.quantity) || 1,
+      })),
+      'in'
+    ).catch(err => console.error('Failed to return stock on cancel order:', err.message));
+  } else if (oldStatus === 'cancelled' && newStatus !== 'cancelled' && target.items && target.items.length > 0) {
+    // Re-deduct stock if reactivated
+    await adjustProductStockBatch(
+      target.items.map(it => ({
+        product_id: it.product_id,
+        sku: it.sku,
+        quantity: Number(it.quantity) || 1,
+      })),
+      'out'
+    ).catch(err => console.error('Failed to re-deduct stock on reactivate order:', err.message));
+  }
 };
 
 export const updateOrderWithItems = async (
@@ -251,6 +289,19 @@ export const updateOrderWithItems = async (
 };
 
 export const deleteOrder = async (id: string) => {
+  const orders = await getAllOrders();
+  const target = orders.find(o => o.id === id);
+  if (target && target.status !== 'cancelled' && target.items && target.items.length > 0) {
+    await adjustProductStockBatch(
+      target.items.map(it => ({
+        product_id: it.product_id,
+        sku: it.sku,
+        quantity: Number(it.quantity) || 1,
+      })),
+      'in'
+    ).catch(err => console.error('Failed to return stock on delete order:', err.message));
+  }
+
   // 1. Remove from ORDERS
   const rawOrderRows = await getSheetData(SPREADSHEET_ID, `${ORDERS_SHEET}!A2:R`);
   const remainingOrders = rawOrderRows.filter((r: any) => r[0] !== id);

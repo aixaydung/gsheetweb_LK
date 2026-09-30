@@ -1,5 +1,6 @@
 import { getSheetData, appendSheetData, updateSheetData, clearSheetData, ensureSheetExists } from '../google-sheets.js';
 import crypto from 'crypto';
+import { adjustProductStockBatch } from './products.js';
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY';
 const RETURNS_SHEET = 'RETURNS';
@@ -180,6 +181,20 @@ export const createReturn = async (returnData: Partial<ReturnRecord>, items: any
     now,
   ];
   await appendSheetData(SPREADSHEET_ID, `${STOCK_MOVEMENTS_SHEET}!A:L`, [movementRow]);
+
+  // Adjust product stocks in PRODUCTS sheet
+  if (items && items.length > 0 && returnData.status !== 'cancelled') {
+    const stockMode = type === 'sales_return' ? 'in' : 'out';
+    await adjustProductStockBatch(
+      items.map(it => ({
+        product_id: it.product_id,
+        sku: it.sku,
+        quantity: Number(it.quantity) || 1,
+        unit_price: Number(it.unit_price) || 0,
+      })),
+      stockMode
+    ).catch(err => console.error(`Failed to adjust stock on create return (${stockMode}):`, err.message));
+  }
 
   return { ...returnData, id, code, items, created_at: now };
 };

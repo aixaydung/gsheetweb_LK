@@ -58,7 +58,9 @@ export const LineItemsEditor: React.FC<LineItemsEditorProps> = ({
   return (
     <div className="space-y-3">
       {items.map((item, index) => {
-        const product = availableProducts.find(p => p.id === item.product_id);
+        const product = availableProducts.find(
+          p => (item.product_id && p.id === item.product_id) || (item.sku && p.sku === item.sku)
+        );
         const availableStock = product?.stock_quantity ?? 0;
         const isOverStock = !isPurchase && !product?.is_service && item.quantity > availableStock;
 

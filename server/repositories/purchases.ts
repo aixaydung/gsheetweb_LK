@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { getSheetData, appendSheetData, updateSheetData, clearSheetData } from '../google-sheets.js';
+import { adjustProductStockBatch } from './products.js';
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY';
 const PO_SHEET = 'PURCHASE_ORDERS';
@@ -179,6 +180,21 @@ export const createPurchaseWithItems = async (poData: Partial<PurchaseOrderRecor
       now,
     ];
     await appendSheetData(SPREADSHEET_ID, `${STOCK_MOVEMENTS_SHEET}!A:L`, [movementRow]);
+
+    // 4. Automatically update product stocks and average cost in PRODUCTS sheet
+    if (poData.status === 'received' || !poData.status) {
+      if (items && items.length > 0) {
+        await adjustProductStockBatch(
+          items.map(it => ({
+            product_id: it.product_id,
+            sku: it.sku,
+            quantity: Number(it.quantity) || 1,
+            unit_price: Number(it.unit_price) || 0,
+          })),
+          'in'
+        ).catch(err => console.error('Failed to adjust stock on create purchase:', err.message));
+      }
+    }
   }
 
   return { ...poData, id, code, items, created_at: now };
@@ -189,8 +205,30 @@ export const updatePurchaseStatus = async (id: string, newStatus: string) => {
   const target = purchases.find(p => p.id === id);
   if (!target || !target.rowIndex) throw new Error('Purchase order not found');
 
+  const oldStatus = target.status;
   // Status column is P (column 16)
   await updateSheetData(SPREADSHEET_ID, `${PO_SHEET}!P${target.rowIndex}:P${target.rowIndex}`, [[newStatus]]);
+
+  if (oldStatus !== 'received' && newStatus === 'received' && target.items && target.items.length > 0) {
+    await adjustProductStockBatch(
+      target.items.map(it => ({
+        product_id: it.product_id,
+        sku: it.sku,
+        quantity: Number(it.quantity) || 1,
+        unit_price: Number(it.unit_price) || 0,
+      })),
+      'in'
+    ).catch(err => console.error('Failed to increase stock on purchase status received:', err.message));
+  } else if (oldStatus === 'received' && newStatus === 'cancelled' && target.items && target.items.length > 0) {
+    await adjustProductStockBatch(
+      target.items.map(it => ({
+        product_id: it.product_id,
+        sku: it.sku,
+        quantity: Number(it.quantity) || 1,
+      })),
+      'out'
+    ).catch(err => console.error('Failed to rollback stock on purchase cancelled:', err.message));
+  }
 };
 
 export const updatePurchaseWithItems = async (
@@ -257,6 +295,19 @@ export const updatePurchaseWithItems = async (
 };
 
 export const deletePurchase = async (id: string) => {
+  const purchases = await getAllPurchases();
+  const target = purchases.find(p => p.id === id);
+  if (target && target.status === 'received' && target.items && target.items.length > 0) {
+    await adjustProductStockBatch(
+      target.items.map(it => ({
+        product_id: it.product_id,
+        sku: it.sku,
+        quantity: Number(it.quantity) || 1,
+      })),
+      'out'
+    ).catch(err => console.error('Failed to rollback stock on delete purchase:', err.message));
+  }
+
   // 1. Remove from PURCHASE_ORDERS
   const rawRows = await getSheetData(SPREADSHEET_ID, `${PO_SHEET}!A2:S`);
   const remaining = rawRows.filter((r: any) => r[0] !== id);

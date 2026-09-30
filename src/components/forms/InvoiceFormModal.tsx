@@ -128,11 +128,13 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
 
   const handleSelectProduct = (item: ComboboxItem | null) => {
     if (!item) return;
-    const prod = products.find(p => p.id === item.id);
+    const prod = products.find(p => p.id === item.id || p.sku === item.code);
     if (!prod) return;
 
     // If item already exists, increment quantity
-    const existingIndex = items.findIndex(it => it.product_id === prod.id);
+    const existingIndex = items.findIndex(
+      it => (it.product_id && it.product_id === prod.id) || (it.sku && it.sku === prod.sku)
+    );
     if (existingIndex >= 0) {
       const updated = [...items];
       updated[existingIndex].quantity += 1;
@@ -140,6 +142,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         updated[existingIndex].quantity * updated[existingIndex].unit_price;
       setItems(updated);
     } else {
+      const unitPrice = Number(prod.sale_price !== undefined ? prod.sale_price : prod.cost_price) || 0;
       const newItem: DocumentLineItem = {
         id: `temp-${Date.now()}`,
         product_id: prod.id,
@@ -147,10 +150,10 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         product_name: prod.name,
         unit: prod.unit,
         quantity: 1,
-        unit_price: prod.sale_price,
+        unit_price: unitPrice,
         line_discount: 0,
-        line_total: prod.sale_price,
-        unit_cost: prod.cost_price,
+        line_total: unitPrice,
+        unit_cost: Number(prod.cost_price) || 0,
       };
       setItems([...items, newItem]);
     }

@@ -379,7 +379,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (prodRes.status === 'fulfilled' && prodRes.value.ok) {
         const data = await prodRes.value.json();
         if (Array.isArray(data.products)) {
-          setProducts(data.products.filter((p: any) => p.status !== 'inactive'));
+          const mappedProducts = data.products
+            .filter((p: any) => p.status !== 'inactive')
+            .map((p: any) => {
+              const cost_price = Number(p.cost_price) || 0;
+              const sale_price = Number(p.sale_price !== undefined ? p.sale_price : p.selling_price) || 0;
+              const stock_quantity = Number(p.stock_quantity) || 0;
+              const min_stock = Number(p.min_stock) || 5;
+              const max_stock = p.max_stock ? Number(p.max_stock) : undefined;
+
+              let stock_level = p.stock_level;
+              if (!stock_level) {
+                if (stock_quantity <= 0) stock_level = 'out';
+                else if (stock_quantity <= min_stock) stock_level = 'low';
+                else if (max_stock && stock_quantity > max_stock) stock_level = 'over';
+                else stock_level = 'ok';
+              }
+
+              return {
+                ...p,
+                cost_price,
+                sale_price,
+                selling_price: sale_price,
+                stock_quantity,
+                min_stock,
+                max_stock,
+                stock_value: Number(p.stock_value) || (stock_quantity * cost_price),
+                stock_level,
+                is_active: p.status !== 'inactive',
+                is_service: p.is_service ?? false,
+              };
+            });
+          setProducts(mappedProducts);
         }
       }
       if (vendRes.status === 'fulfilled' && vendRes.value.ok) {
@@ -1005,7 +1036,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Deduct products quantity
       setProducts(prevProducts =>
         prevProducts.map(prod => {
-          const item = items.find(it => it.product_id === prod.id);
+          const item = items.find(it => (it.product_id && it.product_id === prod.id) || (it.sku && it.sku === prod.sku));
           if (!item || prod.is_service) return prod;
           const newQty = prod.stock_quantity - item.quantity;
           let level = prod.stock_level;
@@ -1473,7 +1504,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Return items to inventory
     setProducts(prevProducts =>
       prevProducts.map(prod => {
-        const item = items.find(it => it.product_id === prod.id);
+        const item = items.find(it => (it.product_id && it.product_id === prod.id) || (it.sku && it.sku === prod.sku));
         if (!item || prod.is_service) return prod;
         const newQty = prod.stock_quantity + item.quantity;
         return {
@@ -1716,7 +1747,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Update product stocks and weighted average cost
       setProducts(prevProducts =>
         prevProducts.map(prod => {
-          const item = items.find(it => it.product_id === prod.id);
+          const item = items.find(it => (it.product_id && it.product_id === prod.id) || (it.sku && it.sku === prod.sku));
           if (!item || prod.is_service) return prod;
           const oldQty = Math.max(0, prod.stock_quantity);
           const newQty = prod.stock_quantity + item.quantity;
@@ -1918,7 +1949,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Deduct stock
     setProducts(prevProducts =>
       prevProducts.map(prod => {
-        const item = items.find(it => it.product_id === prod.id);
+        const item = items.find(it => (it.product_id && it.product_id === prod.id) || (it.sku && it.sku === prod.sku));
         if (!item || prod.is_service) return prod;
         const newQty = prod.stock_quantity - item.quantity;
         return {

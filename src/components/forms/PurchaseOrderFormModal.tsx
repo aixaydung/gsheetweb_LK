@@ -123,10 +123,12 @@ export const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
 
   const handleSelectProduct = (item: ComboboxItem | null) => {
     if (!item) return;
-    const prod = products.find(p => p.id === item.id);
+    const prod = products.find(p => p.id === item.id || p.sku === item.code);
     if (!prod) return;
 
-    const existingIndex = items.findIndex(it => it.product_id === prod.id);
+    const existingIndex = items.findIndex(
+      it => (it.product_id && it.product_id === prod.id) || (it.sku && it.sku === prod.sku)
+    );
     if (existingIndex >= 0) {
       const updated = [...items];
       updated[existingIndex].quantity += 1;
@@ -134,6 +136,7 @@ export const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
         updated[existingIndex].quantity * updated[existingIndex].unit_price;
       setItems(updated);
     } else {
+      const unitCost = Number(prod.cost_price || (prod as any).selling_price || 100000);
       const newItem: DocumentLineItem = {
         id: `temp-${Date.now()}`,
         product_id: prod.id,
@@ -141,9 +144,9 @@ export const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
         product_name: prod.name,
         unit: prod.unit,
         quantity: 1,
-        unit_price: prod.cost_price || 100000,
+        unit_price: unitCost,
         line_discount: 0,
-        line_total: prod.cost_price || 100000,
+        line_total: unitCost,
       };
       setItems([...items, newItem]);
     }
