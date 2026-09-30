@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../../context/AppContext';
 import { Icon } from '../../../components/ui/Icon';
 
@@ -12,9 +12,36 @@ export const CompanyGeneralTab: React.FC = () => {
   const [taxCode, setTaxCode] = useState(companySettings.tax_code);
   const [website, setWebsite] = useState(companySettings.website || 'https://lkerp.sheetapp.store');
   const [logoUrl, setLogoUrl] = useState(companySettings.logo_url || '');
+  const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('Đã lưu thành công thông tin doanh nghiệp!');
 
-  const handleSave = () => {
+  // Sync state whenever companySettings changes (e.g. from Google Sheets sync or localStorage)
+  useEffect(() => {
+    if (companySettings.company_name) setCompanyName(companySettings.company_name);
+    if (companySettings.address) setAddress(companySettings.address);
+    if (companySettings.phone) setPhone(companySettings.phone);
+    if (companySettings.email) setEmail(companySettings.email);
+    if (companySettings.tax_code) setTaxCode(companySettings.tax_code);
+    if (companySettings.website) setWebsite(companySettings.website);
+    if (companySettings.logo_url !== undefined) {
+      setLogoUrl(companySettings.logo_url);
+    } else {
+      const backupLogo = localStorage.getItem('lkerp_company_logo');
+      if (backupLogo) setLogoUrl(backupLogo);
+    }
+  }, [
+    companySettings.company_name,
+    companySettings.address,
+    companySettings.phone,
+    companySettings.email,
+    companySettings.tax_code,
+    companySettings.website,
+    companySettings.logo_url,
+  ]);
+
+  const handleSave = async () => {
+    setIsSaving(true);
     updateSettings({
       company_name: companyName,
       address,
@@ -24,6 +51,7 @@ export const CompanyGeneralTab: React.FC = () => {
       website,
       logo_url: logoUrl,
     });
+
     try {
       localStorage.setItem('lkerp_company_settings', JSON.stringify({
         ...companySettings,
@@ -40,11 +68,39 @@ export const CompanyGeneralTab: React.FC = () => {
       } else {
         localStorage.removeItem('lkerp_company_logo');
       }
+
+      // Explicitly push to Google Sheets
+      const res = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          key: 'company_info',
+          value: {
+            company_name: companyName,
+            address,
+            phone,
+            email,
+            tax_code: taxCode,
+            website,
+            logo_url: logoUrl,
+          },
+          updatedBy: 'admin',
+        }),
+      });
+
+      if (res.ok) {
+        setSaveMessage('Đã lưu thành công lên Google Sheets và bộ nhớ hệ thống!');
+      } else {
+        setSaveMessage('Đã lưu vào bộ nhớ trình duyệt thành công!');
+      }
     } catch (e) {
-      console.warn('Failed to save to localStorage:', e);
+      console.warn('Remote sync warning:', e);
+      setSaveMessage('Đã lưu vào bộ nhớ trình duyệt thành công!');
+    } finally {
+      setIsSaving(false);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3500);
     }
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
   };
 
   return (
@@ -53,23 +109,24 @@ export const CompanyGeneralTab: React.FC = () => {
         <div>
           <h3 className="text-[18px] sm:text-[20px] font-bold text-[#111827] dark:text-[#F8FAFC]">Thông tin doanh nghiệp</h3>
           <p className="text-[13px] sm:text-[14.5px] text-[#4B5563] dark:text-[#94A3B8] mt-0.5">
-            Hiển thị trên tiêu đề hóa đơn GTGT, phiếu xuất nhập kho, báo giá và chứng từ in ấn
+            Hiển thị trên tiêu đề hóa đơn GTGT, phiếu xuất nhập kho, báo giá và chứng từ in ấn (Đồng bộ Google Sheets)
           </p>
         </div>
         <button
           type="button"
+          disabled={isSaving}
           onClick={handleSave}
-          className="w-full sm:w-auto h-10 px-5 bg-[#6D3EEB] hover:bg-[#5B2BD6] text-white text-[14px] sm:text-[14.5px] font-semibold rounded-[12px] shadow-sm flex items-center justify-center gap-2 transition-all shrink-0 cursor-pointer"
+          className="w-full sm:w-auto h-10 px-5 bg-[#6D3EEB] hover:bg-[#5B2BD6] disabled:opacity-50 text-white text-[14px] sm:text-[14.5px] font-semibold rounded-[12px] shadow-sm flex items-center justify-center gap-2 transition-all shrink-0 cursor-pointer"
         >
-          <Icon name="save" size={18} />
-          <span>Lưu thông tin</span>
+          <Icon name="save" size={18} className={isSaving ? 'animate-spin' : ''} />
+          <span>{isSaving ? 'Đang lưu lên Sheets...' : 'Lưu thông tin'}</span>
         </button>
       </div>
 
       {saved && (
         <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 rounded-[12px] flex items-center gap-2.5 text-[14px] font-semibold">
           <Icon name="check_circle" size={20} className="text-emerald-600 dark:text-emerald-400" />
-          <span>Đã lưu thành công thông tin doanh nghiệp!</span>
+          <span>{saveMessage}</span>
         </div>
       )}
 

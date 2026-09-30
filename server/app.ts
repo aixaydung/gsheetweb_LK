@@ -13,6 +13,7 @@ import stocktakesRouter from './routes/stocktakes.js';
 import stockMovementsRouter from './routes/stockMovements.js';
 import { quotationsRouter } from './routes/quotations.js';
 import { returnsRouter } from './routes/returns.js';
+import settingsRouter from './routes/settings.js';
 
 dotenv.config();
 
@@ -63,6 +64,9 @@ app.use('/quotations', quotationsRouter);
 
 app.use('/api/returns', returnsRouter);
 app.use('/returns', returnsRouter);
+
+app.use('/api/settings', settingsRouter);
+app.use('/settings', settingsRouter);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

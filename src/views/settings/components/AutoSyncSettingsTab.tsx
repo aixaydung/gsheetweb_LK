@@ -47,6 +47,7 @@ export const AutoSyncSettingsTab: React.FC = () => {
     { name: 'QUOTATION_ITEMS', desc: 'Chi tiết danh mục hàng hóa trong từng báo giá', type: 'Detail (Gói 8)', status: 'Live 2 chiều' },
     { name: 'RETURNS', desc: 'Phiếu trả hàng bán & trả hàng NCC, bù trừ công nợ', type: 'Master (Gói 8)', status: 'Live 2 chiều' },
     { name: 'RETURN_ITEMS', desc: 'Chi tiết các mặt hàng trả lại và nhập lại kho', type: 'Detail (Gói 8)', status: 'Live 2 chiều' },
+    { name: 'SYSTEM_SETTINGS', desc: 'Thông tin công ty, logo, VietQR ngân hàng, mẫu in & cấu hình hệ thống', type: 'Config', status: 'Live 2 chiều' },
   ];
 
   return (

@@ -2,28 +2,50 @@ import React, { useState } from 'react';
 import { Icon } from '../../../components/ui/Icon';
 
 export const PrintTemplatesTab: React.FC = () => {
-  const [paperSize, setPaperSize] = useState<'A4' | 'A5' | 'K80'>('A4');
-  const [invoiceTitle, setInvoiceTitle] = useState('HÓA ĐƠN BÁN HÀNG');
-  const [stockOutTitle, setStockOutTitle] = useState('PHIẾU XUẤT KHO KIÊM BẢO HÀNH');
-  const [showLogo, setShowLogo] = useState(true);
-  const [showQr, setShowQr] = useState(true);
-  const [showSignatures, setShowSignatures] = useState(true);
-  const [thankYouNote, setThankYouNote] = useState('Cảm ơn Quý khách đã tin tưởng và ủng hộ sản phẩm của chúng tôi!');
+  const getStoredConfig = () => {
+    try {
+      const stored = localStorage.getItem('lkerp_print_config');
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const initial = getStoredConfig();
+
+  const [paperSize, setPaperSize] = useState<'A4' | 'A5' | 'K80'>(initial.paperSize || 'A4');
+  const [invoiceTitle, setInvoiceTitle] = useState(initial.invoiceTitle || 'HÓA ĐƠN BÁN HÀNG');
+  const [stockOutTitle, setStockOutTitle] = useState(initial.stockOutTitle || 'PHIẾU XUẤT KHO KIÊM BẢO HÀNH');
+  const [showLogo, setShowLogo] = useState(initial.showLogo !== undefined ? initial.showLogo : true);
+  const [showQr, setShowQr] = useState(initial.showQr !== undefined ? initial.showQr : true);
+  const [showSignatures, setShowSignatures] = useState(initial.showSignatures !== undefined ? initial.showSignatures : true);
+  const [thankYouNote, setThankYouNote] = useState(initial.thankYouNote || 'Cảm ơn Quý khách đã tin tưởng và ủng hộ sản phẩm của chúng tôi!');
   const [saved, setSaved] = useState(false);
 
   const handleSave = () => {
-    localStorage.setItem(
-      'lkerp_print_config',
-      JSON.stringify({
-        paperSize,
-        invoiceTitle,
-        stockOutTitle,
-        showLogo,
-        showQr,
-        showSignatures,
-        thankYouNote,
-      })
-    );
+    const config = {
+      paperSize,
+      invoiceTitle,
+      stockOutTitle,
+      showLogo,
+      showQr,
+      showSignatures,
+      thankYouNote,
+    };
+
+    localStorage.setItem('lkerp_print_config', JSON.stringify(config));
+
+    // Sync to Google Sheets
+    fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        key: 'print_config',
+        value: config,
+        updatedBy: 'admin',
+      }),
+    }).catch(err => console.warn('Failed to sync print config to Sheets:', err));
+
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };

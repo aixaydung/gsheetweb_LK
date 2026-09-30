@@ -21,7 +21,7 @@ export const VietQrBankTab: React.FC = () => {
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
 
-  // Auto-sync the default account to companySettings and localStorage
+  // Auto-sync the default account to companySettings, localStorage, and Google Sheets
   const syncToSettings = (accounts: BankAccountItem[]) => {
     localStorage.setItem('lkerp_bank_accounts', JSON.stringify(accounts));
     const defaultAcc = accounts.find(a => a.isDefault) || accounts[0];
@@ -33,6 +33,17 @@ export const VietQrBankTab: React.FC = () => {
         bank_account_name: defaultAcc.accountName,
       });
     }
+
+    // Push bank_accounts to Google Sheets SYSTEM_SETTINGS tab
+    fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        key: 'bank_accounts',
+        value: accounts,
+        updatedBy: 'admin',
+      }),
+    }).catch(err => console.warn('Failed to sync bank accounts to Sheets:', err));
   };
 
   const showToast = (msg: string) => {

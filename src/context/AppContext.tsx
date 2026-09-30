@@ -355,7 +355,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setSyncStatus('syncing');
     }
     try {
-      const [custRes, prodRes, vendRes, orderRes, poRes, payRes, stkRes, movRes, quoRes, retRes] = await Promise.allSettled([
+      const [custRes, prodRes, vendRes, orderRes, poRes, payRes, stkRes, movRes, quoRes, retRes, setRes] = await Promise.allSettled([
         fetch('/api/customers'),
         fetch('/api/products'),
         fetch('/api/vendors'),
@@ -366,6 +366,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         fetch('/api/stock-movements'),
         fetch('/api/quotations'),
         fetch('/api/returns'),
+        fetch('/api/settings'),
       ]);
 
       if (custRes.status === 'fulfilled' && custRes.value.ok) {
@@ -594,6 +595,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (purchaseRets.length > 0) {
             setPurchaseReturns(purchaseRets);
           }
+        }
+      }
+
+      // Sync settings from Google Sheets tab SYSTEM_SETTINGS
+      if (setRes.status === 'fulfilled' && setRes.value.ok) {
+        const data = await setRes.value.json();
+        const settings = data.settings || {};
+
+        if (settings.company_info?.value) {
+          const cInfo = settings.company_info.value;
+          setCompanySettings(prev => {
+            const merged = { ...prev, ...cInfo };
+            try {
+              localStorage.setItem(STORAGE_PREFIX + 'company_settings', JSON.stringify(merged));
+              if (merged.logo_url) {
+                localStorage.setItem('lkerp_company_logo', merged.logo_url);
+              }
+            } catch (e) {
+              console.warn('LocalStorage error:', e);
+            }
+            return merged;
+          });
+        }
+
+        if (settings.bank_accounts?.value && Array.isArray(settings.bank_accounts.value) && settings.bank_accounts.value.length > 0) {
+          try {
+            localStorage.setItem('lkerp_bank_accounts', JSON.stringify(settings.bank_accounts.value));
+          } catch (e) {
+            console.warn('LocalStorage error:', e);
+          }
+        }
+
+        if (settings.print_config?.value) {
+          try {
+            localStorage.setItem('lkerp_print_config', JSON.stringify(settings.print_config.value));
+          } catch (e) {
+            console.warn('LocalStorage error:', e);
+          }
+        }
+
+        if (settings.warehouse_policy?.value) {
+          setCompanySettings(prev => ({ ...prev, ...settings.warehouse_policy.value }));
+        }
+        if (settings.sales_policy?.value) {
+          setCompanySettings(prev => ({ ...prev, ...settings.sales_policy.value }));
+        }
+        if (settings.debt_policy?.value) {
+          setCompanySettings(prev => ({ ...prev, ...settings.debt_policy.value }));
         }
       }
 
@@ -2811,8 +2860,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateSettings = (settingsData: Partial<CompanySettings>) => {
+    let fullUpdated: CompanySettings;
     setCompanySettings(prev => {
       const updated = { ...prev, ...settingsData };
+      fullUpdated = updated;
       try {
         localStorage.setItem(STORAGE_PREFIX + 'company_settings', JSON.stringify(updated));
         if (updated.logo_url) {
@@ -2825,13 +2876,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return updated;
     });
+
+    // Sync company info to Google Sheets in background
+    syncWithApi(
+      fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          key: 'company_info',
+          value: {
+            company_name: settingsData.company_name ?? companySettings.company_name,
+            address: settingsData.address ?? companySettings.address,
+            phone: settingsData.phone ?? companySettings.phone,
+            email: settingsData.email ?? companySettings.email,
+            tax_code: settingsData.tax_code ?? companySettings.tax_code,
+            website: settingsData.website ?? companySettings.website,
+            logo_url: settingsData.logo_url !== undefined ? settingsData.logo_url : companySettings.logo_url,
+          },
+          updatedBy: 'admin',
+        }),
+      })
+    );
+
     logActivity({
       action: 'update',
       entity_type: 'settings',
       entity_id: 'company',
       entity_code: 'SYS-CFG',
       title: 'Cập nhật cấu hình công ty & thông tin doanh nghiệp',
-      details: 'Cập nhật cài đặt hệ thống',
+      details: 'Cập nhật cài đặt hệ thống và đồng bộ Google Sheets',
     });
   };
 
