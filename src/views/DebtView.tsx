@@ -7,6 +7,7 @@ import { FilterToolbar } from '../components/ui/FilterToolbar';
 import { DataTable, Column } from '../components/ui/DataTable';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { Icon } from '../components/ui/Icon';
+import { DateRange } from '../components/ui/DateRangePicker';
 import { formatCurrency, formatDate } from '../lib/format';
 import { exportToExcelFile, ExportColumn } from '../lib/excelExport';
 import { Customer, Supplier, SalesInvoice, PurchaseOrder, Payment } from '../types';
@@ -31,6 +32,17 @@ export const DebtView: React.FC<DebtViewProps> = ({
   const [filterDirection, setFilterDirection] = useState('all');
   const [agingPartnerType, setAgingPartnerType] = useState<'customer' | 'supplier'>('customer');
   const [agingRiskFilter, setAgingRiskFilter] = useState<'all' | 'safe' | 'warning' | 'danger'>('all');
+
+  // Specific filters for DebtView tabs
+  const [customerGroupFilter, setCustomerGroupFilter] = useState('all');
+  const [customerOverdueFilter, setCustomerOverdueFilter] = useState('all');
+  const [supplierOverdueFilter, setSupplierOverdueFilter] = useState('all');
+  const [partnerFilter, setPartnerFilter] = useState('all');
+  const [debtTermFilter, setDebtTermFilter] = useState('all');
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState('all');
+  const [overdueTypeFilter, setOverdueTypeFilter] = useState('all');
+  const [overdueDaysFilter, setOverdueDaysFilter] = useState('all');
+  const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null });
 
   const [reconciliationState, setReconciliationState] = useState<{
     isOpen: boolean;
@@ -83,54 +95,108 @@ export const DebtView: React.FC<DebtViewProps> = ({
   );
   const totalOverdue = overdueReceivables + overduePayables;
 
+  // Partner filter items
+  const customerFilterOptions = useMemo(() => [
+    { value: 'all', label: 'Khách hàng: Tất cả' },
+    ...customers.map(c => ({
+      value: c.id,
+      label: `Khách hàng: ${c.code} - ${c.name}`,
+      code: c.code,
+      name: c.name,
+    })),
+  ], [customers]);
+
+  const supplierFilterOptions = useMemo(() => [
+    { value: 'all', label: 'Nhà cung cấp: Tất cả' },
+    ...suppliers.map(s => ({
+      value: s.id,
+      label: `Nhà cung cấp: ${s.code} - ${s.name}`,
+      code: s.code,
+      name: s.name,
+    })),
+  ], [suppliers]);
+
   // Filtered lists
   const filteredDebtors = useMemo(() => {
-    return debtors.filter(
-      c =>
+    return debtors.filter(c => {
+      const matchSearch =
         c.name.toLowerCase().includes(search.toLowerCase()) ||
-        c.code.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [debtors, search]);
+        c.code.toLowerCase().includes(search.toLowerCase()) ||
+        (c.phone && c.phone.includes(search));
+      const matchGroup = customerGroupFilter === 'all' || c.group_name === customerGroupFilter;
+      const matchOverdue =
+        customerOverdueFilter === 'all' ||
+        (customerOverdueFilter === 'overdue' && (c.overdue_amount || 0) > 0) ||
+        (customerOverdueFilter === 'in_term' && (c.overdue_amount || 0) === 0);
+      return matchSearch && matchGroup && matchOverdue;
+    });
+  }, [debtors, search, customerGroupFilter, customerOverdueFilter]);
 
   const filteredSupplierDebtors = useMemo(() => {
-    return supplierDebtors.filter(
-      s =>
+    return supplierDebtors.filter(s => {
+      const matchSearch =
         s.name.toLowerCase().includes(search.toLowerCase()) ||
-        s.code.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [supplierDebtors, search]);
+        s.code.toLowerCase().includes(search.toLowerCase()) ||
+        (s.phone && s.phone.includes(search));
+      const matchOverdue =
+        supplierOverdueFilter === 'all' ||
+        (supplierOverdueFilter === 'overdue' && (s.overdue_amount || 0) > 0) ||
+        (supplierOverdueFilter === 'in_term' && (s.overdue_amount || 0) === 0);
+      return matchSearch && matchOverdue;
+    });
+  }, [supplierDebtors, search, supplierOverdueFilter]);
 
   // Receivables details (Invoices with debt)
   const openInvoices = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
     return invoices
       .filter(i => i.debt_amount > 0 && i.status !== 'cancelled')
-      .filter(
-        i =>
+      .filter(i => {
+        const matchSearch =
           i.code.toLowerCase().includes(search.toLowerCase()) ||
-          i.customer_name.toLowerCase().includes(search.toLowerCase())
-      )
+          i.customer_name.toLowerCase().includes(search.toLowerCase());
+        const matchCustomer = partnerFilter === 'all' || i.customer_id === partnerFilter;
+        let matchDate = true;
+        if (dateRange.from && i.invoice_date < dateRange.from) matchDate = false;
+        if (dateRange.to && i.invoice_date > dateRange.to) matchDate = false;
+        const isOverdue = !!(i.due_date && i.due_date < today);
+        const matchTerm =
+          debtTermFilter === 'all' ||
+          (debtTermFilter === 'overdue' && isOverdue) ||
+          (debtTermFilter === 'in_term' && !isOverdue);
+        return matchSearch && matchCustomer && matchDate && matchTerm;
+      })
       .map(i => ({
         ...i,
         isOverdue: i.due_date && i.due_date < today,
       }));
-  }, [invoices, search]);
+  }, [invoices, search, partnerFilter, dateRange, debtTermFilter]);
 
   // Payables details (POs with debt)
   const openPOs = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
     return purchaseOrders
       .filter(p => p.debt_amount > 0 && p.status !== 'cancelled')
-      .filter(
-        p =>
+      .filter(p => {
+        const matchSearch =
           p.code.toLowerCase().includes(search.toLowerCase()) ||
-          p.supplier_name.toLowerCase().includes(search.toLowerCase())
-      )
+          p.supplier_name.toLowerCase().includes(search.toLowerCase());
+        const matchSupplier = partnerFilter === 'all' || p.supplier_id === partnerFilter;
+        let matchDate = true;
+        if (dateRange.from && p.order_date < dateRange.from) matchDate = false;
+        if (dateRange.to && p.order_date > dateRange.to) matchDate = false;
+        const isOverdue = !!(p.due_date && p.due_date < today);
+        const matchTerm =
+          debtTermFilter === 'all' ||
+          (debtTermFilter === 'overdue' && isOverdue) ||
+          (debtTermFilter === 'in_term' && !isOverdue);
+        return matchSearch && matchSupplier && matchDate && matchTerm;
+      })
       .map(p => ({
         ...p,
         isOverdue: p.due_date && p.due_date < today,
       }));
-  }, [purchaseOrders, search]);
+  }, [purchaseOrders, search, partnerFilter, dateRange, debtTermFilter]);
 
   // Dynamic Cashflow 30 days buckets
   const { cashflowBuckets, totalExpectedIn, totalExpectedOut, netCashflow } = useMemo(() => {
@@ -449,8 +515,19 @@ export const DebtView: React.FC<DebtViewProps> = ({
         ),
       }));
 
-    return [...recs, ...pays];
-  }, [invoices, purchaseOrders]);
+    const allOverdue = [...recs, ...pays];
+    return allOverdue.filter(item => {
+      const matchSearch =
+        item.code.toLowerCase().includes(search.toLowerCase()) ||
+        item.partner_name.toLowerCase().includes(search.toLowerCase());
+      const matchType = overdueTypeFilter === 'all' || item.type === overdueTypeFilter;
+      let matchDays = true;
+      if (overdueDaysFilter === '1-30') matchDays = item.days_late >= 1 && item.days_late <= 30;
+      else if (overdueDaysFilter === '31-60') matchDays = item.days_late >= 31 && item.days_late <= 60;
+      else if (overdueDaysFilter === 'over60') matchDays = item.days_late > 60;
+      return matchSearch && matchType && matchDays;
+    });
+  }, [invoices, purchaseOrders, search, overdueTypeFilter, overdueDaysFilter]);
 
   // Tab 2 Customer Debt Columns
   const debtorColumns: Column<Customer>[] = [
@@ -1011,9 +1088,40 @@ export const DebtView: React.FC<DebtViewProps> = ({
           </div>
 
           <FilterToolbar
-            searchPlaceholder="Tìm khách hàng nợ..."
+            searchPlaceholder="Tìm khách hàng nợ, SĐT, mã..."
             searchValue={search}
             onSearchChange={setSearch}
+            filters={[
+              {
+                label: 'Nhóm khách',
+                key: 'group',
+                value: customerGroupFilter,
+                items: [
+                  { value: 'all', label: 'Nhóm: Tất cả' },
+                  { value: 'Đại lý', label: 'Đại lý' },
+                  { value: 'Doanh nghiệp', label: 'Doanh nghiệp' },
+                  { value: 'Khách lẻ', label: 'Khách lẻ' },
+                  { value: 'DỰ ÁN', label: 'Dự án' },
+                ],
+                onChange: setCustomerGroupFilter,
+              },
+              {
+                label: 'Tình trạng nợ',
+                key: 'overdue',
+                value: customerOverdueFilter,
+                items: [
+                  { value: 'all', label: 'Tình trạng: Tất cả' },
+                  { value: 'overdue', label: 'Có nợ quá hạn' },
+                  { value: 'in_term', label: 'Nợ trong hạn' },
+                ],
+                onChange: setCustomerOverdueFilter,
+              },
+            ]}
+            onClearFilters={() => {
+              setSearch('');
+              setCustomerGroupFilter('all');
+              setCustomerOverdueFilter('all');
+            }}
             primaryAction={{
               label: 'Thu tiền (phân bổ nhiều HĐ)',
               icon: 'account_balance_wallet',
@@ -1058,9 +1166,26 @@ export const DebtView: React.FC<DebtViewProps> = ({
           </div>
 
           <FilterToolbar
-            searchPlaceholder="Tìm nhà cung cấp nợ..."
+            searchPlaceholder="Tìm nhà cung cấp nợ, mã, SĐT..."
             searchValue={search}
             onSearchChange={setSearch}
+            filters={[
+              {
+                label: 'Tình trạng nợ',
+                key: 'overdue',
+                value: supplierOverdueFilter,
+                items: [
+                  { value: 'all', label: 'Tình trạng: Tất cả' },
+                  { value: 'overdue', label: 'Nợ quá hạn NCC' },
+                  { value: 'in_term', label: 'Nợ trong hạn' },
+                ],
+                onChange: setSupplierOverdueFilter,
+              },
+            ]}
+            onClearFilters={() => {
+              setSearch('');
+              setSupplierOverdueFilter('all');
+            }}
             primaryAction={{
               label: 'Trả tiền (phân bổ nhiều phiếu)',
               icon: 'payments',
@@ -1357,6 +1482,34 @@ export const DebtView: React.FC<DebtViewProps> = ({
             searchPlaceholder="Tìm hóa đơn, khách hàng..."
             searchValue={search}
             onSearchChange={setSearch}
+            dateRange={dateRange}
+            onDateRangeChange={setDateRange}
+            filters={[
+              {
+                label: 'Khách hàng',
+                key: 'customer',
+                value: partnerFilter,
+                items: customerFilterOptions,
+                onChange: setPartnerFilter,
+              },
+              {
+                label: 'Thời hạn',
+                key: 'term',
+                value: debtTermFilter,
+                items: [
+                  { value: 'all', label: 'Thời hạn: Tất cả' },
+                  { value: 'in_term', label: 'Trong hạn' },
+                  { value: 'overdue', label: 'Quá hạn' },
+                ],
+                onChange: setDebtTermFilter,
+              },
+            ]}
+            onClearFilters={() => {
+              setSearch('');
+              setPartnerFilter('all');
+              setDebtTermFilter('all');
+              setDateRange({ from: null, to: null });
+            }}
             primaryAction={{
               label: 'Thu tiền (phân bổ nhiều HĐ)',
               icon: 'account_balance_wallet',
@@ -1432,6 +1585,34 @@ export const DebtView: React.FC<DebtViewProps> = ({
             searchPlaceholder="Tìm phiếu mua, NCC..."
             searchValue={search}
             onSearchChange={setSearch}
+            dateRange={dateRange}
+            onDateRangeChange={setDateRange}
+            filters={[
+              {
+                label: 'Nhà cung cấp',
+                key: 'supplier',
+                value: partnerFilter,
+                items: supplierFilterOptions,
+                onChange: setPartnerFilter,
+              },
+              {
+                label: 'Thời hạn',
+                key: 'term',
+                value: debtTermFilter,
+                items: [
+                  { value: 'all', label: 'Thời hạn: Tất cả' },
+                  { value: 'in_term', label: 'Trong hạn' },
+                  { value: 'overdue', label: 'Quá hạn' },
+                ],
+                onChange: setDebtTermFilter,
+              },
+            ]}
+            onClearFilters={() => {
+              setSearch('');
+              setPartnerFilter('all');
+              setDebtTermFilter('all');
+              setDateRange({ from: null, to: null });
+            }}
             primaryAction={{
               label: 'Trả tiền (phân bổ nhiều phiếu)',
               icon: 'payments',
@@ -1551,25 +1732,41 @@ export const DebtView: React.FC<DebtViewProps> = ({
       {currentTab === 'lich-su-thanh-toan' && (
         <div className="space-y-4">
           <FilterToolbar
-            searchPlaceholder="Tìm thanh toán, đối tượng..."
+            searchPlaceholder="Tìm thanh toán, đối tượng, mã phiếu..."
             searchValue={search}
             onSearchChange={setSearch}
+            dateRange={dateRange}
+            onDateRangeChange={setDateRange}
             filters={[
               {
-                label: 'Hướng',
+                label: 'Hướng dòng tiền',
                 key: 'direction',
                 value: filterDirection,
                 items: [
                   { value: 'all', label: 'Hướng: Tất cả' },
-                  { value: 'in', label: 'Thu' },
-                  { value: 'out', label: 'Chi' },
+                  { value: 'in', label: 'Thu tiền' },
+                  { value: 'out', label: 'Chi tiền' },
                 ],
                 onChange: setFilterDirection,
+              },
+              {
+                label: 'Phương thức',
+                key: 'method',
+                value: paymentMethodFilter,
+                items: [
+                  { value: 'all', label: 'Phương thức: Tất cả' },
+                  { value: 'transfer', label: 'Chuyển khoản' },
+                  { value: 'cash', label: 'Tiền mặt' },
+                  { value: 'offset', label: 'Đối trừ' },
+                ],
+                onChange: setPaymentMethodFilter,
               },
             ]}
             onClearFilters={() => {
               setSearch('');
               setFilterDirection('all');
+              setPaymentMethodFilter('all');
+              setDateRange({ from: null, to: null });
             }}
           />
 
@@ -1641,12 +1838,17 @@ export const DebtView: React.FC<DebtViewProps> = ({
                 ),
               },
             ]}
-            data={payments.filter(
-              p =>
-                (filterDirection === 'all' || p.direction === filterDirection) &&
-                (p.code.toLowerCase().includes(search.toLowerCase()) ||
-                  p.partner_name.toLowerCase().includes(search.toLowerCase()))
-            )}
+            data={payments.filter(p => {
+              const matchDirection = filterDirection === 'all' || p.direction === filterDirection;
+              const matchMethod = paymentMethodFilter === 'all' || p.method === paymentMethodFilter;
+              const matchSearch =
+                p.code.toLowerCase().includes(search.toLowerCase()) ||
+                p.partner_name.toLowerCase().includes(search.toLowerCase());
+              let matchDate = true;
+              if (dateRange.from && p.payment_date < dateRange.from) matchDate = false;
+              if (dateRange.to && p.payment_date > dateRange.to) matchDate = false;
+              return matchDirection && matchMethod && matchSearch && matchDate;
+            })}
             keyExtractor={row => row.id}
             emptyMessage="Chưa có giao dịch thanh toán nào"
           />
@@ -1657,10 +1859,39 @@ export const DebtView: React.FC<DebtViewProps> = ({
       {currentTab === 'qua-han' && (
         <div className="space-y-4">
           <FilterToolbar
-            searchPlaceholder="Tìm chứng từ quá hạn..."
+            searchPlaceholder="Tìm chứng từ quá hạn, đối tác..."
             searchValue={search}
             onSearchChange={setSearch}
-            onClearFilters={() => setSearch('')}
+            filters={[
+              {
+                label: 'Loại công nợ',
+                key: 'type',
+                value: overdueTypeFilter,
+                items: [
+                  { value: 'all', label: 'Loại: Tất cả' },
+                  { value: 'receivable', label: 'Phải thu (Khách nợ)' },
+                  { value: 'payable', label: 'Phải trả (Nợ NCC)' },
+                ],
+                onChange: setOverdueTypeFilter,
+              },
+              {
+                label: 'Mức độ trễ',
+                key: 'days_late',
+                value: overdueDaysFilter,
+                items: [
+                  { value: 'all', label: 'Trễ hạn: Tất cả' },
+                  { value: '1-30', label: 'Trễ 1 - 30 ngày' },
+                  { value: '31-60', label: 'Trễ 31 - 60 ngày' },
+                  { value: 'over60', label: 'Trễ trên 60 ngày' },
+                ],
+                onChange: setOverdueDaysFilter,
+              },
+            ]}
+            onClearFilters={() => {
+              setSearch('');
+              setOverdueTypeFilter('all');
+              setOverdueDaysFilter('all');
+            }}
           />
 
           <DataTable

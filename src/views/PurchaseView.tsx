@@ -70,6 +70,7 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
   const [filterGroup, setFilterGroup] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [filterSupplier, setFilterSupplier] = useState('all');
+  const [filterSupplierDebt, setFilterSupplierDebt] = useState('all');
   const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null });
   const [sortKey, setSortKey] = useState<string>('date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -169,16 +170,20 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
         s.code.toLowerCase().includes(search.toLowerCase()) ||
         s.phone.includes(search);
       const matchGroup = filterGroup === 'all' || s.group_name === filterGroup;
+      const matchDebt =
+        filterSupplierDebt === 'all' ||
+        (filterSupplierDebt === 'debt' && (s.debt_amount || 0) > 0) ||
+        (filterSupplierDebt === 'no_debt' && (s.debt_amount || 0) === 0);
       let matchDate = true;
       if (dateRange.from && s.created_at && s.created_at.slice(0, 10) < dateRange.from) matchDate = false;
       if (dateRange.to && s.created_at && s.created_at.slice(0, 10) > dateRange.to) matchDate = false;
-      return matchSearch && matchGroup && matchDate;
+      return matchSearch && matchGroup && matchDebt && matchDate;
     }).sort((a, b) => {
       if (sortKey === 'total') return sortDir === 'asc' ? a.total_purchase - b.total_purchase : b.total_purchase - a.total_purchase;
       if (sortKey === 'debt') return sortDir === 'asc' ? a.debt_amount - b.debt_amount : b.debt_amount - a.debt_amount;
       return sortDir === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
     });
-  }, [suppliers, search, filterGroup, dateRange, sortKey, sortDir]);
+  }, [suppliers, search, filterGroup, filterSupplierDebt, dateRange, sortKey, sortDir]);
 
   const filteredReturns = useMemo(() => {
     return purchaseReturns.filter(ret => {
@@ -1021,6 +1026,17 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
                 ],
                 onChange: setFilterGroup,
               },
+              {
+                label: 'Công nợ',
+                key: 'debt',
+                value: filterSupplierDebt,
+                items: [
+                  { value: 'all', label: 'Công nợ: Tất cả' },
+                  { value: 'debt', label: 'Đang nợ NCC' },
+                  { value: 'no_debt', label: 'Không còn nợ' },
+                ],
+                onChange: setFilterSupplierDebt,
+              },
             ]}
             dateRange={dateRange}
             onDateRangeChange={setDateRange}
@@ -1038,6 +1054,7 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
             onClearFilters={() => {
               setSearch('');
               setFilterGroup('all');
+              setFilterSupplierDebt('all');
               setDateRange({ from: null, to: null });
             }}
             secondaryAction={

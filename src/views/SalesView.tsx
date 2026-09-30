@@ -76,6 +76,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
   const [filterGroup, setFilterGroup] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [filterCustomer, setFilterCustomer] = useState('all');
+  const [filterCustomerDebt, setFilterCustomerDebt] = useState('all');
   const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null });
   const [sortKey, setSortKey] = useState<string>('date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -150,12 +151,16 @@ export const SalesView: React.FC<SalesViewProps> = ({
         cust.phone.includes(search);
       const matchGroup = filterGroup === 'all' || cust.group_name === filterGroup;
       const matchStatus = filterStatus === 'all' || cust.status === filterStatus;
+      const matchDebt =
+        filterCustomerDebt === 'all' ||
+        (filterCustomerDebt === 'debt' && (cust.debt_amount || 0) > 0) ||
+        (filterCustomerDebt === 'no_debt' && (cust.debt_amount || 0) === 0);
       let matchDate = true;
       if (dateRange.from && cust.created_at && cust.created_at.slice(0, 10) < dateRange.from) matchDate = false;
       if (dateRange.to && cust.created_at && cust.created_at.slice(0, 10) > dateRange.to) matchDate = false;
-      return matchSearch && matchGroup && matchStatus && matchDate;
+      return matchSearch && matchGroup && matchStatus && matchDebt && matchDate;
     });
-  }, [customers, search, filterGroup, filterStatus, dateRange]);
+  }, [customers, search, filterGroup, filterStatus, filterCustomerDebt, dateRange]);
 
   // Tab 3: Filtered Quotations
   const filteredQuotations = useMemo(() => {
@@ -1054,12 +1059,24 @@ export const SalesView: React.FC<SalesViewProps> = ({
                 ],
                 onChange: setFilterGroup,
               },
+              {
+                label: 'Công nợ',
+                key: 'debt',
+                value: filterCustomerDebt,
+                items: [
+                  { value: 'all', label: 'Công nợ: Tất cả' },
+                  { value: 'debt', label: 'Đang có nợ' },
+                  { value: 'no_debt', label: 'Không có nợ' },
+                ],
+                onChange: setFilterCustomerDebt,
+              },
             ]}
             dateRange={dateRange}
             onDateRangeChange={setDateRange}
             onClearFilters={() => {
               setSearch('');
               setFilterGroup('all');
+              setFilterCustomerDebt('all');
               setDateRange({ from: null, to: null });
             }}
             onExportExcel={() => setIsExportOpen(true)}

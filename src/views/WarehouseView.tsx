@@ -54,6 +54,16 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
   const [filterType, setFilterType] = useState('all');
   const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null });
 
+  // Tab 2 & 3 Voucher filters
+  const [voucherPartnerFilter, setVoucherPartnerFilter] = useState('all');
+  const [voucherStatusFilter, setVoucherStatusFilter] = useState('all');
+
+  // Tab 4 Stocktake filters
+  const [stocktakeStatusFilter, setStocktakeStatusFilter] = useState('all');
+
+  // Tab 6 Movement filters
+  const [movementTypeFilter, setMovementTypeFilter] = useState('all');
+
   // State for Thẻ kho (Stock Card)
   const [selectedProductSku, setSelectedProductSku] = useState<string>(() => products[0]?.sku || '');
   const [stockCardDateRange, setStockCardDateRange] = useState<DateRange>({
@@ -73,6 +83,15 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
     { id: 'lich-su', label: 'Lịch sử kho' },
   ];
 
+  // Unique product groups
+  const productGroupOptions = useMemo(() => {
+    const groups = Array.from(new Set(products.map(p => p.group_name).filter(Boolean))) as string[];
+    return [
+      { value: 'all', label: 'Nhóm: Tất cả' },
+      ...groups.map(g => ({ value: g, label: g })),
+    ];
+  }, [products]);
+
   // 5 KPIs for Tab 1
   const kpis = useMemo(() => {
     const totalVal = products.reduce((sum, p) => sum + (p.stock_value || ((p.stock_quantity || 0) * (p.cost_price || 0)) || 0), 0);
@@ -91,47 +110,83 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
         (p.sku || '').toLowerCase().includes(search.toLowerCase());
       const matchGroup = filterGroup === 'all' || p.group_name === filterGroup;
       const matchStatus = filterStatus === 'all' || p.stock_level === filterStatus;
-      return matchSearch && matchGroup && matchStatus;
+      const matchType =
+        filterType === 'all' ||
+        (filterType === 'service' ? p.is_service : !p.is_service);
+      return matchSearch && matchGroup && matchStatus && matchType;
     });
-  }, [products, search, filterGroup, filterStatus]);
+  }, [products, search, filterGroup, filterStatus, filterType]);
 
-  // Tab 2 & 3: Stock Vouchers
+  // Tab 2 & 3: Stock Vouchers with date, search & status filter
   const inboundVouchers = useMemo(() => {
-    return stockVouchers.filter(
-      v =>
-        v.direction === 'in' &&
-        ((v.code || '').toLowerCase().includes(search.toLowerCase()) ||
-          (v.summary || '').toLowerCase().includes(search.toLowerCase()))
-    );
-  }, [stockVouchers, search]);
+    return stockVouchers.filter(v => {
+      if (v.direction !== 'in') return false;
+      const matchSearch =
+        (v.code || '').toLowerCase().includes(search.toLowerCase()) ||
+        (v.summary || '').toLowerCase().includes(search.toLowerCase()) ||
+        (v.partner_name || '').toLowerCase().includes(search.toLowerCase());
+      let matchDate = true;
+      const vDate = v.voucher_date ? v.voucher_date.split('T')[0] : '';
+      if (dateRange.from && vDate < dateRange.from) matchDate = false;
+      if (dateRange.to && vDate > dateRange.to) matchDate = false;
+      const matchStatus = voucherStatusFilter === 'all' || v.status === voucherStatusFilter;
+      return matchSearch && matchDate && matchStatus;
+    });
+  }, [stockVouchers, search, dateRange, voucherStatusFilter]);
 
   const outboundVouchers = useMemo(() => {
-    return stockVouchers.filter(
-      v =>
-        v.direction === 'out' &&
-        ((v.code || '').toLowerCase().includes(search.toLowerCase()) ||
-          (v.summary || '').toLowerCase().includes(search.toLowerCase()))
-    );
-  }, [stockVouchers, search]);
+    return stockVouchers.filter(v => {
+      if (v.direction !== 'out') return false;
+      const matchSearch =
+        (v.code || '').toLowerCase().includes(search.toLowerCase()) ||
+        (v.summary || '').toLowerCase().includes(search.toLowerCase()) ||
+        (v.partner_name || '').toLowerCase().includes(search.toLowerCase());
+      let matchDate = true;
+      const vDate = v.voucher_date ? v.voucher_date.split('T')[0] : '';
+      if (dateRange.from && vDate < dateRange.from) matchDate = false;
+      if (dateRange.to && vDate > dateRange.to) matchDate = false;
+      const matchStatus = voucherStatusFilter === 'all' || v.status === voucherStatusFilter;
+      return matchSearch && matchDate && matchStatus;
+    });
+  }, [stockVouchers, search, dateRange, voucherStatusFilter]);
 
-  // Tab 4: Stocktakes
+  // Tab 4: Stocktakes with date and diff filter
   const filteredStocktakes = useMemo(() => {
-    return stocktakes.filter(
-      st =>
+    return stocktakes.filter(st => {
+      const matchSearch =
         (st.code || '').toLowerCase().includes(search.toLowerCase()) ||
-        (st.counted_by || '').toLowerCase().includes(search.toLowerCase())
-    );
-  }, [stocktakes, search]);
+        (st.counted_by || '').toLowerCase().includes(search.toLowerCase());
+      let matchDate = true;
+      const stDate = st.stocktake_date ? st.stocktake_date.split('T')[0] : '';
+      if (dateRange.from && stDate < dateRange.from) matchDate = false;
+      if (dateRange.to && stDate > dateRange.to) matchDate = false;
+      const matchStatus =
+        stocktakeStatusFilter === 'all' ||
+        (stocktakeStatusFilter === 'balanced' && st.status === 'balanced') ||
+        (stocktakeStatusFilter === 'has_diff' && (st.difference_qty !== 0 || (st.items && st.items.some(it => it.diff_qty !== 0)))) ||
+        (stocktakeStatusFilter === 'draft' && st.status === 'draft');
+      return matchSearch && matchDate && matchStatus;
+    });
+  }, [stocktakes, search, dateRange, stocktakeStatusFilter]);
 
-  // Tab 5: Movements
+  // Tab 6: Movements with date and movement type filter
   const filteredMovements = useMemo(() => {
-    return stockMovements.filter(
-      m =>
+    return stockMovements.filter(m => {
+      const matchSearch =
         (m.product_name || '').toLowerCase().includes(search.toLowerCase()) ||
         (m.sku || '').toLowerCase().includes(search.toLowerCase()) ||
-        (m.source_code || '').toLowerCase().includes(search.toLowerCase())
-    );
-  }, [stockMovements, search]);
+        (m.source_code || '').toLowerCase().includes(search.toLowerCase());
+      let matchDate = true;
+      const mDate = m.created_at ? m.created_at.split('T')[0] : '';
+      if (dateRange.from && mDate < dateRange.from) matchDate = false;
+      if (dateRange.to && mDate > dateRange.to) matchDate = false;
+      const matchType =
+        movementTypeFilter === 'all' ||
+        (movementTypeFilter === 'in' && (m.movement_type === 'in' || (m.change_qty || 0) > 0)) ||
+        (movementTypeFilter === 'out' && (m.movement_type === 'out' || (m.change_qty || 0) < 0));
+      return matchSearch && matchDate && matchType;
+    });
+  }, [stockMovements, search, dateRange, movementTypeFilter]);
 
   // Tab 1 Columns: Products & Stock
   const productColumns: Column<Product>[] = [
@@ -1033,6 +1088,24 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
             onSearchChange={setSearch}
             filters={[
               {
+                label: 'Nhóm hàng',
+                key: 'group',
+                value: filterGroup,
+                items: productGroupOptions,
+                onChange: setFilterGroup,
+              },
+              {
+                label: 'Loại hàng',
+                key: 'type',
+                value: filterType,
+                items: [
+                  { value: 'all', label: 'Loại: Tất cả' },
+                  { value: 'product', label: 'Hàng hóa' },
+                  { value: 'service', label: 'Dịch vụ' },
+                ],
+                onChange: setFilterType,
+              },
+              {
                 label: 'Trạng thái',
                 key: 'status',
                 value: filterStatus,
@@ -1042,13 +1115,14 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
                   { value: 'low', label: 'Sắp hết' },
                   { value: 'out', label: 'Hết hàng' },
                   { value: 'over', label: 'Vượt tồn' },
-                  { value: 'service', label: 'Dịch vụ' },
                 ],
                 onChange: setFilterStatus,
               },
             ]}
             onClearFilters={() => {
               setSearch('');
+              setFilterGroup('all');
+              setFilterType('all');
               setFilterStatus('all');
             }}
           />
@@ -1068,10 +1142,30 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
       {currentTab === 'nhap-kho' && (
         <div className="space-y-4">
           <FilterToolbar
-            searchPlaceholder="Tìm mã phiếu, sản phẩm..."
+            searchPlaceholder="Tìm mã phiếu nhập, NCC, sản phẩm..."
             searchValue={search}
             onSearchChange={setSearch}
-            onClearFilters={() => setSearch('')}
+            dateRange={dateRange}
+            onDateRangeChange={setDateRange}
+            filters={[
+              {
+                label: 'Trạng thái',
+                key: 'status',
+                value: voucherStatusFilter,
+                items: [
+                  { value: 'all', label: 'Trạng thái: Tất cả' },
+                  { value: 'completed', label: 'Hoàn tất' },
+                  { value: 'draft', label: 'Bản nháp' },
+                  { value: 'cancelled', label: 'Đã hủy' },
+                ],
+                onChange: setVoucherStatusFilter,
+              },
+            ]}
+            onClearFilters={() => {
+              setSearch('');
+              setVoucherStatusFilter('all');
+              setDateRange({ from: null, to: null });
+            }}
             primaryAction={{
               label: '+ Nhập kho',
               onClick: () => onOpenStockVoucherModal('in'),
@@ -1091,10 +1185,30 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
       {currentTab === 'xuat-kho' && (
         <div className="space-y-4">
           <FilterToolbar
-            searchPlaceholder="Tìm mã phiếu, sản phẩm..."
+            searchPlaceholder="Tìm mã phiếu xuất, khách hàng, sản phẩm..."
             searchValue={search}
             onSearchChange={setSearch}
-            onClearFilters={() => setSearch('')}
+            dateRange={dateRange}
+            onDateRangeChange={setDateRange}
+            filters={[
+              {
+                label: 'Trạng thái',
+                key: 'status',
+                value: voucherStatusFilter,
+                items: [
+                  { value: 'all', label: 'Trạng thái: Tất cả' },
+                  { value: 'completed', label: 'Hoàn tất' },
+                  { value: 'draft', label: 'Bản nháp' },
+                  { value: 'cancelled', label: 'Đã hủy' },
+                ],
+                onChange: setVoucherStatusFilter,
+              },
+            ]}
+            onClearFilters={() => {
+              setSearch('');
+              setVoucherStatusFilter('all');
+              setDateRange({ from: null, to: null });
+            }}
             primaryAction={{
               label: '+ Xuất kho',
               onClick: () => onOpenStockVoucherModal('out'),
@@ -1114,10 +1228,30 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
       {currentTab === 'kiem-ke' && (
         <div className="space-y-4">
           <FilterToolbar
-            searchPlaceholder="Tìm mã phiếu kiểm kê..."
+            searchPlaceholder="Tìm mã phiếu kiểm kê, người kiểm..."
             searchValue={search}
             onSearchChange={setSearch}
-            onClearFilters={() => setSearch('')}
+            dateRange={dateRange}
+            onDateRangeChange={setDateRange}
+            filters={[
+              {
+                label: 'Trạng thái',
+                key: 'status',
+                value: stocktakeStatusFilter,
+                items: [
+                  { value: 'all', label: 'Trạng thái: Tất cả' },
+                  { value: 'balanced', label: 'Đã cân bằng kho' },
+                  { value: 'has_diff', label: 'Có chênh lệch' },
+                  { value: 'draft', label: 'Phiếu nháp' },
+                ],
+                onChange: setStocktakeStatusFilter,
+              },
+            ]}
+            onClearFilters={() => {
+              setSearch('');
+              setStocktakeStatusFilter('all');
+              setDateRange({ from: null, to: null });
+            }}
             primaryAction={{
               label: '+ Tạo phiếu kiểm kê',
               onClick: onOpenStocktakeModal,
@@ -1429,10 +1563,29 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
       {currentTab === 'lich-su' && (
         <div className="space-y-4">
           <FilterToolbar
-            searchPlaceholder="Tìm sản phẩm, chứng từ..."
+            searchPlaceholder="Tìm sản phẩm, SKU, chứng từ..."
             searchValue={search}
             onSearchChange={setSearch}
-            onClearFilters={() => setSearch('')}
+            dateRange={dateRange}
+            onDateRangeChange={setDateRange}
+            filters={[
+              {
+                label: 'Loại biến động',
+                key: 'movement_type',
+                value: movementTypeFilter,
+                items: [
+                  { value: 'all', label: 'Biến động: Tất cả' },
+                  { value: 'in', label: 'Tăng tồn (Nhập kho, trả hàng)' },
+                  { value: 'out', label: 'Giảm tồn (Xuất bán, trả NCC)' },
+                ],
+                onChange: setMovementTypeFilter,
+              },
+            ]}
+            onClearFilters={() => {
+              setSearch('');
+              setMovementTypeFilter('all');
+              setDateRange({ from: null, to: null });
+            }}
           />
 
           <DataTable
