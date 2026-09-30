@@ -24,6 +24,25 @@ export const CompanyGeneralTab: React.FC = () => {
       website,
       logo_url: logoUrl,
     });
+    try {
+      localStorage.setItem('lkerp_company_settings', JSON.stringify({
+        ...companySettings,
+        company_name: companyName,
+        address,
+        phone,
+        email,
+        tax_code: taxCode,
+        website,
+        logo_url: logoUrl,
+      }));
+      if (logoUrl) {
+        localStorage.setItem('lkerp_company_logo', logoUrl);
+      } else {
+        localStorage.removeItem('lkerp_company_logo');
+      }
+    } catch (e) {
+      console.warn('Failed to save to localStorage:', e);
+    }
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };

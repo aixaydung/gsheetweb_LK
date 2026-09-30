@@ -65,12 +65,85 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
   debtAmount = 0,
   note,
 }) => {
-  const { companySettings } = useApp();
+  const { companySettings, updateSettings } = useApp();
   const [paperSize, setPaperSize] = useState<'A4' | 'A5' | 'K80'>('A4');
   const [docTitle, setDocTitle] = useState(documentType);
   const [recipientEmail, setRecipientEmail] = useState(partnerEmail ? partnerEmail.trim() : '');
   const [emailError, setEmailError] = useState<string>('');
   const emailInputRef = useRef<HTMLInputElement>(null);
+
+  // Logo state synced with company settings and localStorage
+  const getStoredLogo = () => {
+    if (companySettings?.logo_url && companySettings.logo_url.trim()) {
+      return companySettings.logo_url.trim();
+    }
+    const backupLogo =
+      localStorage.getItem('lkerp_company_logo') ||
+      localStorage.getItem('company_logo') ||
+      localStorage.getItem('lkerp_logo');
+    if (backupLogo && backupLogo.trim()) return backupLogo.trim();
+
+    try {
+      const stored = localStorage.getItem('lkerp_company_settings');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.logo_url && parsed.logo_url.trim()) return parsed.logo_url.trim();
+      }
+    } catch {
+      // ignore
+    }
+    return '';
+  };
+
+  const [customLogoUrl, setCustomLogoUrl] = useState<string>(getStoredLogo);
+
+  useEffect(() => {
+    if (isOpen) {
+      setCustomLogoUrl(getStoredLogo());
+    }
+  }, [isOpen, companySettings?.logo_url]);
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const dataUrl = ev.target?.result as string;
+      if (dataUrl) {
+        setCustomLogoUrl(dataUrl);
+        updateSettings({ logo_url: dataUrl });
+        try {
+          localStorage.setItem('lkerp_company_logo', dataUrl);
+          const currentSettings = localStorage.getItem('lkerp_company_settings');
+          const parsed = currentSettings ? JSON.parse(currentSettings) : {};
+          localStorage.setItem(
+            'lkerp_company_settings',
+            JSON.stringify({ ...parsed, logo_url: dataUrl })
+          );
+        } catch (err) {
+          console.warn('Storage save warning:', err);
+        }
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveLogo = () => {
+    setCustomLogoUrl('');
+    updateSettings({ logo_url: '' });
+    try {
+      localStorage.removeItem('lkerp_company_logo');
+      const currentSettings = localStorage.getItem('lkerp_company_settings');
+      if (currentSettings) {
+        const parsed = JSON.parse(currentSettings);
+        delete parsed.logo_url;
+        localStorage.setItem('lkerp_company_settings', JSON.stringify(parsed));
+      }
+    } catch (err) {
+      console.warn('Storage save warning:', err);
+    }
+  };
 
   // Bank accounts & VietQR configuration
   const [bankAccounts, setBankAccounts] = useState<BankAccountItem[]>(() =>
@@ -434,9 +507,10 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
             page-break-inside: avoid;
           }
           img.company-logo {
-            max-height: 46px;
-            max-width: 120px;
-            object-fit: contain;
+            max-height: 48px !important;
+            max-width: 140px !important;
+            object-fit: contain !important;
+            display: block !important;
           }
           img.qr-code-img {
             width: ${paperSize === 'K80' ? '90px' : '100px'} !important;
@@ -639,15 +713,61 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
               Bật tắt cho riêng lần in này
             </label>
             <div className="space-y-2.5 bg-[#F9FAFB] dark:bg-gray-800/40 p-3.5 rounded-[14px] border border-[#F1F2F5] dark:border-gray-800 max-h-60 overflow-y-auto">
-              <label className="flex items-center gap-2.5 text-[12.5px] text-[#374151] dark:text-gray-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={options.logo}
-                  onChange={() => toggleOption('logo')}
-                  className="w-4 h-4 rounded border-gray-300 text-[#6D3EEB] focus:ring-[#6D3EEB] accent-[#6D3EEB]"
-                />
-                <span>Logo & thông tin doanh nghiệp</span>
-              </label>
+              <div>
+                <label className="flex items-center gap-2.5 text-[12.5px] text-[#374151] dark:text-gray-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={options.logo}
+                    onChange={() => toggleOption('logo')}
+                    className="w-4 h-4 rounded border-gray-300 text-[#6D3EEB] focus:ring-[#6D3EEB] accent-[#6D3EEB]"
+                  />
+                  <span>Logo & thông tin doanh nghiệp</span>
+                </label>
+
+                {options.logo && (
+                  <div className="mt-2 ml-6.5 p-2 bg-white dark:bg-gray-800 rounded-lg border border-dashed border-gray-200 dark:border-gray-700 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {customLogoUrl ? (
+                        <img
+                          src={customLogoUrl}
+                          alt="Logo preview"
+                          className="w-7 h-7 object-contain rounded bg-white border border-gray-200 dark:border-gray-700 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-7 h-7 rounded border border-gray-300 dark:border-gray-600 flex items-center justify-center font-bold text-[10px] text-gray-500 bg-gray-50 dark:bg-gray-700 shrink-0">
+                          LK
+                        </div>
+                      )}
+                      <span className="text-[11px] text-gray-600 dark:text-gray-400 truncate">
+                        {customLogoUrl ? 'Logo công ty' : 'Chưa có ảnh logo'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <label className="px-2 py-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 text-[11px] font-medium rounded cursor-pointer transition-colors flex items-center gap-1">
+                        <Icon name="upload" size={13} />
+                        <span>{customLogoUrl ? 'Đổi logo' : 'Tải logo'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleLogoUpload}
+                        />
+                      </label>
+                      {customLogoUrl && (
+                        <button
+                          type="button"
+                          onClick={handleRemoveLogo}
+                          title="Xóa logo"
+                          className="p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition-colors"
+                        >
+                          <Icon name="close" size={13} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
               <label className="flex items-center gap-2.5 text-[12.5px] text-[#374151] dark:text-gray-300 cursor-pointer">
                 <input
                   type="checkbox"
@@ -817,26 +937,30 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
                 borderBottom: '2px solid #000000',
               }}
             >
-              <div className="brand" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+              <div className="brand" style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
                 {options.logo && (
-                  companySettings.logo_url ? (
+                  customLogoUrl ? (
                     <img
-                      src={companySettings.logo_url}
+                      src={customLogoUrl}
                       alt="Logo"
                       className="company-logo"
+                      crossOrigin="anonymous"
                       style={{
-                        width: '46px',
-                        height: '46px',
+                        maxHeight: '48px',
+                        maxWidth: '140px',
                         objectFit: 'contain',
-                        borderRadius: '8px',
-                        border: '1.5px solid #000000',
-                        padding: '2px',
+                        display: 'block',
                         flexShrink: 0,
+                      }}
+                      onError={e => {
+                        e.currentTarget.style.display = 'none';
+                        const fb = e.currentTarget.parentElement?.querySelector('.logo-fallback');
+                        if (fb) (fb as HTMLElement).style.display = 'flex';
                       }}
                     />
                   ) : (
                     <div
-                      className="logo"
+                      className="logo logo-fallback"
                       style={{
                         width: '46px',
                         height: '46px',
@@ -845,13 +969,14 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontWeight: 700,
+                        fontWeight: 800,
                         fontSize: '16px',
+                        letterSpacing: '0.5px',
                         flexShrink: 0,
                         color: '#000000',
                       }}
                     >
-                      {(companySettings.company_name || 'LK').substring(0, 2).toUpperCase()}
+                      LK
                     </div>
                   )
                 )}

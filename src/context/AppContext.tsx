@@ -181,9 +181,17 @@ function getInitialState<T>(key: string, fallback: T): T {
 }
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [companySettings, setCompanySettings] = useState<CompanySettings>(() =>
-    getInitialState('company_settings', INITIAL_COMPANY_SETTINGS)
-  );
+  const [companySettings, setCompanySettings] = useState<CompanySettings>(() => {
+    const base = getInitialState('company_settings', INITIAL_COMPANY_SETTINGS);
+    const backupLogo =
+      localStorage.getItem('lkerp_company_logo') ||
+      localStorage.getItem('company_logo') ||
+      localStorage.getItem('lkerp_logo');
+    if (backupLogo && !base.logo_url) {
+      return { ...INITIAL_COMPANY_SETTINGS, ...base, logo_url: backupLogo };
+    }
+    return { ...INITIAL_COMPANY_SETTINGS, ...base };
+  });
   const [warehouses, setWarehouses] = useState<Warehouse[]>(() =>
     getInitialState('warehouses', INITIAL_WAREHOUSES)
   );
@@ -696,6 +704,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem(STORAGE_PREFIX + 'recent_tabs', JSON.stringify(recentTabs));
   }, [recentTabs]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_PREFIX + 'company_settings', JSON.stringify(companySettings));
+      if (companySettings.logo_url) {
+        localStorage.setItem('lkerp_company_logo', companySettings.logo_url);
+      }
+    } catch (e) {
+      console.warn('Failed to save company settings to localStorage', e);
+    }
+  }, [companySettings]);
 
   const addRecentTab = (tab: { module: string; tab: string; label: string; url: string }) => {
     setRecentTabs(prev => {
@@ -2792,7 +2811,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateSettings = (settingsData: Partial<CompanySettings>) => {
-    setCompanySettings(prev => ({ ...prev, ...settingsData }));
+    setCompanySettings(prev => {
+      const updated = { ...prev, ...settingsData };
+      try {
+        localStorage.setItem(STORAGE_PREFIX + 'company_settings', JSON.stringify(updated));
+        if (updated.logo_url) {
+          localStorage.setItem('lkerp_company_logo', updated.logo_url);
+        } else if (settingsData.logo_url === '') {
+          localStorage.removeItem('lkerp_company_logo');
+        }
+      } catch (e) {
+        console.warn('Failed to save company settings in updateSettings', e);
+      }
+      return updated;
+    });
     logActivity({
       action: 'update',
       entity_type: 'settings',
