@@ -3,6 +3,11 @@ import { Modal } from '../ui/Modal';
 import { Icon } from '../ui/Icon';
 import { useApp } from '../../context/AppContext';
 import { formatCurrency, formatDate, formatDateTime } from '../../lib/format';
+import {
+  BankAccountItem,
+  getStoredBankAccounts,
+  buildVietQrUrl,
+} from '../../lib/bankUtils';
 
 interface PrintDialogProps {
   isOpen: boolean;
@@ -62,16 +67,55 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
   const [emailError, setEmailError] = useState<string>('');
   const emailInputRef = useRef<HTMLInputElement>(null);
 
+  // Bank accounts & VietQR configuration
+  const [bankAccounts, setBankAccounts] = useState<BankAccountItem[]>(() =>
+    getStoredBankAccounts(companySettings)
+  );
+  const [selectedBankId, setSelectedBankId] = useState<string>(() => {
+    const accs = getStoredBankAccounts(companySettings);
+    const def = accs.find(a => a.isDefault) || accs[0];
+    return def ? def.id : '';
+  });
+  const [qrAddInfo, setQrAddInfo] = useState<string>(code || '');
+  const [qrIncludeAmount, setQrIncludeAmount] = useState<boolean>(true);
+
   useEffect(() => {
     if (isOpen) {
       setRecipientEmail(partnerEmail ? partnerEmail.trim() : '');
       setEmailError('');
+      const accs = getStoredBankAccounts(companySettings);
+      setBankAccounts(accs);
+      const def = accs.find(a => a.isDefault) || accs[0];
+      if (def && (!selectedBankId || !accs.some(a => a.id === selectedBankId))) {
+        setSelectedBankId(def.id);
+      }
+      setQrAddInfo(code || '');
     }
-  }, [partnerEmail, isOpen]);
+  }, [partnerEmail, isOpen, companySettings, code]);
 
   useEffect(() => {
     setDocTitle(documentType);
   }, [documentType]);
+
+  const activeAccount =
+    bankAccounts.find(a => a.id === selectedBankId) ||
+    bankAccounts.find(a => a.isDefault) ||
+    bankAccounts[0];
+
+  const qrAmount = qrIncludeAmount ? (debtAmount > 0 ? debtAmount : total) : 0;
+  const qrTransferContent = qrAddInfo.trim() || code || 'Thanh toan';
+
+  const qrCodeUrl = activeAccount?.accountNo
+    ? buildVietQrUrl({
+        bankBin: activeAccount.bankBin,
+        bankCode: activeAccount.bankCode,
+        accountNo: activeAccount.accountNo,
+        accountName: activeAccount.accountName,
+        amount: qrAmount,
+        addInfo: qrTransferContent,
+        template: 'qr_only',
+      })
+    : '';
 
   const printPaperRef = useRef<HTMLDivElement>(null);
 
@@ -214,7 +258,27 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
             margin-top: 36px;
             text-align: center;
           }
-          img { max-height: 50px; max-width: 150px; object-fit: contain; }
+          img.company-logo {
+            max-height: 48px;
+            max-width: 130px;
+            object-fit: contain;
+          }
+          img.qr-code-img {
+            width: ${paperSize === 'K80' ? '90px' : '105px'} !important;
+            height: ${paperSize === 'K80' ? '90px' : '105px'} !important;
+            max-width: ${paperSize === 'K80' ? '90px' : '105px'} !important;
+            max-height: ${paperSize === 'K80' ? '90px' : '105px'} !important;
+            object-fit: contain !important;
+            display: block !important;
+          }
+          .qr-container {
+            margin: 10px 0;
+            padding: 8px 12px;
+            border: 1px solid #000000;
+            border-radius: 4px;
+            background: #ffffff;
+            page-break-inside: avoid;
+          }
         </style>
       </head>
       <body>
@@ -226,7 +290,12 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
     `);
     doc.close();
 
-    setTimeout(() => {
+    // Ensure images inside iframe are loaded before printing
+    const imgs = doc.querySelectorAll('img');
+    let loadedCount = 0;
+    const totalImgs = imgs.length;
+
+    const triggerPrint = () => {
       try {
         iframe.contentWindow?.focus();
         iframe.contentWindow?.print();
@@ -234,10 +303,42 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
         console.error('Print iframe error:', err);
       } finally {
         setTimeout(() => {
-          document.body.removeChild(iframe);
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
         }, 1500);
       }
-    }, 250);
+    };
+
+    if (totalImgs === 0) {
+      setTimeout(triggerPrint, 250);
+    } else {
+      let isTriggered = false;
+      const onImageFinish = () => {
+        loadedCount++;
+        if (loadedCount >= totalImgs && !isTriggered) {
+          isTriggered = true;
+          setTimeout(triggerPrint, 200);
+        }
+      };
+
+      imgs.forEach(img => {
+        if (img.complete) {
+          onImageFinish();
+        } else {
+          img.onload = onImageFinish;
+          img.onerror = onImageFinish;
+        }
+      });
+
+      // Safety timeout in case an image takes too long
+      setTimeout(() => {
+        if (!isTriggered) {
+          isTriggered = true;
+          triggerPrint();
+        }
+      }, 1000);
+    }
   };
 
   const handleSendEmail = () => {
@@ -468,6 +569,65 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
               </label>
             </div>
           </div>
+
+          {/* Bank Account Selector & QR Configuration Panel */}
+          {options.qrCode && (
+            <div className="p-3.5 bg-[#FAF5FF] dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/50 rounded-[14px] space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] font-bold uppercase tracking-wider text-[#6D3EEB] dark:text-[#C084FC] flex items-center gap-1.5">
+                  <Icon name="qr_code_2" size={16} />
+                  Tài khoản nhận thanh toán
+                </span>
+                <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">
+                  {bankAccounts.length} tài khoản
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-[11.5px] font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Chọn tài khoản hiển thị mã QR:
+                </label>
+                <select
+                  value={selectedBankId}
+                  onChange={e => setSelectedBankId(e.target.value)}
+                  className="w-full h-9 px-2.5 bg-white dark:bg-gray-800 border border-purple-200 dark:border-purple-800/60 rounded-[8px] text-[12.5px] text-[#111827] dark:text-white focus:outline-none focus:border-[#6D3EEB]"
+                >
+                  {bankAccounts.map(acc => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.bankCode} - {acc.accountNo} ({acc.bankName.split('(')[0].trim()}) {acc.isDefault ? '★ Mặc định' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2 pt-1.5 border-t border-purple-100 dark:border-purple-900/40 text-[12px]">
+                <div>
+                  <label className="block text-[11px] font-medium text-gray-600 dark:text-gray-400 mb-1">
+                    Nội dung chuyển khoản (tự động):
+                  </label>
+                  <input
+                    type="text"
+                    value={qrAddInfo}
+                    onChange={e => setQrAddInfo(e.target.value)}
+                    placeholder={`VD: ${code}`}
+                    className="w-full h-8 px-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-[6px] text-[12px] text-[#111827] dark:text-white focus:outline-none focus:border-[#6D3EEB]"
+                  />
+                </div>
+
+                <label className="flex items-center gap-2 cursor-pointer text-gray-700 dark:text-gray-300 pt-1">
+                  <input
+                    type="checkbox"
+                    checked={qrIncludeAmount}
+                    onChange={e => setQrIncludeAmount(e.target.checked)}
+                    className="w-4 h-4 rounded text-[#6D3EEB] accent-[#6D3EEB]"
+                  />
+                  <span>
+                    Kèm số tiền: <strong className="text-[#6D3EEB] dark:text-purple-300">{formatCurrency(qrAmount)}</strong>
+                  </span>
+                </label>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right Preview Frame (Matching Document layout in Image) */}
@@ -520,6 +680,7 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
                           <img
                             src={companySettings.logo_url}
                             alt="Logo"
+                            className="company-logo"
                             style={{ maxHeight: '48px', maxWidth: '120px', objectFit: 'contain' }}
                           />
                         </td>
@@ -828,44 +989,117 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
             )}
 
             {/* QR Code if enabled */}
-            {options.qrCode && (
+            {options.qrCode && activeAccount && (
               <div
+                className="qr-container"
                 style={{
-                  margin: '8px 0',
-                  padding: '8px',
-                  border: '1px solid #cccccc',
-                  borderRadius: '4px',
+                  margin: '12px 0',
+                  padding: '10px 14px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '12px',
-                  backgroundColor: '#f9f9f9',
-                  width: '240px',
+                  gap: paperSize === 'K80' ? '10px' : '16px',
+                  backgroundColor: '#fbfcfd',
+                  width: paperSize === 'K80' ? '100%' : 'fit-content',
+                  maxWidth: '100%',
+                  flexDirection: paperSize === 'K80' ? 'column' : 'row',
                 }}
               >
+                {/* QR Code Box */}
                 <div
                   style={{
-                    width: '56px',
-                    height: '56px',
+                    width: paperSize === 'K80' ? '92px' : '108px',
+                    height: paperSize === 'K80' ? '92px' : '108px',
                     backgroundColor: '#ffffff',
-                    border: '1px solid #ddd',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '4px',
+                    padding: '3px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontFamily: 'monospace',
-                    fontSize: '9px',
-                    textAlign: 'center',
-                    padding: '4px',
-                    color: '#6d3eeb',
+                    flexShrink: 0,
                   }}
                 >
-                  VietQR
-                </div>
-                <div style={{ fontSize: '11px', lineHeight: '1.3' }}>
-                  <div style={{ fontWeight: 'bold', color: '#111827' }}>Quét mã VietQR</div>
-                  <div style={{ color: '#4b5563', marginTop: '2px' }}>
-                    Số TK: {companySettings.bank_account_no}
+                  <img
+                    src={qrCodeUrl}
+                    alt="VietQR"
+                    className="qr-code-img"
+                    crossOrigin="anonymous"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'contain',
+                      display: 'block',
+                    }}
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                      const fallback = e.currentTarget.parentElement?.querySelector('.qr-fallback');
+                      if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                    }}
+                  />
+                  <div
+                    className="qr-fallback"
+                    style={{
+                      display: 'none',
+                      width: '100%',
+                      height: '100%',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      textAlign: 'center',
+                      color: '#6d3eeb',
+                      fontSize: '9px',
+                      fontWeight: 600,
+                    }}
+                  >
+                    <span style={{ fontSize: '11px', fontWeight: 800 }}>VIETQR</span>
+                    <span style={{ fontSize: '8px', color: '#6b7280' }}>{activeAccount.bankCode}</span>
                   </div>
-                  <div style={{ color: '#6d3eeb', fontWeight: 600 }}>{companySettings.bank_name}</div>
+                </div>
+
+                {/* Account Details */}
+                <div
+                  style={{
+                    fontSize: paperSize === 'K80' ? '10.5px' : '11.5px',
+                    lineHeight: '1.45',
+                    textAlign: paperSize === 'K80' ? 'center' : 'left',
+                    color: '#1f2937',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontWeight: 800,
+                      color: '#111827',
+                      fontSize: paperSize === 'K80' ? '11px' : '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      justifyContent: paperSize === 'K80' ? 'center' : 'flex-start',
+                      marginBottom: '2px',
+                    }}
+                  >
+                    <span style={{ color: '#dc2626' }}>VIET</span>
+                    <span style={{ color: '#2563eb' }}>QR</span>
+                    <span style={{ color: '#4b5563', fontSize: '10.5px', fontWeight: 600 }}>• NAPAS 247</span>
+                  </div>
+                  <div>
+                    Ngân hàng: <strong>{activeAccount.bankName || activeAccount.bankCode}</strong>
+                  </div>
+                  <div style={{ marginTop: '1px' }}>
+                    Số TK: <strong style={{ fontFamily: 'monospace', fontSize: '13px', letterSpacing: '0.4px', color: '#111827' }}>{activeAccount.accountNo}</strong>
+                  </div>
+                  <div style={{ marginTop: '1px' }}>
+                    Chủ TK: <strong style={{ textTransform: 'uppercase' }}>{activeAccount.accountName}</strong>
+                  </div>
+                  {qrIncludeAmount && (qrAmount > 0) && (
+                    <div style={{ marginTop: '1px', color: '#15803d' }}>
+                      Số tiền: <strong>{formatCurrency(qrAmount)}</strong>
+                    </div>
+                  )}
+                  <div style={{ marginTop: '1px', color: '#4b5563' }}>
+                    Nội dung: <strong style={{ fontFamily: 'monospace', color: '#6d3eeb' }}>{qrTransferContent}</strong>
+                  </div>
                 </div>
               </div>
             )}

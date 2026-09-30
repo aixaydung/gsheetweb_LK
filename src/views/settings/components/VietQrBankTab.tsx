@@ -2,51 +2,21 @@ import React, { useState } from 'react';
 import { useApp } from '../../../context/AppContext';
 import { VIETNAM_BANKS_REFERENCE } from '../settingsData';
 import { Icon } from '../../../components/ui/Icon';
+import {
+  BankAccountItem,
+  BANK_ACCOUNTS_STORAGE_KEY,
+  getStoredBankAccounts,
+} from '../../../lib/bankUtils';
 
-export interface BankAccountItem {
-  id: string;
-  bankCode: string;
-  bankBin: string;
-  bankName: string;
-  accountNo: string;
-  accountName: string;
-  defaultContent: string;
-  printLine: string;
-  isDefault: boolean;
-}
+export type { BankAccountItem };
 
 export const VietQrBankTab: React.FC = () => {
   const { companySettings, updateSettings } = useApp();
 
   // Load multiple bank accounts from localStorage or initialize with existing company settings
-  const [bankAccounts, setBankAccounts] = useState<BankAccountItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('lkerp_bank_accounts') || localStorage.getItem('nexupone_bank_accounts');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      }
-    } catch {
-      // fallback
-    }
-
-    // Initial default bank account
-    return [
-      {
-        id: 'ba_1',
-        bankCode: 'MB',
-        bankBin: companySettings.bank_bin || '970422',
-        bankName: companySettings.bank_name || 'MB Bank (Quân Đội)',
-        accountNo: companySettings.bank_account_no || '0336243202',
-        accountName: companySettings.bank_account_name || 'CTY LK ERP',
-        defaultContent: 'Thanh toan don hang',
-        printLine: `MB - ${companySettings.bank_account_no || '0336243202'} - ${companySettings.bank_account_name || 'CTY LK ERP'}`,
-        isDefault: true,
-      },
-    ];
-  });
+  const [bankAccounts, setBankAccounts] = useState<BankAccountItem[]>(() =>
+    getStoredBankAccounts(companySettings)
+  );
 
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
