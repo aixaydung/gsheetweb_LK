@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { getSheetData, appendSheetData, updateSheetData } from '../google-sheets.js';
+import { getSheetData, appendSheetData, updateSheetData, clearSheetData } from '../google-sheets.js';
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY';
 const PO_SHEET = 'PURCHASE_ORDERS';
@@ -191,4 +191,87 @@ export const updatePurchaseStatus = async (id: string, newStatus: string) => {
 
   // Status column is P (column 16)
   await updateSheetData(SPREADSHEET_ID, `${PO_SHEET}!P${target.rowIndex}:P${target.rowIndex}`, [[newStatus]]);
+};
+
+export const updatePurchaseWithItems = async (
+  id: string,
+  poData: Partial<PurchaseOrderRecord>,
+  items?: PurchaseOrderItemRecord[]
+) => {
+  const purchases = await getAllPurchases();
+  const target = purchases.find(p => p.id === id);
+  if (!target || !target.rowIndex) throw new Error('Purchase order not found');
+
+  const updatedRow = [
+    target.id,
+    poData.code ?? target.code,
+    poData.supplier_id ?? target.supplier_id,
+    poData.supplier_name ?? target.supplier_name,
+    poData.order_date ?? target.order_date,
+    poData.expected_date ?? target.expected_date,
+    poData.subtotal ?? target.subtotal,
+    poData.discount_amount ?? target.discount_amount,
+    poData.vat_rate ?? target.vat_rate,
+    poData.vat_amount ?? target.vat_amount,
+    poData.shipping_fee ?? target.shipping_fee,
+    poData.total ?? target.total,
+    poData.paid_amount ?? target.paid_amount,
+    poData.debt_amount ?? target.debt_amount,
+    poData.payment_status ?? target.payment_status,
+    poData.status ?? target.status,
+    poData.note ?? target.note,
+    target.created_by || 'Hệ thống',
+    target.created_at,
+  ];
+
+  await updateSheetData(
+    SPREADSHEET_ID,
+    `${PO_SHEET}!A${target.rowIndex}:S${target.rowIndex}`,
+    [updatedRow]
+  );
+
+  if (items && Array.isArray(items)) {
+    const rawItemRows = await getSheetData(SPREADSHEET_ID, `${PO_ITEMS_SHEET}!A2:K`);
+    const remainingItems = rawItemRows.filter((r: any) => r[1] !== id);
+    const newItems = items.map(it => [
+      it.id || crypto.randomUUID(),
+      id,
+      it.product_id || '',
+      it.sku || '',
+      it.product_name || '',
+      it.unit || 'Cái',
+      it.quantity || 1,
+      it.unit_price || 0,
+      it.discount_amount || 0,
+      it.line_total || 0,
+      it.note || '',
+    ]);
+    const allItemRows = [...remainingItems, ...newItems];
+    await clearSheetData(SPREADSHEET_ID, `${PO_ITEMS_SHEET}!A2:K`);
+    if (allItemRows.length > 0) {
+      await updateSheetData(SPREADSHEET_ID, `${PO_ITEMS_SHEET}!A2:K${allItemRows.length + 1}`, allItemRows);
+    }
+  }
+
+  return { ...target, ...poData, items: items || target.items };
+};
+
+export const deletePurchase = async (id: string) => {
+  // 1. Remove from PURCHASE_ORDERS
+  const rawRows = await getSheetData(SPREADSHEET_ID, `${PO_SHEET}!A2:S`);
+  const remaining = rawRows.filter((r: any) => r[0] !== id);
+  await clearSheetData(SPREADSHEET_ID, `${PO_SHEET}!A2:S`);
+  if (remaining.length > 0) {
+    await updateSheetData(SPREADSHEET_ID, `${PO_SHEET}!A2:S${remaining.length + 1}`, remaining);
+  }
+
+  // 2. Remove from PURCHASE_ORDER_ITEMS
+  const rawItemRows = await getSheetData(SPREADSHEET_ID, `${PO_ITEMS_SHEET}!A2:K`);
+  const remainingItems = rawItemRows.filter((r: any) => r[1] !== id);
+  await clearSheetData(SPREADSHEET_ID, `${PO_ITEMS_SHEET}!A2:K`);
+  if (remainingItems.length > 0) {
+    await updateSheetData(SPREADSHEET_ID, `${PO_ITEMS_SHEET}!A2:K${remainingItems.length + 1}`, remainingItems);
+  }
+
+  return { id, deleted: true };
 };

@@ -1,4 +1,4 @@
-import { getSheetData, appendSheetData, updateSheetData, ensureSheetExists } from '../google-sheets.js';
+import { getSheetData, appendSheetData, updateSheetData, clearSheetData, ensureSheetExists } from '../google-sheets.js';
 import crypto from 'crypto';
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY';
@@ -177,6 +177,85 @@ export const updateQuotationStatus = async (
   return { id, status: newStatus, converted_invoice_id: newConvertedId, note: newNote };
 };
 
+export const updateQuotationWithItems = async (
+  id: string,
+  quoteData: Partial<QuotationRecord>,
+  items?: any[]
+) => {
+  const quotes = await getAllQuotations();
+  const target = quotes.find(q => q.id === id);
+  if (!target || !target.rowIndex) throw new Error('Quotation not found');
+
+  const updatedRow = [
+    target.id,
+    quoteData.code ?? target.code,
+    quoteData.customer_id ?? target.customer_id,
+    quoteData.customer_name ?? target.customer_name,
+    quoteData.customer_phone ?? target.customer_phone,
+    quoteData.quote_date ?? target.quote_date,
+    quoteData.expires_at ?? target.expires_at,
+    quoteData.subtotal ?? target.subtotal,
+    quoteData.discount_type ?? target.discount_type,
+    quoteData.discount_value ?? target.discount_value,
+    quoteData.discount_amount ?? target.discount_amount,
+    quoteData.vat_rate ?? target.vat_rate,
+    quoteData.vat_amount ?? target.vat_amount,
+    quoteData.shipping_fee ?? target.shipping_fee,
+    quoteData.total ?? target.total,
+    quoteData.status ?? target.status,
+    quoteData.converted_invoice_id ?? target.converted_invoice_id,
+    quoteData.note ?? target.note,
+    target.created_at,
+  ];
+
+  await updateSheetData(
+    SPREADSHEET_ID,
+    `${QUOTATIONS_SHEET}!A${target.rowIndex}:S${target.rowIndex}`,
+    [updatedRow]
+  );
+
+  if (items && Array.isArray(items)) {
+    const rawItemRows = await getSheetData(SPREADSHEET_ID, `${QUOTATION_ITEMS_SHEET}!A2:K`);
+    const remainingItems = rawItemRows.filter((r: any) => r[1] !== id);
+    const newItems = items.map(item => [
+      item.id || crypto.randomUUID(),
+      id,
+      item.product_id || '',
+      item.sku || '',
+      item.product_name || '',
+      item.unit || 'Cái',
+      item.quantity || 1,
+      item.unit_price || 0,
+      item.discount_amount || 0,
+      item.line_total || ((item.quantity || 1) * (item.unit_price || 0)),
+      item.note || '',
+    ]);
+    const allItemRows = [...remainingItems, ...newItems];
+    await clearSheetData(SPREADSHEET_ID, `${QUOTATION_ITEMS_SHEET}!A2:K`);
+    if (allItemRows.length > 0) {
+      await updateSheetData(SPREADSHEET_ID, `${QUOTATION_ITEMS_SHEET}!A2:K${allItemRows.length + 1}`, allItemRows);
+    }
+  }
+
+  return { ...target, ...quoteData, items: items || target.items };
+};
+
 export const deleteQuotation = async (id: string) => {
-  return await updateQuotationStatus(id, 'cancelled');
+  // 1. Remove from QUOTATIONS
+  const rawRows = await getSheetData(SPREADSHEET_ID, `${QUOTATIONS_SHEET}!A2:S`);
+  const remaining = rawRows.filter((r: any) => r[0] !== id);
+  await clearSheetData(SPREADSHEET_ID, `${QUOTATIONS_SHEET}!A2:S`);
+  if (remaining.length > 0) {
+    await updateSheetData(SPREADSHEET_ID, `${QUOTATIONS_SHEET}!A2:S${remaining.length + 1}`, remaining);
+  }
+
+  // 2. Remove from QUOTATION_ITEMS
+  const rawItemRows = await getSheetData(SPREADSHEET_ID, `${QUOTATION_ITEMS_SHEET}!A2:K`);
+  const remainingItems = rawItemRows.filter((r: any) => r[1] !== id);
+  await clearSheetData(SPREADSHEET_ID, `${QUOTATION_ITEMS_SHEET}!A2:K`);
+  if (remainingItems.length > 0) {
+    await updateSheetData(SPREADSHEET_ID, `${QUOTATION_ITEMS_SHEET}!A2:K${remainingItems.length + 1}`, remainingItems);
+  }
+
+  return { id, deleted: true };
 };

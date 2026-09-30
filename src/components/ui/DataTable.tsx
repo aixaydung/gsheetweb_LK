@@ -23,7 +23,7 @@ interface DataTableProps<T> {
   emptyMessage?: string;
   emptyActionText?: string;
   onEmptyAction?: () => void;
-  onDeleteSelected?: () => void;
+  onDeleteSelected?: (selectedIds: string[]) => void;
   onExportSelected?: () => void;
   className?: string;
 }
@@ -98,7 +98,7 @@ export function DataTable<T>({
           {onDeleteSelected && (
             <button
               type="button"
-              onClick={onDeleteSelected}
+              onClick={() => onDeleteSelected(selectedIds)}
               className="hover:text-rose-400 font-medium flex items-center gap-1 cursor-pointer text-rose-300"
             >
               <Icon name="delete" size={16} />

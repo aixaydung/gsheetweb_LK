@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { getSheetData, appendSheetData, updateSheetData } from '../google-sheets.js';
+import { getSheetData, appendSheetData, updateSheetData, clearSheetData } from '../google-sheets.js';
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY';
 const SHEET_NAME = 'PAYMENTS';
@@ -109,4 +109,45 @@ export const cancelPayment = async (id: string) => {
 
   // Status column is L (column 12)
   await updateSheetData(SPREADSHEET_ID, `${SHEET_NAME}!L${target.rowIndex}:L${target.rowIndex}`, [['cancelled']]);
+};
+
+export const updatePayment = async (id: string, data: Partial<PaymentRecord>) => {
+  const payments = await getAllPayments();
+  const target = payments.find(p => p.id === id);
+  if (!target || !target.rowIndex) throw new Error('Payment record not found');
+
+  const updatedRow = [
+    target.id,
+    data.code ?? target.code,
+    data.payment_date ?? target.payment_date,
+    data.direction ?? target.direction,
+    data.partner_type ?? target.partner_type,
+    data.partner_id ?? target.partner_id,
+    data.partner_name ?? target.partner_name,
+    data.amount ?? target.amount,
+    data.payment_method ?? data.method ?? target.payment_method,
+    data.reference_code ?? target.reference_code,
+    data.note ?? target.note,
+    data.status ?? target.status,
+    target.created_by || 'Hệ thống',
+    target.created_at,
+  ];
+
+  await updateSheetData(
+    SPREADSHEET_ID,
+    `${SHEET_NAME}!A${target.rowIndex}:N${target.rowIndex}`,
+    [updatedRow]
+  );
+
+  return { ...target, ...data };
+};
+
+export const deletePayment = async (id: string) => {
+  const rawRows = await getSheetData(SPREADSHEET_ID, `${SHEET_NAME}!A2:N`);
+  const remaining = rawRows.filter((r: any) => r[0] !== id);
+  await clearSheetData(SPREADSHEET_ID, `${SHEET_NAME}!A2:N`);
+  if (remaining.length > 0) {
+    await updateSheetData(SPREADSHEET_ID, `${SHEET_NAME}!A2:N${remaining.length + 1}`, remaining);
+  }
+  return { id, deleted: true };
 };

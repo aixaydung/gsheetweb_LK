@@ -20,9 +20,9 @@ export interface VendorRecord {
   rowIndex: number;
 }
 
-export const getAllVendors = async (): Promise<VendorRecord[]> => {
+export const getAllVendors = async (includeInactive = false): Promise<VendorRecord[]> => {
   const rows = await getSheetData(SPREADSHEET_ID, `${SHEET_NAME}!A2:L`);
-  return rows.map((row: any, index: number) => ({
+  const list = rows.map((row: any, index: number) => ({
     id: row[0] || '',
     code: row[1] || '',
     name: row[2] || '',
@@ -37,11 +37,13 @@ export const getAllVendors = async (): Promise<VendorRecord[]> => {
     updated_at: row[11] || '',
     rowIndex: index + 2,
   }));
+  if (includeInactive) return list;
+  return list.filter((v: any) => v.status !== 'inactive');
 };
 
 export const createVendor = async (data: Partial<VendorRecord>) => {
   const id = data.id || crypto.randomUUID();
-  const existing = await getAllVendors();
+  const existing = await getAllVendors(true);
   const nextNum = existing.length + 1;
   const code = data.code || `NCC-${String(nextNum).padStart(4, '0')}`;
   const now = new Date().toISOString();
@@ -66,7 +68,7 @@ export const createVendor = async (data: Partial<VendorRecord>) => {
 };
 
 export const createVendorsBatch = async (items: Partial<VendorRecord>[]) => {
-  const existing = await getAllVendors();
+  const existing = await getAllVendors(true);
   let nextNum = existing.length + 1;
   const now = new Date().toISOString();
   const created: any[] = [];
@@ -100,7 +102,7 @@ export const createVendorsBatch = async (items: Partial<VendorRecord>[]) => {
 };
 
 export const updateVendor = async (id: string, data: Partial<VendorRecord>) => {
-  const vendors = await getAllVendors();
+  const vendors = await getAllVendors(true);
   const target = vendors.find(v => v.id === id);
   if (!target) throw new Error(`Vendor with ID ${id} not found`);
 

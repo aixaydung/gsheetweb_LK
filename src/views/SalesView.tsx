@@ -57,6 +57,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
     updateQuotationStatus,
     convertQuotationToInvoice,
     deleteInvoice,
+    cancelInvoice,
     deleteCustomer,
     deleteCustomersBatch,
     deleteQuotation,
@@ -1011,6 +1012,12 @@ export const SalesView: React.FC<SalesViewProps> = ({
             keyExtractor={row => row.id}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
+            onDeleteSelected={(ids: string[]) => {
+              if (confirm(`Bạn có chắc muốn xóa ${ids.length} hóa đơn đã chọn?`)) {
+                ids.forEach(id => deleteInvoice(id));
+                setSelectedIds([]);
+              }
+            }}
             emptyMessage="Chưa có dữ liệu"
             emptyActionText="+ Tạo phiếu bán"
             onEmptyAction={onOpenCreateInvoice}
@@ -1101,7 +1108,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
             keyExtractor={row => row.id}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
-            onDeleteSelected={ids => {
+            onDeleteSelected={(ids: string[]) => {
               if (confirm(`Xóa ${ids.length} khách hàng đã chọn?`)) {
                 deleteCustomersBatch(ids);
                 setSelectedIds([]);
@@ -1175,7 +1182,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
             keyExtractor={row => row.id}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
-            onDeleteSelected={ids => {
+            onDeleteSelected={(ids: string[]) => {
               if (isAdmin) {
                 if (confirm(`[ADMIN] Xóa vĩnh viễn ${ids.length} báo giá đã chọn?`)) {
                   deleteQuotationsBatch(ids);
@@ -1187,7 +1194,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                     `Bạn có muốn HỦY ${ids.length} báo giá đã chọn? (Chuyển trạng thái 'Đã huỷ' để lưu vết sổ sách)`
                   )
                 ) {
-                  ids.forEach(id => updateQuotationStatus(id, 'cancelled'));
+                  ids.forEach((id: string) => updateQuotationStatus(id, 'cancelled'));
                   setSelectedIds([]);
                 }
               }
@@ -1262,7 +1269,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
             keyExtractor={row => row.id}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
-            onDeleteSelected={ids => {
+            onDeleteSelected={(ids: string[]) => {
               if (confirm(`Xóa ${ids.length} phiếu trả hàng đã chọn?`)) {
                 deleteSalesReturnsBatch(ids);
                 setSelectedIds([]);

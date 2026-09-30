@@ -74,17 +74,17 @@ export const AuditLogTab: React.FC = () => {
   }, [activityLogs, search, actionFilter]);
 
   const handleExport = () => {
-    const columns: ExportColumn[] = [
-      { key: 'occurred_at', header: 'Thời gian', format: val => formatDateTime(val) },
-      { key: 'user_name', header: 'Người thực hiện', format: val => val || 'Admin' },
-      { key: 'user_email', header: 'Email', format: val => val || 'admin@lkerp.vn' },
-      { key: 'action', header: 'Loại thao tác', format: val => ACTION_MAP[val]?.label || val },
+    const columns: ExportColumn<any>[] = [
+      { key: 'occurred_at', header: 'Thời gian', format: (val: any) => formatDateTime(val) },
+      { key: 'user_name', header: 'Người thực hiện', format: (val: any) => val || 'Admin' },
+      { key: 'user_email', header: 'Email', format: (val: any) => val || 'admin@lkerp.vn' },
+      { key: 'action', header: 'Loại thao tác', format: (val: any) => ACTION_MAP[val]?.label || val },
       { key: 'entity_code', header: 'Mã đối tượng' },
       { key: 'entity_type', header: 'Phân hệ' },
       { key: 'title', header: 'Nội dung chi tiết' },
-      { key: 'details', header: 'Ghi chú bổ sung', format: val => val || '—' },
-      { key: 'amount', header: 'Giá trị (VNĐ)', format: val => (val ? formatCurrency(val) : '—') },
-      { key: 'ip', header: 'Địa chỉ IP', format: val => val || '192.168.1.100' },
+      { key: 'details', header: 'Ghi chú bổ sung', format: (val: any) => val || '—' },
+      { key: 'amount', header: 'Giá trị (VNĐ)', format: (val: any) => (val ? formatCurrency(val) : '—') },
+      { key: 'ip', header: 'Địa chỉ IP', format: (val: any) => val || '192.168.1.100' },
     ];
 
     exportToExcelFile(filteredLogs, columns, 'Nhat_ky_he_thong_AuditTrail');

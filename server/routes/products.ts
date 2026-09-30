@@ -7,7 +7,8 @@ const router = Router();
 // GET all products
 router.get('/', requireAuth, async (req, res) => {
   try {
-    const products = await getAllProducts();
+    const includeInactive = req.query.include_inactive === 'true';
+    const products = await getAllProducts(includeInactive);
     res.json({ products });
   } catch (error: any) {
     console.error('Error fetching products:', error.message);
@@ -57,8 +58,9 @@ router.put('/:id', requireAuth, async (req, res) => {
 router.delete('/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    await deleteProduct(id);
-    res.json({ message: 'Product deleted successfully' });
+    const hard = req.query.hard === 'true';
+    const result = await deleteProduct(id, hard);
+    res.json({ success: true, message: hard ? 'Product permanently deleted' : 'Product archived', result });
   } catch (error: any) {
     console.error('Error deleting product:', error.message);
     res.status(500).json({ error: { code: 'DATABASE_ERROR', message: error.message } });

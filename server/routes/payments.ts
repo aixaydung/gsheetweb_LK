@@ -1,5 +1,12 @@
 import { Router } from 'express';
-import { getAllPayments, createPayment, cancelPayment, generatePaymentCode } from '../repositories/payments.js';
+import {
+  getAllPayments,
+  createPayment,
+  updatePayment,
+  cancelPayment,
+  deletePayment,
+  generatePaymentCode,
+} from '../repositories/payments.js';
 import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
@@ -37,6 +44,18 @@ router.post('/', requireAuth, async (req, res) => {
   }
 });
 
+// UPDATE payment
+router.put('/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updated = await updatePayment(id, req.body);
+    res.json({ payment: updated });
+  } catch (error: any) {
+    console.error('Error updating payment:', error.message);
+    res.status(500).json({ error: { code: 'DATABASE_ERROR', message: error.message } });
+  }
+});
+
 // CANCEL payment
 router.patch('/:id/cancel', requireAuth, async (req, res) => {
   try {
@@ -45,6 +64,18 @@ router.patch('/:id/cancel', requireAuth, async (req, res) => {
     res.json({ message: 'Payment cancelled successfully' });
   } catch (error: any) {
     console.error('Error cancelling payment:', error.message);
+    res.status(500).json({ error: { code: 'DATABASE_ERROR', message: error.message } });
+  }
+});
+
+// DELETE payment (hard delete)
+router.delete('/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await deletePayment(id);
+    res.json({ success: true, message: 'Payment deleted successfully' });
+  } catch (error: any) {
+    console.error('Error deleting payment:', error.message);
     res.status(500).json({ error: { code: 'DATABASE_ERROR', message: error.message } });
   }
 });

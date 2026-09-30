@@ -7,7 +7,8 @@ const router = Router();
 // GET all customers
 router.get('/', requireAuth, async (req, res) => {
   try {
-    const customers = await getAllCustomers();
+    const includeInactive = req.query.include_inactive === 'true';
+    const customers = await getAllCustomers(includeInactive);
     res.json({ customers });
   } catch (error: any) {
     console.error('Error fetching customers:', error.message);

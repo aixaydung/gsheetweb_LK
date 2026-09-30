@@ -1,9 +1,10 @@
 // Excel / CSV Export utility matching Section 9.1 & 9.2
 
-export interface ExportColumn<T> {
+export interface ExportColumn<T = any> {
   key: keyof T | string;
   header: string;
   accessor?: (row: T) => string | number | null | undefined;
+  format?: (val: any) => string | number | null | undefined;
 }
 
 export function exportToExcelFile<T>(
@@ -29,6 +30,9 @@ export function exportToExcelFile<T>(
           val = col.accessor(row);
         } else {
           val = (row as any)[col.key];
+          if (col.format) {
+            val = col.format(val);
+          }
         }
         return escapeCsvValue(val);
       })

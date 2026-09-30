@@ -136,7 +136,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ currentTab, onTabChange 
   const rangeInvoices = useMemo(() => {
     return invoices.filter(inv => {
       if (inv.status === 'cancelled') return false;
-      const d = (inv.date || '').slice(0, 10);
+      const d = (inv.invoice_date || inv.date || '').slice(0, 10);
       if (fromDate && d < fromDate) return false;
       if (toDate && d > toDate) return false;
       return true;
@@ -146,7 +146,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ currentTab, onTabChange 
   const rangePurchases = useMemo(() => {
     return purchaseOrders.filter(po => {
       if (po.status === 'cancelled') return false;
-      const d = (po.date || '').slice(0, 10);
+      const d = (po.order_date || po.date || '').slice(0, 10);
       if (fromDate && d < fromDate) return false;
       if (toDate && d > toDate) return false;
       return true;
@@ -175,7 +175,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ currentTab, onTabChange 
       });
       cost += invCost;
 
-      const dStr = (inv.date || '').slice(0, 10);
+      const dStr = (inv.invoice_date || inv.date || '').slice(0, 10);
       if (dStr) {
         const parts = dStr.split('-');
         const displayDay = parts.length === 3 ? `${parts[2]}/${parts[1]}` : dStr;

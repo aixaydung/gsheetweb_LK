@@ -137,7 +137,8 @@ interface AppContextType {
 
   createProduct: (prod: Partial<Product>) => Product;
   updateProduct: (id: string, prod: Partial<Product>) => void;
-  deleteProduct: (id: string) => void;
+  deleteProduct: (id: string, hard?: boolean) => void;
+  deleteProductsBatch: (ids: string[], hard?: boolean) => void;
 
   createCustomer: (cust: Partial<Customer>) => Customer;
   updateCustomer: (id: string, cust: Partial<Customer>) => void;
@@ -372,19 +373,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (custRes.status === 'fulfilled' && custRes.value.ok) {
         const data = await custRes.value.json();
         if (Array.isArray(data.customers)) {
-          setCustomers(data.customers);
+          setCustomers(data.customers.filter((c: any) => c.status !== 'inactive'));
         }
       }
       if (prodRes.status === 'fulfilled' && prodRes.value.ok) {
         const data = await prodRes.value.json();
         if (Array.isArray(data.products)) {
-          setProducts(data.products);
+          setProducts(data.products.filter((p: any) => p.status !== 'inactive'));
         }
       }
       if (vendRes.status === 'fulfilled' && vendRes.value.ok) {
         const data = await vendRes.value.json();
         if (Array.isArray(data.vendors)) {
-          setSuppliers(data.vendors);
+          setSuppliers(data.vendors.filter((v: any) => v.status !== 'inactive'));
         }
       }
       if (orderRes.status === 'fulfilled' && orderRes.value.ok) {
@@ -1200,6 +1201,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       title: `Xóa vĩnh viễn hóa đơn ${targetInv?.code || id}`,
       details: `Xóa hóa đơn của khách hàng ${targetInv?.customer_name || ''}`,
     });
+    syncWithApi(
+      fetch(`/api/orders/${id}`, {
+        method: 'DELETE',
+      })
+    );
   };
 
   // Quotation handlers
@@ -2401,7 +2407,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
-  const deleteProduct = (id: string) => {
+  const deleteProduct = (id: string, hard = false) => {
     const p = products.find(prod => prod.id === id);
     setProducts(prev => prev.filter(prod => prod.id !== id));
     logActivity({
@@ -2409,10 +2415,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       entity_type: 'product',
       entity_id: id,
       entity_code: p?.sku || id,
-      title: `Xóa sản phẩm ${p?.sku || id} - ${p?.name || ''}`,
-      details: 'Xóa khỏi danh mục hàng hóa',
+      title: hard
+        ? `Xóa vĩnh viễn sản phẩm ${p?.sku || id} - ${p?.name || ''}`
+        : `Ngừng kinh doanh / Xóa sản phẩm ${p?.sku || id} - ${p?.name || ''}`,
+      details: hard ? 'Xóa hoàn toàn khỏi cơ sở dữ liệu' : 'Xóa khỏi danh mục đang hoạt động',
     });
-    syncWithApi(fetch(`/api/products/${id}`, { method: 'DELETE' }));
+    syncWithApi(fetch(`/api/products/${id}${hard ? '?hard=true' : ''}`, { method: 'DELETE' }));
+  };
+
+  const deleteProductsBatch = (ids: string[], hard = false) => {
+    if (!ids || ids.length === 0) return;
+    setProducts(prev => prev.filter(p => !ids.includes(p.id)));
+    ids.forEach(id =>
+      syncWithApi(fetch(`/api/products/${id}${hard ? '?hard=true' : ''}`, { method: 'DELETE' }))
+    );
+    logActivity({
+      action: 'delete',
+      entity_type: 'product',
+      entity_id: ids.join(','),
+      entity_code: 'BATCH',
+      title: `Xóa hàng loạt ${ids.length} sản phẩm`,
+      details: `Đã xóa các sản phẩm: ${ids.join(', ')}`,
+    });
   };
 
   // Customer CRUD
@@ -3039,6 +3063,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         createProduct,
         updateProduct,
         deleteProduct,
+        deleteProductsBatch,
         createCustomer,
         updateCustomer,
         deleteCustomer,

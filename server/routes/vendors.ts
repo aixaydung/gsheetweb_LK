@@ -7,7 +7,8 @@ const router = Router();
 // GET all vendors
 router.get('/', requireAuth, async (req, res) => {
   try {
-    const vendors = await getAllVendors();
+    const includeInactive = req.query.include_inactive === 'true';
+    const vendors = await getAllVendors(includeInactive);
     res.json({ vendors });
   } catch (error: any) {
     console.error('Error fetching vendors:', error.message);

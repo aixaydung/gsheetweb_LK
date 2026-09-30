@@ -137,6 +137,8 @@ export interface Customer {
   earliest_due_date?: string;
   max_overdue_days?: number;
   open_docs_count: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface SupplierGroup {
@@ -166,12 +168,15 @@ export interface Supplier {
   earliest_due_date?: string;
   max_overdue_days?: number;
   open_docs_count: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface DocumentLineItem {
   id: string;
   product_id: string;
   sku: string;
+  product_sku?: string;
   product_name: string;
   unit: string;
   quantity: number;
@@ -189,6 +194,7 @@ export interface SalesInvoice {
   id: string;
   code: string;
   invoice_date: string; // ISO
+  date?: string;
   customer_id?: string;
   customer_name: string;
   customer_phone?: string;
@@ -261,6 +267,7 @@ export interface PurchaseOrder {
   id: string;
   code: string;
   order_date: string;
+  date?: string;
   supplier_id: string;
   supplier_name: string;
   warehouse_id: string;
@@ -332,13 +339,17 @@ export interface StockMovement {
   id: string;
   code: string; // MVxxxx
   movement_date: string;
+  date?: string;
+  created_at?: string;
   type: MovementType;
+  movement_type?: string;
   product_id: string;
   product_name: string;
   sku: string;
   warehouse_id: string;
   qty_in: number;
   qty_out: number;
+  change_qty?: number;
   unit_cost: number;
   balance_after: number;
   avg_cost_after: number;
@@ -357,6 +368,7 @@ export interface Stocktake {
   increase_count: number;
   decrease_count: number;
   diff_value: number;
+  difference_qty?: number;
   status: StocktakeStatus;
   note?: string;
   items: StocktakeItem[];

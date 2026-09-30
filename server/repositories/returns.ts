@@ -1,4 +1,4 @@
-import { getSheetData, appendSheetData, updateSheetData, ensureSheetExists } from '../google-sheets.js';
+import { getSheetData, appendSheetData, updateSheetData, clearSheetData, ensureSheetExists } from '../google-sheets.js';
 import crypto from 'crypto';
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY';
@@ -192,4 +192,87 @@ export const updateReturnStatus = async (id: string, status: string) => {
   const range = `${RETURNS_SHEET}!R${target.rowIndex}`;
   await updateSheetData(SPREADSHEET_ID, range, [[status]]);
   return { id, status };
+};
+
+export const updateReturnWithItems = async (
+  id: string,
+  returnData: Partial<ReturnRecord>,
+  items?: any[]
+) => {
+  const all = await getAllReturns();
+  const target = all.find(r => r.id === id);
+  if (!target || !target.rowIndex) throw new Error('Return record not found');
+
+  const updatedRow = [
+    target.id,
+    returnData.code ?? target.code,
+    returnData.type ?? target.type,
+    returnData.return_date ?? target.return_date,
+    returnData.partner_type ?? target.partner_type,
+    returnData.partner_id ?? target.partner_id,
+    returnData.partner_name ?? target.partner_name,
+    returnData.reference_doc_id ?? target.reference_doc_id,
+    returnData.reference_doc_code ?? target.reference_doc_code,
+    returnData.warehouse_id ?? target.warehouse_id,
+    returnData.total_value ?? target.total_value,
+    returnData.handling ?? target.handling,
+    returnData.money_method ?? target.money_method,
+    returnData.offset_amount ?? target.offset_amount,
+    returnData.refund_due ?? target.refund_due,
+    returnData.refunded_amount ?? target.refunded_amount,
+    returnData.reason ?? target.reason,
+    returnData.status ?? target.status,
+    returnData.note ?? target.note,
+    target.created_at,
+  ];
+
+  await updateSheetData(
+    SPREADSHEET_ID,
+    `${RETURNS_SHEET}!A${target.rowIndex}:T${target.rowIndex}`,
+    [updatedRow]
+  );
+
+  if (items && Array.isArray(items)) {
+    const rawItemRows = await getSheetData(SPREADSHEET_ID, `${RETURN_ITEMS_SHEET}!A2:J`);
+    const remainingItems = rawItemRows.filter((r: any) => r[1] !== id);
+    const newItems = items.map(item => [
+      item.id || crypto.randomUUID(),
+      id,
+      item.product_id || '',
+      item.sku || '',
+      item.product_name || '',
+      item.unit || 'Cái',
+      item.quantity || 1,
+      item.unit_price || 0,
+      item.line_total || ((item.quantity || 1) * (item.unit_price || 0)),
+      item.note || '',
+    ]);
+    const allItemRows = [...remainingItems, ...newItems];
+    await clearSheetData(SPREADSHEET_ID, `${RETURN_ITEMS_SHEET}!A2:J`);
+    if (allItemRows.length > 0) {
+      await updateSheetData(SPREADSHEET_ID, `${RETURN_ITEMS_SHEET}!A2:J${allItemRows.length + 1}`, allItemRows);
+    }
+  }
+
+  return { ...target, ...returnData, items: items || target.items };
+};
+
+export const deleteReturn = async (id: string) => {
+  // 1. Remove from RETURNS
+  const rawRows = await getSheetData(SPREADSHEET_ID, `${RETURNS_SHEET}!A2:T`);
+  const remaining = rawRows.filter((r: any) => r[0] !== id);
+  await clearSheetData(SPREADSHEET_ID, `${RETURNS_SHEET}!A2:T`);
+  if (remaining.length > 0) {
+    await updateSheetData(SPREADSHEET_ID, `${RETURNS_SHEET}!A2:T${remaining.length + 1}`, remaining);
+  }
+
+  // 2. Remove from RETURN_ITEMS
+  const rawItemRows = await getSheetData(SPREADSHEET_ID, `${RETURN_ITEMS_SHEET}!A2:J`);
+  const remainingItems = rawItemRows.filter((r: any) => r[1] !== id);
+  await clearSheetData(SPREADSHEET_ID, `${RETURN_ITEMS_SHEET}!A2:J`);
+  if (remainingItems.length > 0) {
+    await updateSheetData(SPREADSHEET_ID, `${RETURN_ITEMS_SHEET}!A2:J${remainingItems.length + 1}`, remainingItems);
+  }
+
+  return { id, deleted: true };
 };

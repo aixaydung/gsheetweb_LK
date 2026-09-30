@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { getSheetData, appendSheetData, updateSheetData } from '../google-sheets.js';
+import { getSheetData, appendSheetData, updateSheetData, clearSheetData } from '../google-sheets.js';
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY';
 const ORDERS_SHEET = 'ORDERS';
@@ -186,4 +186,86 @@ export const updateOrderStatus = async (id: string, newStatus: string) => {
 
   // Status column is O (column 15)
   await updateSheetData(SPREADSHEET_ID, `${ORDERS_SHEET}!O${target.rowIndex}:O${target.rowIndex}`, [[newStatus]]);
+};
+
+export const updateOrderWithItems = async (
+  id: string,
+  orderData: Partial<OrderRecord>,
+  items?: OrderItemRecord[]
+) => {
+  const orders = await getAllOrders();
+  const target = orders.find(o => o.id === id);
+  if (!target || !target.rowIndex) throw new Error('Order not found');
+
+  const updatedRow = [
+    target.id,
+    orderData.code ?? target.code,
+    orderData.customer_id ?? target.customer_id,
+    orderData.customer_name ?? target.customer_name,
+    orderData.order_date ?? target.order_date,
+    orderData.subtotal ?? target.subtotal,
+    orderData.discount_amount ?? target.discount_amount,
+    orderData.vat_rate ?? target.vat_rate,
+    orderData.vat_amount ?? target.vat_amount,
+    orderData.shipping_fee ?? target.shipping_fee,
+    orderData.total ?? target.total,
+    orderData.paid_amount ?? target.paid_amount,
+    orderData.debt_amount ?? target.debt_amount,
+    orderData.payment_status ?? target.payment_status,
+    orderData.status ?? target.status,
+    orderData.note ?? target.note,
+    target.created_by || 'Hệ thống',
+    target.created_at,
+  ];
+
+  await updateSheetData(
+    SPREADSHEET_ID,
+    `${ORDERS_SHEET}!A${target.rowIndex}:R${target.rowIndex}`,
+    [updatedRow]
+  );
+
+  if (items && Array.isArray(items)) {
+    const rawItemRows = await getSheetData(SPREADSHEET_ID, `${ORDER_ITEMS_SHEET}!A2:K`);
+    const remainingItems = rawItemRows.filter((r: any) => r[1] !== id);
+    const newItems = items.map(it => [
+      it.id || crypto.randomUUID(),
+      id,
+      it.product_id || '',
+      it.sku || '',
+      it.product_name || '',
+      it.unit || 'Cái',
+      it.quantity || 1,
+      it.unit_price || 0,
+      it.discount_amount || 0,
+      it.line_total || 0,
+      it.note || '',
+    ]);
+    const allItemRows = [...remainingItems, ...newItems];
+    await clearSheetData(SPREADSHEET_ID, `${ORDER_ITEMS_SHEET}!A2:K`);
+    if (allItemRows.length > 0) {
+      await updateSheetData(SPREADSHEET_ID, `${ORDER_ITEMS_SHEET}!A2:K${allItemRows.length + 1}`, allItemRows);
+    }
+  }
+
+  return { ...target, ...orderData, items: items || target.items };
+};
+
+export const deleteOrder = async (id: string) => {
+  // 1. Remove from ORDERS
+  const rawOrderRows = await getSheetData(SPREADSHEET_ID, `${ORDERS_SHEET}!A2:R`);
+  const remainingOrders = rawOrderRows.filter((r: any) => r[0] !== id);
+  await clearSheetData(SPREADSHEET_ID, `${ORDERS_SHEET}!A2:R`);
+  if (remainingOrders.length > 0) {
+    await updateSheetData(SPREADSHEET_ID, `${ORDERS_SHEET}!A2:R${remainingOrders.length + 1}`, remainingOrders);
+  }
+
+  // 2. Remove from ORDER_ITEMS
+  const rawItemRows = await getSheetData(SPREADSHEET_ID, `${ORDER_ITEMS_SHEET}!A2:K`);
+  const remainingItems = rawItemRows.filter((r: any) => r[1] !== id);
+  await clearSheetData(SPREADSHEET_ID, `${ORDER_ITEMS_SHEET}!A2:K`);
+  if (remainingItems.length > 0) {
+    await updateSheetData(SPREADSHEET_ID, `${ORDER_ITEMS_SHEET}!A2:K${remainingItems.length + 1}`, remainingItems);
+  }
+
+  return { id, deleted: true };
 };

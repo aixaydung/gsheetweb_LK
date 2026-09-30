@@ -12,6 +12,7 @@ import { DateRangePicker, DateRange } from '../components/ui/DateRangePicker';
 import { formatCurrency, formatQuantity, formatDate, formatDateTime } from '../lib/format';
 import { exportToExcelFile } from '../lib/excelExport';
 import { Product, StockVoucher, StockMovement, Stocktake } from '../types';
+import { ProductDeleteModal } from '../components/dialogs/ProductDeleteModal';
 
 interface WarehouseViewProps {
   currentTab: string;
@@ -53,6 +54,11 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null });
+
+  // Product Selection & Safe Deletion State
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [productsToDelete, setProductsToDelete] = useState<Product[]>([]);
 
   // Tab 2 & 3 Voucher filters
   const [voucherPartnerFilter, setVoucherPartnerFilter] = useState('all');
@@ -162,8 +168,8 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
       if (dateRange.to && stDate > dateRange.to) matchDate = false;
       const matchStatus =
         stocktakeStatusFilter === 'all' ||
-        (stocktakeStatusFilter === 'balanced' && st.status === 'balanced') ||
-        (stocktakeStatusFilter === 'has_diff' && (st.difference_qty !== 0 || (st.items && st.items.some(it => it.diff_qty !== 0)))) ||
+        (stocktakeStatusFilter === 'balanced' && ((st.status as any) === 'balanced' || st.status === 'completed')) ||
+        (stocktakeStatusFilter === 'has_diff' && ((st.difference_qty || 0) !== 0 || (st.items && st.items.some(it => it.diff_qty !== 0)))) ||
         (stocktakeStatusFilter === 'draft' && st.status === 'draft');
       return matchSearch && matchDate && matchStatus;
     });
@@ -177,13 +183,13 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
         (m.sku || '').toLowerCase().includes(search.toLowerCase()) ||
         (m.source_code || '').toLowerCase().includes(search.toLowerCase());
       let matchDate = true;
-      const mDate = m.created_at ? m.created_at.split('T')[0] : '';
+      const mDate = (m.movement_date || m.created_at || (m as any).date || '').split('T')[0];
       if (dateRange.from && mDate < dateRange.from) matchDate = false;
       if (dateRange.to && mDate > dateRange.to) matchDate = false;
       const matchType =
         movementTypeFilter === 'all' ||
-        (movementTypeFilter === 'in' && (m.movement_type === 'in' || (m.change_qty || 0) > 0)) ||
-        (movementTypeFilter === 'out' && (m.movement_type === 'out' || (m.change_qty || 0) < 0));
+        (movementTypeFilter === 'in' && (m.movement_type === 'in' || m.qty_in > 0 || (m.change_qty || 0) > 0)) ||
+        (movementTypeFilter === 'out' && (m.movement_type === 'out' || m.qty_out > 0 || (m.change_qty || 0) < 0));
       return matchSearch && matchDate && matchType;
     });
   }, [stockMovements, search, dateRange, movementTypeFilter]);
@@ -305,11 +311,12 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
           </button>
           <button
             type="button"
-            title="Xoá"
+            title="Xoá / Kiểm tra an toàn"
             onClick={() => {
-              if (confirm(`Xoá sản phẩm ${row.name}?`)) deleteProduct(row.id);
+              setProductsToDelete([row]);
+              setIsDeleteModalOpen(true);
             }}
-            className="p-1.5 hover:text-[#E11D48] rounded-full hover:bg-gray-100 transition-colors"
+            className="p-1.5 hover:text-[#E11D48] rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
           >
             <Icon name="delete" size={18} />
           </button>
@@ -1131,6 +1138,15 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
             columns={productColumns}
             data={filteredProducts}
             keyExtractor={row => row.id}
+            selectedIds={selectedProductIds}
+            onSelectionChange={setSelectedProductIds}
+            onDeleteSelected={(ids: string[]) => {
+              const targets = products.filter(p => ids.includes(p.id));
+              if (targets.length > 0) {
+                setProductsToDelete(targets);
+                setIsDeleteModalOpen(true);
+              }
+            }}
             emptyMessage="Chưa có sản phẩm nào"
             emptyActionText="+ Thêm sản phẩm"
             onEmptyAction={onOpenCreateProduct}
@@ -1596,6 +1612,20 @@ export const WarehouseView: React.FC<WarehouseViewProps> = ({
           />
         </div>
       )}
+
+      {/* Product Safe Deletion & Impact Modal */}
+      <ProductDeleteModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        products={productsToDelete}
+        onSuccess={() => {
+          setSelectedProductIds([]);
+        }}
+        onNavigateToStockCard={(sku: string) => {
+          setSelectedProductSku(sku);
+          onTabChange('the-kho');
+        }}
+      />
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { getSheetData, appendSheetData, updateSheetData } from '../google-sheets.js';
+import { getSheetData, appendSheetData, updateSheetData, clearSheetData } from '../google-sheets.js';
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '1wniDalcsynG8-H1sWokE47Woi0o9mrViDwW27di7oNY';
 const SHEET_NAME = 'PRODUCTS';
@@ -23,9 +23,9 @@ export interface ProductRecord {
   rowIndex: number;
 }
 
-export const getAllProducts = async (): Promise<ProductRecord[]> => {
+export const getAllProducts = async (includeInactive = false): Promise<ProductRecord[]> => {
   const rows = await getSheetData(SPREADSHEET_ID, `${SHEET_NAME}!A2:O`);
-  return rows.map((row: any, index: number) => ({
+  const list = rows.map((row: any, index: number) => ({
     id: row[0] || '',
     sku: row[1] || '',
     name: row[2] || '',
@@ -43,11 +43,13 @@ export const getAllProducts = async (): Promise<ProductRecord[]> => {
     updated_at: row[14] || '',
     rowIndex: index + 2,
   }));
+  if (includeInactive) return list;
+  return list.filter((p: any) => p.status !== 'inactive');
 };
 
 export const createProduct = async (data: Partial<ProductRecord>) => {
   const id = data.id || crypto.randomUUID();
-  const existing = await getAllProducts();
+  const existing = await getAllProducts(true);
   const nextNum = existing.length + 1;
   const sku = data.sku || `SP-${String(nextNum).padStart(4, '0')}`;
   const now = new Date().toISOString();
@@ -75,7 +77,7 @@ export const createProduct = async (data: Partial<ProductRecord>) => {
 };
 
 export const createProductsBatch = async (items: Partial<ProductRecord>[]) => {
-  const existing = await getAllProducts();
+  const existing = await getAllProducts(true);
   let nextNum = existing.length + 1;
   const now = new Date().toISOString();
   const created: any[] = [];
@@ -112,7 +114,7 @@ export const createProductsBatch = async (items: Partial<ProductRecord>[]) => {
 };
 
 export const updateProduct = async (id: string, data: Partial<ProductRecord>) => {
-  const products = await getAllProducts();
+  const products = await getAllProducts(true);
   const target = products.find(p => p.id === id);
   if (!target) throw new Error(`Product with ID ${id} not found`);
 
@@ -139,6 +141,15 @@ export const updateProduct = async (id: string, data: Partial<ProductRecord>) =>
   return { ...target, ...data, updated_at: now };
 };
 
-export const deleteProduct = async (id: string) => {
+export const deleteProduct = async (id: string, hard = false) => {
+  if (hard) {
+    const rawRows = await getSheetData(SPREADSHEET_ID, `${SHEET_NAME}!A2:O`);
+    const remaining = rawRows.filter((r: any) => r[0] !== id);
+    await clearSheetData(SPREADSHEET_ID, `${SHEET_NAME}!A2:O`);
+    if (remaining.length > 0) {
+      await updateSheetData(SPREADSHEET_ID, `${SHEET_NAME}!A2:O${remaining.length + 1}`, remaining);
+    }
+    return { id, deleted: true, hard: true };
+  }
   return updateProduct(id, { status: 'inactive' });
 };

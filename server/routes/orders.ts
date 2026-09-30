@@ -1,5 +1,12 @@
 import { Router } from 'express';
-import { getAllOrders, createOrderWithItems, updateOrderStatus, generateOrderCode } from '../repositories/orders.js';
+import {
+  getAllOrders,
+  createOrderWithItems,
+  updateOrderStatus,
+  generateOrderCode,
+  updateOrderWithItems,
+  deleteOrder,
+} from '../repositories/orders.js';
 import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
@@ -37,6 +44,19 @@ router.post('/', requireAuth, async (req, res) => {
   }
 });
 
+// UPDATE order (with items)
+router.put('/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { order, items } = req.body;
+    const updated = await updateOrderWithItems(id, order || req.body, items || req.body.items);
+    res.json({ order: updated });
+  } catch (error: any) {
+    console.error('Error updating order:', error.message);
+    res.status(500).json({ error: { code: 'DATABASE_ERROR', message: error.message } });
+  }
+});
+
 // UPDATE order status
 router.patch('/:id/status', requireAuth, async (req, res) => {
   try {
@@ -46,6 +66,18 @@ router.patch('/:id/status', requireAuth, async (req, res) => {
     res.json({ message: 'Order status updated successfully' });
   } catch (error: any) {
     console.error('Error updating order status:', error.message);
+    res.status(500).json({ error: { code: 'DATABASE_ERROR', message: error.message } });
+  }
+});
+
+// DELETE order (hard delete)
+router.delete('/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await deleteOrder(id);
+    res.json({ success: true, message: 'Order deleted successfully' });
+  } catch (error: any) {
+    console.error('Error deleting order:', error.message);
     res.status(500).json({ error: { code: 'DATABASE_ERROR', message: error.message } });
   }
 });

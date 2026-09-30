@@ -1,5 +1,11 @@
 import { Router } from 'express';
-import { getAllQuotations, createQuotation, updateQuotationStatus, deleteQuotation } from '../repositories/quotations.js';
+import {
+  getAllQuotations,
+  createQuotation,
+  updateQuotationWithItems,
+  updateQuotationStatus,
+  deleteQuotation,
+} from '../repositories/quotations.js';
 
 export const quotationsRouter = Router();
 
@@ -24,6 +30,18 @@ quotationsRouter.post('/', async (req, res) => {
   } catch (error: any) {
     console.error('Error creating quotation:', error);
     res.status(500).json({ error: error.message || 'Failed to create quotation' });
+  }
+});
+
+quotationsRouter.put('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { quotation, items } = req.body;
+    const updated = await updateQuotationWithItems(id, quotation || req.body, items || req.body.items);
+    res.json({ success: true, quotation: updated });
+  } catch (error: any) {
+    console.error('Error updating quotation:', error);
+    res.status(500).json({ error: error.message || 'Failed to update quotation' });
   }
 });
 

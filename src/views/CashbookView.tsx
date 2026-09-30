@@ -443,7 +443,7 @@ export const CashbookView: React.FC<CashbookViewProps> = ({
           keyExtractor={p => p.id}
           selectedIds={selectedIds}
           onSelectionChange={setSelectedIds}
-          onDeleteSelected={ids => {
+          onDeleteSelected={(ids: string[]) => {
             if (confirm(`Xóa ${ids.length} phiếu thu/chi đã chọn?`)) {
               deletePaymentsBatch(ids);
               setSelectedIds([]);

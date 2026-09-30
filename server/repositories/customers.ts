@@ -22,9 +22,9 @@ export interface CustomerRecord {
   rowIndex: number;
 }
 
-export const getAllCustomers = async (): Promise<CustomerRecord[]> => {
+export const getAllCustomers = async (includeInactive = false): Promise<CustomerRecord[]> => {
   const rows = await getSheetData(SPREADSHEET_ID, `${SHEET_NAME}!A2:N`);
-  return rows.map((row: any, index: number) => ({
+  const list = rows.map((row: any, index: number) => ({
     id: row[0] || '',
     code: row[1] || '',
     name: row[2] || '',
@@ -41,11 +41,13 @@ export const getAllCustomers = async (): Promise<CustomerRecord[]> => {
     updated_at: row[13] || '',
     rowIndex: index + 2,
   }));
+  if (includeInactive) return list;
+  return list.filter((c: any) => c.status !== 'inactive');
 };
 
 export const createCustomer = async (data: Partial<CustomerRecord>) => {
   const id = data.id || crypto.randomUUID();
-  const existing = await getAllCustomers();
+  const existing = await getAllCustomers(true);
   const nextNum = existing.length + 1;
   const code = data.code || `KH-${String(nextNum).padStart(4, '0')}`;
   const now = new Date().toISOString();
@@ -72,7 +74,7 @@ export const createCustomer = async (data: Partial<CustomerRecord>) => {
 };
 
 export const createCustomersBatch = async (items: Partial<CustomerRecord>[]) => {
-  const existing = await getAllCustomers();
+  const existing = await getAllCustomers(true);
   let nextNum = existing.length + 1;
   const now = new Date().toISOString();
   const created: any[] = [];
@@ -108,7 +110,7 @@ export const createCustomersBatch = async (items: Partial<CustomerRecord>[]) => 
 };
 
 export const updateCustomer = async (id: string, data: Partial<CustomerRecord>) => {
-  const customers = await getAllCustomers();
+  const customers = await getAllCustomers(true);
   const target = customers.find(c => c.id === id);
   if (!target) throw new Error(`Customer with ID ${id} not found`);
 

@@ -916,7 +916,7 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
             keyExtractor={row => row.id}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
-            onDeleteSelected={ids => {
+            onDeleteSelected={(ids: string[]) => {
               if (isAdmin) {
                 if (confirm(`[ADMIN] Xóa vĩnh viễn ${ids.length} phiếu mua đã chọn?`)) {
                   deletePurchaseOrdersBatch(ids);
@@ -928,7 +928,7 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
                     `Bạn có muốn HỦY ${ids.length} phiếu mua đã chọn? (Chuyển trạng thái 'Đã hủy' để lưu vết sổ sách)`
                   )
                 ) {
-                  ids.forEach(id => updatePurchaseOrderStatus(id, 'cancelled'));
+                  ids.forEach((id: string) => updatePurchaseOrderStatus(id, 'cancelled'));
                   setSelectedIds([]);
                 }
               }
@@ -995,7 +995,7 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
             keyExtractor={row => row.id}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
-            onDeleteSelected={ids => {
+            onDeleteSelected={(ids: string[]) => {
               if (confirm(`Xóa ${ids.length} đơn đặt hàng đã chọn?`)) {
                 deletePurchaseOrdersBatch(ids);
                 setSelectedIds([]);
@@ -1078,7 +1078,7 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
             keyExtractor={row => row.id}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
-            onDeleteSelected={ids => {
+            onDeleteSelected={(ids: string[]) => {
               if (confirm(`Xóa ${ids.length} nhà cung cấp đã chọn?`)) {
                 deleteSuppliersBatch(ids);
                 setSelectedIds([]);
@@ -1139,7 +1139,7 @@ export const PurchaseView: React.FC<PurchaseViewProps> = ({
             keyExtractor={row => row.id}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
-            onDeleteSelected={ids => {
+            onDeleteSelected={(ids: string[]) => {
               if (confirm(`Xóa ${ids.length} phiếu trả NCC đã chọn?`)) {
                 deletePurchaseReturnsBatch(ids);
                 setSelectedIds([]);
