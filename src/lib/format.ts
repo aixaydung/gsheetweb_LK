@@ -96,3 +96,81 @@ export function getDaysDiff(targetDateString?: string | null): number {
   const diffTime = today.getTime() - target.getTime();
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 }
+
+const VIETNAMESE_DIGITS = ['không', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín'];
+
+function readGroupOfThree(threeDigits: string, showZeroHundreds: boolean): string {
+  const hundreds = parseInt(threeDigits[0], 10);
+  const tens = parseInt(threeDigits[1], 10);
+  const units = parseInt(threeDigits[2], 10);
+  let result = '';
+
+  if (hundreds === 0 && tens === 0 && units === 0) return '';
+
+  if (hundreds !== 0 || showZeroHundreds) {
+    result += `${VIETNAMESE_DIGITS[hundreds]} trăm `;
+    if (tens === 0 && units !== 0) {
+      result += 'lẻ ';
+    }
+  }
+
+  if (tens === 1) {
+    result += 'mười ';
+  } else if (tens > 1) {
+    result += `${VIETNAMESE_DIGITS[tens]} mươi `;
+  }
+
+  if (tens > 0 && units === 1) {
+    result += tens === 1 ? 'một ' : 'mốt ';
+  } else if (units === 5 && tens > 0) {
+    result += 'lăm ';
+  } else if (units > 0) {
+    result += `${VIETNAMESE_DIGITS[units]} `;
+  }
+
+  return result;
+}
+
+/**
+ * Convert number into Vietnamese words:
+ * e.g. 48178000 -> "Bốn mươi tám triệu một trăm bảy mươi tám nghìn đồng."
+ */
+export function numberToVietnameseWords(n: number | null | undefined): string {
+  if (n === null || n === undefined || isNaN(n) || n === 0) {
+    return 'Không đồng.';
+  }
+
+  const isNegative = n < 0;
+  const absAmount = Math.floor(Math.abs(n));
+  if (absAmount === 0) return 'Không đồng.';
+
+  const scales = ['', 'nghìn', 'triệu', 'tỷ', 'nghìn tỷ', 'triệu tỷ'];
+  let str = absAmount.toString();
+  while (str.length % 3 !== 0) {
+    str = '0' + str;
+  }
+
+  const groups: string[] = [];
+  for (let i = 0; i < str.length; i += 3) {
+    groups.push(str.substring(i, i + 3));
+  }
+
+  let words = '';
+  const totalGroups = groups.length;
+
+  for (let i = 0; i < totalGroups; i++) {
+    const scaleIndex = totalGroups - 1 - i;
+    const groupStr = groups[i];
+    const groupWords = readGroupOfThree(groupStr, i > 0);
+    if (groupWords.trim() !== '') {
+      words += `${groupWords}${scales[scaleIndex]} `;
+    }
+  }
+
+  words = words.trim();
+  if (!words) return 'Không đồng.';
+
+  const capitalized = words.charAt(0).toUpperCase() + words.slice(1);
+  return `${isNegative ? 'Âm ' : ''}${capitalized} đồng.`;
+}
+

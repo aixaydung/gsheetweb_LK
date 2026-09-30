@@ -2,7 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Modal } from '../ui/Modal';
 import { Icon } from '../ui/Icon';
 import { useApp } from '../../context/AppContext';
-import { formatCurrency, formatDate, formatDateTime } from '../../lib/format';
+import {
+  formatCurrency,
+  formatDate,
+  formatDateTime,
+  numberToVietnameseWords,
+} from '../../lib/format';
 import {
   BankAccountItem,
   getStoredBankAccounts,
@@ -117,6 +122,14 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
       })
     : '';
 
+  const isPurchase =
+    documentType.includes('MUA') ||
+    documentType.includes('NHẬP') ||
+    documentType.includes('NCC') ||
+    documentType.includes('CHI');
+
+  const printTimeStr = formatDateTime(new Date().toISOString());
+
   const printPaperRef = useRef<HTMLDivElement>(null);
 
   // 10 print checkboxes matching UI screenshot
@@ -170,11 +183,13 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
       <head>
         <meta charset="utf-8">
         <title>${docTitle} - ${code}</title>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap">
         <style>
           @page {
             size: ${paperSizeCss};
             margin: ${paperSize === 'K80' ? '2mm' : '8mm 10mm'};
           }
+          :root { --ink:#000; --muted:#444; --line:#000; --hair:#999; }
           * {
             box-sizing: border-box;
             -webkit-print-color-adjust: exact !important;
@@ -183,11 +198,11 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
           body {
             margin: 0;
             padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-family: 'Be Vietnam Pro', 'Segoe UI', Arial, sans-serif;
             color: #000000;
             background: #ffffff;
-            font-size: ${paperSize === 'K80' ? '11px' : paperSize === 'A5' ? '12px' : '13px'};
-            line-height: 1.45;
+            font-size: ${paperSize === 'K80' ? '11px' : paperSize === 'A5' ? '11.5px' : '12px'};
+            line-height: 1.5;
           }
           .print-wrapper {
             width: 100%;
@@ -195,89 +210,241 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
             margin: 0 auto;
             background: #ffffff;
           }
-          /* Standard accounting data table with crisp borders */
-          .data-table {
-            width: 100%;
-            border-collapse: collapse;
-            border: 1px solid #000000;
-            margin: 8px 0;
-          }
-          .data-table th, .data-table td {
-            border: 1px solid #000000;
-            padding: ${paperSize === 'K80' ? '4px 3px' : '6px 7px'};
-          }
-          .data-table th {
-            background-color: #f3f4f6;
-            font-weight: 700;
-            text-align: center;
-          }
-          /* Layout table with no borders for headers and signatures */
-          .layout-table {
-            width: 100%;
-            border-collapse: collapse;
-            border: none !important;
-          }
-          .layout-table td, .layout-table th {
-            border: none !important;
-            padding: 2px 4px;
-            vertical-align: top;
-          }
-          .tabular-nums {
-            font-variant-numeric: tabular-nums;
-          }
-          .text-center { text-align: center; }
-          .text-right { text-align: right; }
-          .text-left { text-align: left; }
-          .font-bold { font-weight: 700; }
-          .font-semibold { font-weight: 600; }
-          .font-medium { font-weight: 500; }
-          .uppercase { text-transform: uppercase; }
-          .italic { font-style: italic; }
-          .divider-line {
-            border-bottom: 1.5px solid #000000;
-            width: 100%;
-            margin: 8px 0 12px 0;
-          }
-          .totals-box {
-            display: flex;
-            justify-content: flex-end;
-            margin: 8px 0;
-          }
-          .totals-table {
-            width: 250px;
-            text-align: right;
-            font-size: 12.5px;
-          }
-          .totals-row {
+          .head {
             display: flex;
             justify-content: space-between;
-            padding: 2px 0;
+            align-items: flex-start;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #000000;
           }
-          .signatures-table {
+          .brand {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+          }
+          .logo {
+            width: 46px;
+            height: 46px;
+            border: 2px solid #000000;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 16px;
+            flex-shrink: 0;
+          }
+          .brand h1 {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 700;
+          }
+          .brand p {
+            margin: 2px 0 0;
+            color: #444444;
+            font-size: 11px;
+            max-width: 320px;
+            line-height: 1.35;
+          }
+          .doc {
+            text-align: right;
+          }
+          .doc h2 {
+            margin: 0;
+            font-size: ${paperSize === 'K80' ? '17px' : '21px'};
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+          .doc .no {
+            font-size: 13px;
+            font-weight: 600;
+            margin-top: 2px;
+          }
+          .info {
+            display: grid;
+            grid-template-columns: ${paperSize === 'K80' ? '1fr' : '1.4fr 1fr'};
+            gap: 12px;
+            margin-top: 14px;
+          }
+          .box {
+            border: 1px solid #000000;
+            border-radius: 6px;
+            padding: 9px 12px;
+          }
+          .box h3 {
+            margin: 0 0 5px;
+            font-size: 11px;
+            font-weight: 700;
+            text-decoration: underline;
+            text-underline-offset: 3px;
+            text-transform: uppercase;
+          }
+          .row {
+            display: flex;
+            gap: 8px;
+            padding: 1.5px 0;
+            font-size: 11.5px;
+          }
+          .row span:first-child {
+            flex: 0 0 78px;
+            color: #444444;
+          }
+          .row span:last-child {
+            font-weight: 500;
+          }
+          .box .name {
+            font-size: 13px;
+            font-weight: 700;
+            margin-bottom: 2px;
+          }
+          .pay {
+            margin-top: 14px;
+            display: flex;
+            justify-content: ${paperSize === 'K80' ? 'center' : 'flex-start'};
+            align-items: center;
+            gap: ${paperSize === 'K80' ? '10px' : '22px'};
+            border: 1.5px solid #000000;
+            border-radius: 8px;
+            padding: 10px 16px;
+            page-break-inside: avoid;
+            flex-direction: ${paperSize === 'K80' ? 'column' : 'row'};
+            background: #ffffff;
+          }
+          .qr {
+            width: ${paperSize === 'K80' ? '92px' : '104px'};
+            height: ${paperSize === 'K80' ? '92px' : '104px'};
+            flex: none;
+            border: 1px dashed #000000;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2px;
+            background: #ffffff;
+          }
+          .pay h3 {
+            margin: 0 0 4px;
+            font-size: 12px;
+            font-weight: 700;
+          }
+          .pay .row span:first-child {
+            flex: ${paperSize === 'K80' ? 'none' : '0 0 70px'};
+          }
+          .amt {
+            font-weight: 700 !important;
+            font-size: 13px;
+            color: #15803d;
+          }
+          table.table-modern {
             width: 100%;
-            margin-top: 36px;
+            border-collapse: collapse;
+            margin-top: 16px;
+            font-size: ${paperSize === 'K80' ? '10.5px' : '11.5px'};
+          }
+          table.table-modern thead th {
+            font-weight: 700;
+            font-size: 11px;
+            padding: 8px 6px;
+            text-align: left;
+            border-top: 2px solid #000000;
+            border-bottom: 2px solid #000000;
+            background: transparent;
+            color: #000000;
+          }
+          table.table-modern tbody td {
+            padding: 8px 6px;
+            border-bottom: 1px solid #999999;
+            vertical-align: top;
+          }
+          .c { text-align: center !important; }
+          .r { text-align: right !important; font-variant-numeric: tabular-nums; }
+          table.table-modern thead th.c { text-align: center !important; }
+          table.table-modern thead th.r { text-align: right !important; }
+          .bottom {
+            display: grid;
+            grid-template-columns: ${paperSize === 'K80' ? '1fr' : '1fr 260px'};
+            gap: 16px;
+            margin-top: 14px;
+            align-items: start;
+          }
+          .words {
+            color: #444444;
+            font-size: 11.5px;
+          }
+          .words b {
+            color: #000000;
+            font-weight: 600;
+          }
+          .sum .line {
+            display: flex;
+            justify-content: space-between;
+            padding: 2.5px 0;
+            font-size: 12px;
+          }
+          .sum .line span:last-child {
+            font-variant-numeric: tabular-nums;
+            font-weight: 500;
+          }
+          .sum .total {
+            margin-top: 4px;
+            padding: 6px 0;
+            border-top: 2px solid #000000;
+            border-bottom: 2px solid #000000;
+            font-size: 13.5px;
+            font-weight: 700;
+          }
+          .sum .debt {
+            color: #dc2626;
+            font-weight: 600;
+            padding: 2.5px 0;
+          }
+          .sign {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
             text-align: center;
+            margin-top: 32px;
+            padding-top: 8px;
+            page-break-inside: avoid;
+          }
+          .sign b {
+            display: block;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+          }
+          .sign i {
+            display: block;
+            color: #555555;
+            font-size: 10.5px;
+            margin-top: 2px;
+          }
+          .sign .space {
+            height: 70px;
+          }
+          .foot {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+            padding-top: 8px;
+            border-top: 1px solid #999999;
+            color: #666666;
+            font-size: 10px;
+            page-break-inside: avoid;
           }
           img.company-logo {
-            max-height: 48px;
-            max-width: 130px;
+            max-height: 46px;
+            max-width: 120px;
             object-fit: contain;
           }
           img.qr-code-img {
-            width: ${paperSize === 'K80' ? '90px' : '105px'} !important;
-            height: ${paperSize === 'K80' ? '90px' : '105px'} !important;
-            max-width: ${paperSize === 'K80' ? '90px' : '105px'} !important;
-            max-height: ${paperSize === 'K80' ? '90px' : '105px'} !important;
+            width: ${paperSize === 'K80' ? '90px' : '100px'} !important;
+            height: ${paperSize === 'K80' ? '90px' : '100px'} !important;
+            max-width: ${paperSize === 'K80' ? '90px' : '100px'} !important;
+            max-height: ${paperSize === 'K80' ? '90px' : '100px'} !important;
             object-fit: contain !important;
             display: block !important;
-          }
-          .qr-container {
-            margin: 10px 0;
-            padding: 8px 12px;
-            border: 1px solid #000000;
-            border-radius: 4px;
-            background: #ffffff;
-            page-break-inside: avoid;
           }
         </style>
       </head>
@@ -362,11 +529,6 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
     alert(`Đã gửi email chứng từ ${code} tới ${trimmed} thành công!`);
     onClose();
   };
-
-  const isPurchase =
-    documentType.includes('MUA') || documentType.includes('NCC');
-
-  const printTimeStr = formatDateTime(new Date().toISOString());
 
   return (
     <Modal
@@ -644,381 +806,244 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
             }`}
             style={{ minHeight: '640px', backgroundColor: '#ffffff', color: '#000000' }}
           >
-            {/* 1. Company Information Header (Top left) */}
-            {options.logo && (
-              <div>
-                <table className="layout-table" style={{ width: '100%', border: 'none' }}>
-                  <tbody>
-                    <tr>
-                      <td style={{ border: 'none', textAlign: 'left', verticalAlign: 'top', padding: 0 }}>
-                        <h3
-                          style={{
-                            fontWeight: 700,
-                            fontSize: '14px',
-                            textTransform: 'uppercase',
-                            color: '#000000',
-                            margin: 0,
-                            letterSpacing: '0.3px',
-                          }}
-                        >
-                          {companySettings.company_name || 'CÔNG TY LK ERP'}
-                        </h3>
-                        <p style={{ fontSize: '12px', color: '#333333', margin: '2px 0 0 0' }}>
-                          {companySettings.address || 'Hồ Chí Minh'}
-                        </p>
-                      </td>
-                      {companySettings.logo_url && (
-                        <td
-                          style={{
-                            border: 'none',
-                            textAlign: 'right',
-                            verticalAlign: 'top',
-                            padding: 0,
-                            width: '130px',
-                          }}
-                        >
-                          <img
-                            src={companySettings.logo_url}
-                            alt="Logo"
-                            className="company-logo"
-                            style={{ maxHeight: '48px', maxWidth: '120px', objectFit: 'contain' }}
-                          />
-                        </td>
-                      )}
-                    </tr>
-                  </tbody>
-                </table>
-                {/* Solid Divider Line */}
-                <div style={{ borderBottom: '1.5px solid #000000', width: '100%', margin: '8px 0 12px 0' }} />
-              </div>
-            )}
-
-            {/* 2. Document Title and Header Meta (Matching Image) */}
-            <div style={{ margin: '8px 0 12px 0' }}>
-              <table className="layout-table" style={{ width: '100%', border: 'none' }}>
-                <tbody>
-                  <tr>
-                    <td
+            {/* 1. Header (Matching .head from mau-in-hoa-don-ban-hang.html) */}
+            <div
+              className="head"
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                paddingBottom: '12px',
+                borderBottom: '2px solid #000000',
+              }}
+            >
+              <div className="brand" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                {options.logo && (
+                  companySettings.logo_url ? (
+                    <img
+                      src={companySettings.logo_url}
+                      alt="Logo"
+                      className="company-logo"
                       style={{
-                        border: 'none',
-                        textAlign: 'center',
-                        verticalAlign: 'middle',
-                        width: '65%',
-                        padding: 0,
+                        width: '46px',
+                        height: '46px',
+                        objectFit: 'contain',
+                        borderRadius: '8px',
+                        border: '1.5px solid #000000',
+                        padding: '2px',
+                        flexShrink: 0,
                       }}
-                    >
-                      <h2
-                        style={{
-                          fontSize: '19px',
-                          fontWeight: 900,
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.8px',
-                          color: '#000000',
-                          margin: 0,
-                        }}
-                      >
-                        {docTitle}
-                      </h2>
-                      <p style={{ fontSize: '12px', color: '#333333', margin: '3px 0 0 0' }}>
-                        Ngày lập phiếu: <strong style={{ color: '#000000' }}>{formatDate(date)}</strong>
-                      </p>
-                    </td>
-                    <td
+                    />
+                  ) : (
+                    <div
+                      className="logo"
                       style={{
-                        border: 'none',
-                        textAlign: 'right',
-                        verticalAlign: 'middle',
-                        width: '35%',
-                        fontSize: '11.5px',
+                        width: '46px',
+                        height: '46px',
+                        border: '2px solid #000000',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: 700,
+                        fontSize: '16px',
+                        flexShrink: 0,
                         color: '#000000',
-                        lineHeight: '1.45',
-                        padding: 0,
                       }}
                     >
-                      <div>
-                        Số phiếu: <strong>{code}</strong>
-                      </div>
-                      <div>
-                        Ngày giờ in: <span style={{ color: '#333333' }}>{printTimeStr}</span>
-                      </div>
-                      <div>
-                        Đơn vị tiền tệ: <span style={{ color: '#333333' }}>Việt Nam đồng</span>
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* 3. Partner Information Section (2 Columns using robust layout-table) */}
-            {options.partnerInfo && (
-              <div style={{ margin: '10px 0 12px 0' }}>
-                <table
-                  className="layout-table"
-                  style={{ width: '100%', border: 'none', fontSize: '12.5px', color: '#000000' }}
-                >
-                  <tbody>
-                    <tr>
-                      <td style={{ border: 'none', width: '58%', padding: '2px 0', verticalAlign: 'top' }}>
-                        <span style={{ fontWeight: 600 }}>{isPurchase ? 'Nhà cung cấp:' : 'Khách hàng:'}</span>{' '}
-                        <strong>{partnerName || 'Công ty Minh An'}</strong>
-                      </td>
-                      <td style={{ border: 'none', width: '42%', padding: '2px 0', verticalAlign: 'top' }}>
-                        <span style={{ fontWeight: 600 }}>Điện thoại:</span>{' '}
-                        <span>{partnerPhone || '---'}</span>
-                      </td>
-                    </tr>
-                    <tr>
-                      <td style={{ border: 'none', padding: '2px 0', verticalAlign: 'top' }}>
-                        <span style={{ fontWeight: 600 }}>Địa chỉ:</span>{' '}
-                        <span>{partnerAddress || '---'}</span>
-                      </td>
-                      <td style={{ border: 'none', padding: '2px 0', verticalAlign: 'top' }}>
-                        <span style={{ fontWeight: 600 }}>Mã số thuế:</span>{' '}
-                        <span style={{ fontFamily: 'monospace' }}>{partnerTaxCode || '---'}</span>
-                      </td>
-                    </tr>
-                    <tr>
-                      <td style={{ border: 'none', padding: '2px 0', verticalAlign: 'top' }}>
-                        <span style={{ fontWeight: 600 }}>Email/Website:</span>{' '}
-                        <span>{partnerEmail || recipientEmail || '---'}</span>
-                      </td>
-                      <td style={{ border: 'none', padding: '2px 0', verticalAlign: 'top' }}></td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {/* 4. Products Table (Accounting standard black border matching Image) */}
-            <div style={{ margin: '10px 0' }}>
-              <table
-                className="data-table"
-                style={{
-                  width: '100%',
-                  borderCollapse: 'collapse',
-                  border: '1px solid #000000',
-                  fontSize: '12px',
-                }}
-              >
-                <thead>
-                  <tr style={{ backgroundColor: '#f3f4f6', borderBottom: '1px solid #000000', color: '#000000' }}>
-                    <th style={{ border: '1px solid #000000', padding: '5px 4px', textAlign: 'center', width: '36px' }}>
-                      STT
-                    </th>
-                    {options.sku && (
-                      <th style={{ border: '1px solid #000000', padding: '5px 6px', textAlign: 'center', width: '75px' }}>
-                        Mã hàng
-                      </th>
-                    )}
-                    <th style={{ border: '1px solid #000000', padding: '5px 8px', textAlign: 'center' }}>
-                      Tên hàng
-                    </th>
-                    {options.unit && (
-                      <th style={{ border: '1px solid #000000', padding: '5px 4px', textAlign: 'center', width: '45px' }}>
-                        ĐV
-                      </th>
-                    )}
-                    <th style={{ border: '1px solid #000000', padding: '5px 4px', textAlign: 'center', width: '45px' }}>
-                      SL
-                    </th>
-                    {options.priceTotal && (
-                      <th style={{ border: '1px solid #000000', padding: '5px 6px', textAlign: 'center', width: '90px' }}>
-                        Đơn giá
-                      </th>
-                    )}
-                    {options.lineDiscount && (
-                      <th style={{ border: '1px solid #000000', padding: '5px 6px', textAlign: 'center', width: '75px' }}>
-                        Chiết khấu
-                      </th>
-                    )}
-                    {options.priceTotal && (
-                      <th style={{ border: '1px solid #000000', padding: '5px 6px', textAlign: 'center', width: '100px' }}>
-                        Thành tiền
-                      </th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((it, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px solid #000000' }}>
-                      <td style={{ border: '1px solid #000000', padding: '5px 4px', textAlign: 'center' }}>
-                        {idx + 1}
-                      </td>
-                      {options.sku && (
-                        <td
-                          style={{
-                            border: '1px solid #000000',
-                            padding: '5px 6px',
-                            textAlign: 'center',
-                            fontFamily: 'monospace',
-                            fontSize: '11.5px',
-                          }}
-                        >
-                          {it.sku || '---'}
-                        </td>
-                      )}
-                      <td style={{ border: '1px solid #000000', padding: '5px 8px', textAlign: 'left', fontWeight: 500 }}>
-                        {it.product_name}
-                      </td>
-                      {options.unit && (
-                        <td style={{ border: '1px solid #000000', padding: '5px 4px', textAlign: 'center' }}>
-                          {it.unit || 'Cái'}
-                        </td>
-                      )}
-                      <td
-                        style={{
-                          border: '1px solid #000000',
-                          padding: '5px 4px',
-                          textAlign: 'center',
-                          fontWeight: 600,
-                        }}
-                      >
-                        {it.quantity}
-                      </td>
-                      {options.priceTotal && (
-                        <td
-                          style={{
-                            border: '1px solid #000000',
-                            padding: '5px 6px',
-                            textAlign: 'right',
-                            fontVariantNumeric: 'tabular-nums',
-                          }}
-                        >
-                          {formatCurrency(it.unit_price).replace(/\s*₫|\s*đ/g, '')}
-                        </td>
-                      )}
-                      {options.lineDiscount && (
-                        <td
-                          style={{
-                            border: '1px solid #000000',
-                            padding: '5px 6px',
-                            textAlign: 'right',
-                            fontVariantNumeric: 'tabular-nums',
-                            color: '#333333',
-                          }}
-                        >
-                          {it.line_discount ? formatCurrency(it.line_discount).replace(/\s*₫|\s*đ/g, '') : '0'}
-                        </td>
-                      )}
-                      {options.priceTotal && (
-                        <td
-                          style={{
-                            border: '1px solid #000000',
-                            padding: '5px 6px',
-                            textAlign: 'right',
-                            fontWeight: 500,
-                            fontVariantNumeric: 'tabular-nums',
-                          }}
-                        >
-                          {formatCurrency(it.line_total).replace(/\s*₫|\s*đ/g, '')}
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* 5. Summary Totals (Matching Right alignment in Image) */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%', margin: '8px 0 12px 0' }}>
-              <div style={{ width: '260px', marginLeft: 'auto', textAlign: 'right', fontSize: '12.5px', color: '#000000' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1.5px 0' }}>
-                  <span style={{ color: '#333333' }}>Tạm tính</span>
-                  <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                    {formatCurrency(subtotal)}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1.5px 0' }}>
-                  <span style={{ color: '#333333' }}>Chiết khấu</span>
-                  <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                    {discountAmount > 0 ? `-${formatCurrency(discountAmount)}` : '0 đ'}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1.5px 0' }}>
-                  <span style={{ color: '#333333' }}>VAT</span>
-                  <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                    {vatAmount > 0 ? `+${formatCurrency(vatAmount)}` : '0 đ'}
-                  </span>
-                </div>
-                {shippingFee > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1.5px 0' }}>
-                    <span style={{ color: '#333333' }}>Phí vận chuyển</span>
-                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>+{formatCurrency(shippingFee)}</span>
-                  </div>
+                      {(companySettings.company_name || 'LK').substring(0, 2).toUpperCase()}
+                    </div>
+                  )
                 )}
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    paddingTop: '5px',
-                    borderTop: '1px solid #777777',
-                    fontWeight: 'bold',
-                    fontSize: '14px',
-                    color: '#000000',
-                    marginTop: '2px',
-                  }}
-                >
-                  <span style={{ textTransform: 'uppercase' }}>TỔNG CỘNG</span>
-                  <span style={{ fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}>
-                    {formatCurrency(total)}
-                  </span>
-                </div>
-                {options.oldDebt && debtAmount > 0 && (
-                  <div
+                <div>
+                  <h1
                     style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      color: '#dc2626',
-                      fontWeight: 600,
-                      paddingTop: '2px',
+                      margin: 0,
+                      fontSize: '15px',
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.2px',
+                      color: '#000000',
                     }}
                   >
-                    <span>Còn nợ:</span>
-                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(debtAmount)}</span>
-                  </div>
-                )}
+                    {companySettings.company_name || 'CÔNG TY LK ERP'}
+                  </h1>
+                  <p
+                    style={{
+                      margin: '2px 0 0',
+                      color: '#444444',
+                      fontSize: '11px',
+                      maxWidth: '340px',
+                      lineHeight: '1.35',
+                    }}
+                  >
+                    {companySettings.address || 'Hồ Chí Minh'}
+                    {companySettings.phone && ` • Hotline: ${companySettings.phone}`}
+                    {companySettings.tax_code && ` • MST: ${companySettings.tax_code}`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="doc" style={{ textAlign: 'right', flexShrink: 0 }}>
+                <h2
+                  style={{
+                    margin: 0,
+                    fontSize: paperSize === 'K80' ? '17px' : '21px',
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                    color: '#000000',
+                  }}
+                >
+                  {docTitle}
+                </h2>
+                <div
+                  className="no"
+                  style={{
+                    fontSize: '12.5px',
+                    fontWeight: 600,
+                    marginTop: '2px',
+                    color: '#222222',
+                  }}
+                >
+                  Số: {code}
+                </div>
               </div>
             </div>
 
-            {/* Note Section */}
-            {options.note && note && (
-              <div style={{ fontSize: '12px', color: '#111111', fontStyle: 'italic', margin: '4px 0 12px 0' }}>
-                <strong>Ghi chú:</strong> {note}
-              </div>
-            )}
+            {/* 2. Customer & Document Meta (Matching .info 2 Box Grid from mau-in-hoa-don-ban-hang.html) */}
+            <div
+              className="info"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: paperSize === 'K80' ? '1fr' : '1.4fr 1fr',
+                gap: '12px',
+                marginTop: '14px',
+              }}
+            >
+              {options.partnerInfo ? (
+                <div
+                  className="box"
+                  style={{
+                    border: '1px solid #000000',
+                    borderRadius: '6px',
+                    padding: '9px 12px',
+                  }}
+                >
+                  <h3
+                    style={{
+                      margin: '0 0 5px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      textDecoration: 'underline',
+                      textUnderlineOffset: '3px',
+                      textTransform: 'uppercase',
+                      color: '#000000',
+                    }}
+                  >
+                    {isPurchase ? 'Nhà cung cấp' : 'Khách hàng'}
+                  </h3>
+                  <div
+                    className="name"
+                    style={{
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      color: '#000000',
+                      marginBottom: '3px',
+                    }}
+                  >
+                    {partnerName || (isPurchase ? 'Nhà cung cấp lẻ' : 'Khách hàng lẻ')}
+                  </div>
+                  <div className="row" style={{ display: 'flex', gap: '8px', padding: '1.5px 0', fontSize: '11.5px' }}>
+                    <span style={{ flex: '0 0 78px', color: '#444444' }}>Địa chỉ</span>
+                    <span style={{ fontWeight: 500 }}>{partnerAddress || '---'}</span>
+                  </div>
+                  <div className="row" style={{ display: 'flex', gap: '8px', padding: '1.5px 0', fontSize: '11.5px' }}>
+                    <span style={{ flex: '0 0 78px', color: '#444444' }}>Điện thoại</span>
+                    <span style={{ fontWeight: 500 }}>{partnerPhone || '---'}</span>
+                  </div>
+                  <div className="row" style={{ display: 'flex', gap: '8px', padding: '1.5px 0', fontSize: '11.5px' }}>
+                    <span style={{ flex: '0 0 78px', color: '#444444' }}>Mã số thuế</span>
+                    <span style={{ fontWeight: 500, fontFamily: 'monospace' }}>{partnerTaxCode || '---'}</span>
+                  </div>
+                  {partnerEmail && (
+                    <div className="row" style={{ display: 'flex', gap: '8px', padding: '1.5px 0', fontSize: '11.5px' }}>
+                      <span style={{ flex: '0 0 78px', color: '#444444' }}>Email</span>
+                      <span style={{ fontWeight: 500 }}>{partnerEmail}</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div />
+              )}
 
-            {/* QR Code if enabled */}
-            {options.qrCode && activeAccount && (
               <div
-                className="qr-container"
+                className="box"
                 style={{
-                  margin: '12px 0',
-                  padding: '10px 14px',
-                  border: '1px solid #d1d5db',
+                  border: '1px solid #000000',
                   borderRadius: '6px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: paperSize === 'K80' ? '10px' : '16px',
-                  backgroundColor: '#fbfcfd',
-                  width: paperSize === 'K80' ? '100%' : 'fit-content',
-                  maxWidth: '100%',
-                  flexDirection: paperSize === 'K80' ? 'column' : 'row',
+                  padding: '9px 12px',
                 }}
               >
-                {/* QR Code Box */}
-                <div
+                <h3
                   style={{
-                    width: paperSize === 'K80' ? '92px' : '108px',
-                    height: paperSize === 'K80' ? '92px' : '108px',
-                    backgroundColor: '#ffffff',
-                    border: '1px solid #e5e7eb',
+                    margin: '0 0 5px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    textDecoration: 'underline',
+                    textUnderlineOffset: '3px',
+                    textTransform: 'uppercase',
+                    color: '#000000',
+                  }}
+                >
+                  Thông tin chứng từ
+                </h3>
+                <div className="row" style={{ display: 'flex', gap: '8px', padding: '1.5px 0', fontSize: '11.5px' }}>
+                  <span style={{ flex: '0 0 78px', color: '#444444' }}>Ngày lập</span>
+                  <span style={{ fontWeight: 600 }}>{formatDate(date)}</span>
+                </div>
+                <div className="row" style={{ display: 'flex', gap: '8px', padding: '1.5px 0', fontSize: '11.5px' }}>
+                  <span style={{ flex: '0 0 78px', color: '#444444' }}>Ngày giờ in</span>
+                  <span style={{ fontWeight: 500 }}>{printTimeStr}</span>
+                </div>
+                <div className="row" style={{ display: 'flex', gap: '8px', padding: '1.5px 0', fontSize: '11.5px' }}>
+                  <span style={{ flex: '0 0 78px', color: '#444444' }}>Tiền tệ</span>
+                  <span style={{ fontWeight: 500 }}>Việt Nam đồng (VND)</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Payment VietQR Block (Matching .pay from mau-in-hoa-don-ban-hang.html) */}
+            {options.qrCode && activeAccount && (
+              <div
+                className="pay qr-container"
+                style={{
+                  marginTop: '14px',
+                  display: 'flex',
+                  justifyContent: paperSize === 'K80' ? 'center' : 'flex-start',
+                  alignItems: 'center',
+                  gap: paperSize === 'K80' ? '10px' : '22px',
+                  border: '1.5px solid #000000',
+                  borderRadius: '8px',
+                  padding: '10px 16px',
+                  backgroundColor: '#ffffff',
+                  flexDirection: paperSize === 'K80' ? 'column' : 'row',
+                  pageBreakInside: 'avoid',
+                }}
+              >
+                <div
+                  className="qr"
+                  style={{
+                    width: paperSize === 'K80' ? '92px' : '104px',
+                    height: paperSize === 'K80' ? '92px' : '104px',
+                    flex: 'none',
+                    border: '1px dashed #000000',
                     borderRadius: '4px',
-                    padding: '3px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    flexShrink: 0,
+                    padding: '2px',
+                    backgroundColor: '#ffffff',
                   }}
                 >
                   <img
@@ -1032,10 +1057,10 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
                       objectFit: 'contain',
                       display: 'block',
                     }}
-                    onError={(e) => {
+                    onError={e => {
                       e.currentTarget.style.display = 'none';
-                      const fallback = e.currentTarget.parentElement?.querySelector('.qr-fallback');
-                      if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                      const fb = e.currentTarget.parentElement?.querySelector('.qr-fallback');
+                      if (fb) (fb as HTMLElement).style.display = 'flex';
                     }}
                   />
                   <div
@@ -1058,128 +1083,418 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
                   </div>
                 </div>
 
-                {/* Account Details */}
                 <div
                   style={{
-                    fontSize: paperSize === 'K80' ? '10.5px' : '11.5px',
+                    flex: 1,
+                    fontSize: '11.5px',
                     lineHeight: '1.45',
                     textAlign: paperSize === 'K80' ? 'center' : 'left',
-                    color: '#1f2937',
                   }}
                 >
-                  <div
+                  <h3
                     style={{
-                      fontWeight: 800,
-                      color: '#111827',
-                      fontSize: paperSize === 'K80' ? '11px' : '12px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '5px',
-                      justifyContent: paperSize === 'K80' ? 'center' : 'flex-start',
-                      marginBottom: '2px',
+                      margin: '0 0 4px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      color: '#000000',
                     }}
                   >
-                    <span style={{ color: '#dc2626' }}>VIET</span>
-                    <span style={{ color: '#2563eb' }}>QR</span>
-                    <span style={{ color: '#4b5563', fontSize: '10.5px', fontWeight: 600 }}>• NAPAS 247</span>
+                    Quét mã để thanh toán (VietQR - NAPAS 247)
+                  </h3>
+                  <div
+                    className="row"
+                    style={{
+                      display: 'flex',
+                      gap: '8px',
+                      padding: '1px 0',
+                      justifyContent: paperSize === 'K80' ? 'center' : 'flex-start',
+                    }}
+                  >
+                    <span style={{ flex: paperSize === 'K80' ? 'none' : '0 0 70px', color: '#444444' }}>Ngân hàng</span>
+                    <span style={{ fontWeight: 600 }}>{activeAccount.bankName || activeAccount.bankCode}</span>
                   </div>
-                  <div>
-                    Ngân hàng: <strong>{activeAccount.bankName || activeAccount.bankCode}</strong>
+                  <div
+                    className="row"
+                    style={{
+                      display: 'flex',
+                      gap: '8px',
+                      padding: '1px 0',
+                      justifyContent: paperSize === 'K80' ? 'center' : 'flex-start',
+                    }}
+                  >
+                    <span style={{ flex: paperSize === 'K80' ? 'none' : '0 0 70px', color: '#444444' }}>Số TK</span>
+                    <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '13px', color: '#000000' }}>
+                      {activeAccount.accountNo}
+                    </span>
                   </div>
-                  <div style={{ marginTop: '1px' }}>
-                    Số TK: <strong style={{ fontFamily: 'monospace', fontSize: '13px', letterSpacing: '0.4px', color: '#111827' }}>{activeAccount.accountNo}</strong>
+                  <div
+                    className="row"
+                    style={{
+                      display: 'flex',
+                      gap: '8px',
+                      padding: '1px 0',
+                      justifyContent: paperSize === 'K80' ? 'center' : 'flex-start',
+                    }}
+                  >
+                    <span style={{ flex: paperSize === 'K80' ? 'none' : '0 0 70px', color: '#444444' }}>Chủ TK</span>
+                    <span style={{ fontWeight: 600, textTransform: 'uppercase' }}>{activeAccount.accountName}</span>
                   </div>
-                  <div style={{ marginTop: '1px' }}>
-                    Chủ TK: <strong style={{ textTransform: 'uppercase' }}>{activeAccount.accountName}</strong>
-                  </div>
-                  {qrIncludeAmount && (qrAmount > 0) && (
-                    <div style={{ marginTop: '1px', color: '#15803d' }}>
-                      Số tiền: <strong>{formatCurrency(qrAmount)}</strong>
+                  {qrIncludeAmount && qrAmount > 0 && (
+                    <div
+                      className="row"
+                      style={{
+                        display: 'flex',
+                        gap: '8px',
+                        padding: '1px 0',
+                        justifyContent: paperSize === 'K80' ? 'center' : 'flex-start',
+                      }}
+                    >
+                      <span style={{ flex: paperSize === 'K80' ? 'none' : '0 0 70px', color: '#444444' }}>Số tiền</span>
+                      <span className="amt" style={{ fontWeight: 700, fontSize: '13px', color: '#15803d' }}>
+                        {formatCurrency(qrAmount)}
+                      </span>
                     </div>
                   )}
-                  <div style={{ marginTop: '1px', color: '#4b5563' }}>
-                    Nội dung: <strong style={{ fontFamily: 'monospace', color: '#6d3eeb' }}>{qrTransferContent}</strong>
+                  <div
+                    className="row"
+                    style={{
+                      display: 'flex',
+                      gap: '8px',
+                      padding: '1px 0',
+                      justifyContent: paperSize === 'K80' ? 'center' : 'flex-start',
+                    }}
+                  >
+                    <span style={{ flex: paperSize === 'K80' ? 'none' : '0 0 70px', color: '#444444' }}>Nội dung</span>
+                    <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#000000' }}>{qrTransferContent}</span>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* 6. Signatures Section (Table-based 2 columns: KHÁCH HÀNG / NGƯỜI BÁN HÀNG) */}
-            {options.signature && (
-              <div style={{ marginTop: '36px' }}>
-                <table
-                  className="layout-table signatures-table"
-                  style={{ width: '100%', border: 'none', textAlign: 'center', fontSize: '12.5px', color: '#000000' }}
+            {/* 4. Products Table (Minimalist Accounting Style - no vertical borders) */}
+            <table
+              className="table-modern"
+              style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                marginTop: '16px',
+                fontSize: paperSize === 'K80' ? '10.5px' : '11.5px',
+              }}
+            >
+              <thead>
+                <tr>
+                  <th
+                    style={{
+                      width: '36px',
+                      textAlign: 'center',
+                      padding: '8px 4px',
+                      borderTop: '2px solid #000000',
+                      borderBottom: '2px solid #000000',
+                      fontWeight: 700,
+                      fontSize: '11px',
+                      color: '#000000',
+                    }}
+                  >
+                    STT
+                  </th>
+                  {options.sku && (
+                    <th
+                      style={{
+                        width: '70px',
+                        padding: '8px 6px',
+                        borderTop: '2px solid #000000',
+                        borderBottom: '2px solid #000000',
+                        fontWeight: 700,
+                        fontSize: '11px',
+                        color: '#000000',
+                      }}
+                    >
+                      Mã hàng
+                    </th>
+                  )}
+                  <th
+                    style={{
+                      padding: '8px 8px',
+                      borderTop: '2px solid #000000',
+                      borderBottom: '2px solid #000000',
+                      fontWeight: 700,
+                      fontSize: '11px',
+                      textAlign: 'left',
+                      color: '#000000',
+                    }}
+                  >
+                    Tên hàng / dịch vụ
+                  </th>
+                  {options.unit && (
+                    <th
+                      style={{
+                        width: '44px',
+                        textAlign: 'center',
+                        padding: '8px 4px',
+                        borderTop: '2px solid #000000',
+                        borderBottom: '2px solid #000000',
+                        fontWeight: 700,
+                        fontSize: '11px',
+                        color: '#000000',
+                      }}
+                    >
+                      ĐVT
+                    </th>
+                  )}
+                  <th
+                    style={{
+                      width: '38px',
+                      textAlign: 'center',
+                      padding: '8px 4px',
+                      borderTop: '2px solid #000000',
+                      borderBottom: '2px solid #000000',
+                      fontWeight: 700,
+                      fontSize: '11px',
+                      color: '#000000',
+                    }}
+                  >
+                    SL
+                  </th>
+                  {options.priceTotal && (
+                    <th
+                      style={{
+                        width: '88px',
+                        textAlign: 'right',
+                        padding: '8px 6px',
+                        borderTop: '2px solid #000000',
+                        borderBottom: '2px solid #000000',
+                        fontWeight: 700,
+                        fontSize: '11px',
+                        color: '#000000',
+                      }}
+                    >
+                      Đơn giá
+                    </th>
+                  )}
+                  {options.lineDiscount && (
+                    <th
+                      style={{
+                        width: '76px',
+                        textAlign: 'right',
+                        padding: '8px 6px',
+                        borderTop: '2px solid #000000',
+                        borderBottom: '2px solid #000000',
+                        fontWeight: 700,
+                        fontSize: '11px',
+                        color: '#000000',
+                      }}
+                    >
+                      Chiết khấu
+                    </th>
+                  )}
+                  {options.priceTotal && (
+                    <th
+                      style={{
+                        width: '96px',
+                        textAlign: 'right',
+                        padding: '8px 6px',
+                        borderTop: '2px solid #000000',
+                        borderBottom: '2px solid #000000',
+                        fontWeight: 700,
+                        fontSize: '11px',
+                        color: '#000000',
+                      }}
+                    >
+                      Thành tiền
+                    </th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((it, idx) => (
+                  <tr key={idx}>
+                    <td style={{ textAlign: 'center', padding: '8px 4px', borderBottom: '1px solid #999999' }}>
+                      {idx + 1}
+                    </td>
+                    {options.sku && (
+                      <td style={{ padding: '8px 6px', borderBottom: '1px solid #999999', fontFamily: 'monospace', fontSize: '11px' }}>
+                        {it.sku || '---'}
+                      </td>
+                    )}
+                    <td style={{ padding: '8px 8px', borderBottom: '1px solid #999999', fontWeight: 500 }}>
+                      {it.product_name}
+                    </td>
+                    {options.unit && (
+                      <td style={{ textAlign: 'center', padding: '8px 4px', borderBottom: '1px solid #999999' }}>
+                        {it.unit || 'Cái'}
+                      </td>
+                    )}
+                    <td style={{ textAlign: 'center', padding: '8px 4px', borderBottom: '1px solid #999999', fontWeight: 600 }}>
+                      {it.quantity}
+                    </td>
+                    {options.priceTotal && (
+                      <td style={{ textAlign: 'right', padding: '8px 6px', borderBottom: '1px solid #999999', fontVariantNumeric: 'tabular-nums' }}>
+                        {formatCurrency(it.unit_price).replace(/\s*₫|\s*đ/g, '')}
+                      </td>
+                    )}
+                    {options.lineDiscount && (
+                      <td style={{ textAlign: 'right', padding: '8px 6px', borderBottom: '1px solid #999999', fontVariantNumeric: 'tabular-nums', color: '#333333' }}>
+                        {it.line_discount ? formatCurrency(it.line_discount).replace(/\s*₫|\s*đ/g, '') : '0'}
+                      </td>
+                    )}
+                    {options.priceTotal && (
+                      <td style={{ textAlign: 'right', padding: '8px 6px', borderBottom: '1px solid #999999', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                        {formatCurrency(it.line_total).replace(/\s*₫|\s*đ/g, '')}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* 5. Summary & Words (Matching .bottom from mau-in-hoa-don-ban-hang.html) */}
+            <div
+              className="bottom"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: paperSize === 'K80' ? '1fr' : '1fr 260px',
+                gap: '16px',
+                marginTop: '16px',
+                alignItems: 'start',
+              }}
+            >
+              <div className="words" style={{ fontSize: '11.5px', color: '#444444' }}>
+                <div>
+                  Bằng chữ: <strong style={{ color: '#000000', fontWeight: 600 }}>{numberToVietnameseWords(total)}</strong>
+                </div>
+                {options.note && note && (
+                  <div style={{ marginTop: '8px', color: '#333333', fontStyle: 'italic', fontSize: '11px' }}>
+                    <strong>Ghi chú:</strong> {note}
+                  </div>
+                )}
+              </div>
+
+              <div className="sum" style={{ fontSize: '12px' }}>
+                <div className="line" style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                  <span style={{ color: '#444444' }}>Tạm tính</span>
+                  <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>{formatCurrency(subtotal)}</span>
+                </div>
+                <div className="line" style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                  <span style={{ color: '#444444' }}>Chiết khấu</span>
+                  <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>
+                    {discountAmount > 0 ? `-${formatCurrency(discountAmount)}` : '0 đ'}
+                  </span>
+                </div>
+                <div className="line" style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                  <span style={{ color: '#444444' }}>VAT</span>
+                  <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>
+                    {vatAmount > 0 ? `+${formatCurrency(vatAmount)}` : '0 đ'}
+                  </span>
+                </div>
+                {shippingFee > 0 && (
+                  <div className="line" style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                    <span style={{ color: '#444444' }}>Phí vận chuyển</span>
+                    <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>+{formatCurrency(shippingFee)}</span>
+                  </div>
+                )}
+                <div
+                  className="line total"
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    marginTop: '4px',
+                    padding: '6px 0',
+                    borderTop: '2px solid #000000',
+                    borderBottom: '2px solid #000000',
+                    fontSize: '13.5px',
+                    fontWeight: 700,
+                  }}
                 >
-                  <tbody>
-                    <tr>
-                      <td
-                        style={{
-                          width: '50%',
-                          border: 'none',
-                          textAlign: 'center',
-                          verticalAlign: 'top',
-                          padding: 0,
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontWeight: 700,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.4px',
-                            color: '#000000',
-                          }}
-                        >
-                          {isPurchase ? 'NHÀ CUNG CẤP' : 'KHÁCH HÀNG'}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: '11px',
-                            color: '#555555',
-                            fontStyle: 'italic',
-                            marginTop: '3px',
-                          }}
-                        >
-                          (Ký, ghi rõ họ tên)
-                        </div>
-                        <div style={{ height: '65px' }} />
-                      </td>
-                      <td
-                        style={{
-                          width: '50%',
-                          border: 'none',
-                          textAlign: 'center',
-                          verticalAlign: 'top',
-                          padding: 0,
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontWeight: 700,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.4px',
-                            color: '#000000',
-                          }}
-                        >
-                          {isPurchase ? 'NGƯỜI MUA HÀNG' : 'NGƯỜI BÁN HÀNG'}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: '11px',
-                            color: '#555555',
-                            fontStyle: 'italic',
-                            marginTop: '3px',
-                          }}
-                        >
-                          (Ký, ghi rõ họ tên)
-                        </div>
-                        <div style={{ height: '65px' }} />
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                  <span>TỔNG CỘNG</span>
+                  <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(total)}</span>
+                </div>
+                {options.oldDebt && debtAmount > 0 && (
+                  <div
+                    className="line debt"
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      padding: '3px 0',
+                      color: '#dc2626',
+                      fontWeight: 600,
+                    }}
+                  >
+                    <span>Còn nợ</span>
+                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(debtAmount)}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 6. Signatures Section (Matching .sign from mau-in-hoa-don-ban-hang.html) */}
+            {options.signature && (
+              <div
+                className="sign"
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  textAlign: 'center',
+                  marginTop: '32px',
+                  paddingTop: '8px',
+                  pageBreakInside: 'avoid',
+                }}
+              >
+                <div>
+                  <b
+                    style={{
+                      display: 'block',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.3px',
+                      color: '#000000',
+                    }}
+                  >
+                    {isPurchase ? 'Nhà cung cấp' : 'Khách hàng'}
+                  </b>
+                  <i style={{ display: 'block', color: '#555555', fontSize: '10.5px', marginTop: '2px' }}>
+                    (Ký, ghi rõ họ tên)
+                  </i>
+                  <div className="space" style={{ height: '70px' }} />
+                </div>
+                <div>
+                  <b
+                    style={{
+                      display: 'block',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.3px',
+                      color: '#000000',
+                    }}
+                  >
+                    {isPurchase ? 'Người mua hàng' : 'Người bán hàng'}
+                  </b>
+                  <i style={{ display: 'block', color: '#555555', fontSize: '10.5px', marginTop: '2px' }}>
+                    (Ký, ghi rõ họ tên)
+                  </i>
+                  <div className="space" style={{ height: '70px' }} />
+                </div>
               </div>
             )}
+
+            {/* 7. Footer (Matching .foot from mau-in-hoa-don-ban-hang.html) */}
+            <div
+              className="foot"
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginTop: '20px',
+                paddingTop: '8px',
+                borderTop: '1px solid #999999',
+                color: '#666666',
+                fontSize: '10.5px',
+                pageBreakInside: 'avoid',
+              }}
+            >
+              <span>{companySettings.company_name || 'CÔNG TY LK ERP'} • {code}</span>
+              <span>Trang 1/1</span>
+            </div>
           </div>
         </div>
       </div>
